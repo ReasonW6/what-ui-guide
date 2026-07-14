@@ -10,7 +10,7 @@ import {
 export const metadata: Metadata = {
   title: "交互式 UI/UX 视觉词典",
   description:
-    "亲手试一试，再记住它的标准名称。收录 75 个常用 UI/UX 组件、交互演示与可复制代码。",
+    "亲手试一试，再记住它的标准名称。收录 81 个常用 UI/UX 组件、交互演示与可复制代码。",
 };
 
 type HomeProps = {

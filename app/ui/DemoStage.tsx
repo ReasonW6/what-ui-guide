@@ -30,6 +30,7 @@ export const demoSlugs = [
   "pagination",
   "progress-stepper",
   "anchor-navigation",
+  "split-view",
   "button",
   "icon-button",
   "button-group",
@@ -38,6 +39,7 @@ export const demoSlugs = [
   "dropdown-menu",
   "context-menu",
   "overflow-menu",
+  "command-palette",
   "text-field",
   "textarea",
   "password-field",
@@ -66,6 +68,8 @@ export const demoSlugs = [
   "skeleton-screen",
   "badge",
   "empty-state",
+  "focus-ring",
+  "progress-ring",
   "dialog",
   "alert-dialog",
   "popover",
@@ -75,6 +79,7 @@ export const demoSlugs = [
   "accordion",
   "disclosure",
   "lightbox",
+  "scrim",
   "card",
   "list-item",
   "avatar",
@@ -82,6 +87,7 @@ export const demoSlugs = [
   "carousel",
   "image-gallery",
   "truncated-text",
+  "divider",
   "data-table",
   "data-grid",
   "tree-view",
@@ -114,13 +120,17 @@ function MiniIcon({ children }: { children: ReactNode }) {
 
 function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const labels = density === "detail" ? ["概览", "组件", "模式", "资源"] : ["首页", "组件", "资源"];
-  const initialActive = slug === "breadcrumb" ? "滑块" : slug === "anchor-navigation" ? "简介" : labels[0];
+  const initialActive = slug === "breadcrumb" ? "滑块" : slug === "anchor-navigation" ? "简介" : slug === "split-view" ? "收件箱" : labels[0];
   const [active, setActive] = useState(initialActive);
+  const [globalActionStatus, setGlobalActionStatus] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [page, setPage] = useState(2);
   const [step, setStep] = useState(1);
+  const [splitPosition, setSplitPosition] = useState(38);
   const drawerTriggerRef = useRef<HTMLButtonElement>(null);
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const anchorContentRef = useRef<HTMLDivElement>(null);
   const drawerOpened = useRef(false);
 
   useEffect(() => {
@@ -140,7 +150,10 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
           aria-current={active === label ? "page" : undefined}
           className={active === label ? "is-active" : ""}
           key={label}
-          onClick={() => setActive(label)}
+          onClick={() => {
+            setActive(label);
+            setGlobalActionStatus("");
+          }}
           type="button"
         >
           <MiniIcon>{["⌂", "◇", "☷", "◎"][index]}</MiniIcon>
@@ -150,13 +163,53 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     </div>
   );
 
+  const updateSplitFromPointer = (handle: HTMLElement, clientX: number) => {
+    const rect = handle.parentElement?.getBoundingClientRect();
+    if (!rect?.width) return;
+    setSplitPosition(Math.round(Math.max(28, Math.min(65, ((clientX - rect.left) / rect.width) * 100))));
+  };
+
+  const handleDrawerKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!drawerOpen) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      setDrawerOpen(false);
+      return;
+    }
+    if (event.key !== "Tab" || !drawerRef.current) return;
+
+    const focusable = Array.from(drawerRef.current.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    ));
+    const first = focusable[0];
+    const last = focusable.at(-1);
+    if (!first || !last) return;
+
+    const activeElement = document.activeElement;
+    if (!activeElement || !drawerRef.current.contains(activeElement)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   switch (slug) {
     case "navigation-bar":
       return (
         <nav className="demo-navbar" aria-label="演示主导航">
           <strong><span className="demo-logo-dot" />设计笔记</strong>
           {navButtons()}
-          <Status>{active}</Status>
+          <div className="demo-navbar-actions">
+            <button aria-label="全局搜索" onClick={() => setGlobalActionStatus("已打开全局搜索")} type="button"><MiniIcon>⌕</MiniIcon></button>
+            {density === "detail" && <button aria-label="账户菜单" onClick={() => setGlobalActionStatus("已打开账户菜单")} type="button"><span aria-hidden="true" className="demo-navbar-avatar">LX</span></button>}
+          </div>
+          <Status>{globalActionStatus || active}</Status>
         </nav>
       );
     case "sidebar-navigation":
@@ -171,17 +224,15 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
       );
     case "navigation-drawer":
       return (
-        <div className="demo-drawer-scene" onKeyDown={(event) => {
-          if (event.key === "Escape" && drawerOpen) setDrawerOpen(false);
-        }}>
+        <div className="demo-drawer-scene" onKeyDown={handleDrawerKeyDown}>
           <button aria-controls="demo-navigation-drawer" aria-expanded={drawerOpen} className="demo-primary" onClick={() => setDrawerOpen(true)} ref={drawerTriggerRef} type="button">
             <MiniIcon>☰</MiniIcon>打开导航抽屉
           </button>
-          {drawerOpen && <div className="demo-drawer is-open" id="demo-navigation-drawer">
+          {drawerOpen && <><button aria-label="关闭导航抽屉" className="demo-drawer-scrim" onClick={() => setDrawerOpen(false)} tabIndex={-1} type="button" /><div className="demo-drawer is-open" id="demo-navigation-drawer" ref={drawerRef}>
             <button aria-label="关闭导航抽屉" className="demo-close" onClick={() => setDrawerOpen(false)} ref={drawerCloseRef} type="button">×</button>
             <strong>浏览</strong>
             {navButtons(true)}
-          </div>}
+          </div></>}
         </div>
       );
     case "bottom-navigation":
@@ -202,7 +253,10 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
                 className={active === label ? "is-active" : ""}
                 id={`demo-tab-${index}`}
                 key={label}
-                onClick={() => setActive(label)}
+          onClick={() => {
+            setActive(label);
+            setGlobalActionStatus("");
+          }}
                 onKeyDown={(event) => {
                   const current = tabs.indexOf(label);
                   const next = event.key === "ArrowRight" ? (current + 1) % tabs.length
@@ -257,15 +311,63 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
         </div>
       );
     }
-    case "anchor-navigation":
+    case "anchor-navigation": {
+      const sections = [
+        ["简介", "认识标准术语，快速描述想要的界面。"],
+        ["结构", "拆解触发器、内容区与当前状态。"],
+        ["用法", "选择目录，在当前容器内定位章节。"],
+      ];
       return (
         <div className="demo-anchor-layout">
           <nav aria-label="页内目录">
-            {["简介", "结构", "用法"].map((label) => <button aria-current={active === label ? "location" : undefined} className={active === label ? "is-active" : ""} key={label} onClick={() => setActive(label)} type="button">{label}</button>)}
+            {sections.map(([label], index) => { const id = `demo-anchor-${density}-${index}`; return <a aria-current={active === label ? "location" : undefined} className={active === label ? "is-active" : ""} href={`#${id}`} key={label} onClick={(event) => { event.preventDefault(); const target = anchorContentRef.current?.querySelector<HTMLElement>(`#${id}`); if (!target || !anchorContentRef.current) return; setActive(label); anchorContentRef.current.scrollTo({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", top: target.offsetTop }); }}>{label}</a>; })}
           </nav>
-          <div><small>当前章节</small><strong>{active}</strong><p>选择目录即可定位内容。</p></div>
+          <div aria-label="章节内容" className="demo-anchor-content" onScroll={(event) => { const current = sections.reduce((selected, [label], index) => event.currentTarget.scrollTop + 12 >= (event.currentTarget.querySelector<HTMLElement>(`#demo-anchor-${density}-${index}`)?.offsetTop ?? Number.POSITIVE_INFINITY) ? label : selected, sections[0][0]); setActive(current); }} ref={anchorContentRef} tabIndex={0}>{sections.map(([label, copy], index) => <section id={`demo-anchor-${density}-${index}`} key={label}><small>章节 {index + 1}</small><strong>{label}</strong><p>{copy}</p></section>)}</div>
         </div>
       );
+    }
+    case "split-view": {
+      const splitItems = ["收件箱", "草稿", "归档"].slice(0, density === "detail" ? 3 : 2);
+      return (
+        <div className="demo-split-view" style={{ gridTemplateColumns: `minmax(0, ${splitPosition}fr) 12px minmax(0, ${100 - splitPosition}fr)` }}>
+          <nav aria-label="文件夹">
+            <strong>邮件</strong>
+            {splitItems.map((item) => <button aria-current={active === item ? "page" : undefined} className={active === item ? "is-active" : ""} key={item} onClick={() => setActive(item)} type="button">{item}</button>)}
+          </nav>
+          <div
+            aria-label="调整左右面板宽度"
+            aria-orientation="vertical"
+            aria-valuemax={65}
+            aria-valuemin={28}
+            aria-valuenow={splitPosition}
+            aria-valuetext={`左侧面板 ${splitPosition}%`}
+            className="demo-split-divider"
+            onDoubleClick={() => setSplitPosition(38)}
+            onKeyDown={(event) => {
+              const next = event.key === "ArrowLeft" ? splitPosition - 4
+                : event.key === "ArrowRight" ? splitPosition + 4
+                  : event.key === "Home" ? 28
+                    : event.key === "End" ? 65
+                      : null;
+              if (next === null) return;
+              event.preventDefault();
+              setSplitPosition(Math.max(28, Math.min(65, next)));
+            }}
+            onPointerCancel={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}
+            onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); updateSplitFromPointer(event.currentTarget, event.clientX); }}
+            onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) updateSplitFromPointer(event.currentTarget, event.clientX); }}
+            onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}
+            role="separator"
+            tabIndex={0}
+          />
+          <section aria-live="polite">
+            <small>当前文件夹</small>
+            <strong>{splitItems.includes(active) ? active : splitItems[0]}</strong>
+            <i /><i />
+          </section>
+        </div>
+      );
+    }
     default:
       return null;
   }
@@ -273,17 +375,27 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
 
 function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const [count, setCount] = useState(0);
-  const [selected, setSelected] = useState("左对齐");
+  const [selected, setSelected] = useState(slug === "split-button" ? "选择发布方式" : "左对齐");
   const [menuOpen, setMenuOpen] = useState(
     density === "card" && ["split-button", "dropdown-menu", "context-menu", "overflow-menu"].includes(slug),
   );
   const [favorite, setFavorite] = useState(false);
   const [toolbarFocus, setToolbarFocus] = useState(0);
+  const [commandOpen, setCommandOpen] = useState(density === "card" && slug === "command-palette");
+  const [commandQuery, setCommandQuery] = useState("");
+  const [commandIndex, setCommandIndex] = useState(0);
   const menuHostRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const menuWasOpened = useRef(false);
+  const commandTriggerRef = useRef<HTMLButtonElement>(null);
+  const commandInputRef = useRef<HTMLInputElement>(null);
+  const commandReturnFocus = useRef<HTMLElement | null>(null);
   const actions = ["复制链接", "移动到…", "加入收藏"];
+  const menuActions = slug === "split-button" ? ["立即发布", "定时发布", "存为草稿"] : actions;
+  const commands = ["新建词条", "搜索组件", "打开设置"];
+  const matchingCommands = commands.filter((command) => command.includes(commandQuery.trim()));
+  const visibleCommands = matchingCommands.slice(0, density === "detail" ? 3 : 2);
 
   useEffect(() => {
     if (menuOpen && menuWasOpened.current) {
@@ -303,9 +415,38 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     return () => document.removeEventListener("pointerdown", closeOutside);
   }, [density, menuOpen]);
 
+  useEffect(() => {
+    if (slug !== "command-palette") return;
+    if (commandOpen && commandReturnFocus.current) {
+      commandInputRef.current?.focus();
+    } else if (!commandOpen && commandReturnFocus.current) {
+      if (commandReturnFocus.current.isConnected) commandReturnFocus.current.focus();
+      commandReturnFocus.current = null;
+    }
+  }, [commandOpen, slug]);
+
+  useEffect(() => {
+    if (slug !== "command-palette" || density !== "detail") return;
+    const handleShortcut = (event: globalThis.KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      event.preventDefault();
+      if (commandOpen) {
+        setCommandOpen(false);
+        return;
+      }
+      commandReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : commandTriggerRef.current;
+      setCommandQuery("");
+      setCommandIndex(0);
+      setCommandOpen(true);
+    };
+    document.addEventListener("keydown", handleShortcut);
+    return () => document.removeEventListener("keydown", handleShortcut);
+  }, [commandOpen, density, slug]);
+
   const choose = (value: string) => {
     menuWasOpened.current = true;
     setSelected(value);
+    if (slug === "split-button") setCount(0);
     setMenuOpen(false);
   };
 
@@ -317,6 +458,41 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const openMenu = () => {
     menuWasOpened.current = true;
     setMenuOpen(true);
+  };
+
+  const openCommandPalette = () => {
+    commandReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : commandTriggerRef.current;
+    setCommandQuery("");
+    setCommandIndex(0);
+    setCommandOpen(true);
+  };
+
+  const chooseCommand = (command: string) => {
+    setSelected(command);
+    setCommandOpen(false);
+  };
+
+  const handleCommandKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setCommandOpen(false);
+      return;
+    }
+    if (event.key === "Tab") {
+      event.preventDefault();
+      commandInputRef.current?.focus();
+      return;
+    }
+    if ((event.key === "ArrowDown" || event.key === "ArrowUp") && visibleCommands.length) {
+      event.preventDefault();
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      setCommandIndex((index) => (index + direction + visibleCommands.length) % visibleCommands.length);
+      return;
+    }
+    if (event.key === "Enter" && visibleCommands[commandIndex]) {
+      event.preventDefault();
+      chooseCommand(visibleCommands[commandIndex]);
+    }
   };
 
   const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -341,7 +517,7 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
 
   const popup = menuOpen && (
     <div className="demo-menu" id={`demo-menu-${slug}`} onKeyDown={handleMenuKeyDown} ref={menuRef} role="menu">
-      {actions.map((action) => <button key={action} onClick={() => choose(action)} role="menuitem" type="button">{action}</button>)}
+      {menuActions.map((action) => <button key={action} onClick={() => choose(action)} role="menuitem" type="button">{action}</button>)}
     </div>
   );
 
@@ -421,6 +597,8 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
       );
     case "overflow-menu":
       return <div className="demo-popup-wrap" ref={menuHostRef}><div className="demo-record-row"><span className="demo-avatar-small">UI</span><span><strong>组件词典</strong><small>刚刚更新</small></span><button aria-controls={`demo-menu-${slug}`} aria-expanded={menuOpen} aria-haspopup="menu" aria-label="更多操作" className="demo-icon-button" onClick={toggleMenu} ref={menuTriggerRef} type="button">•••</button></div>{popup}</div>;
+    case "command-palette":
+      return <div className="demo-command-scene"><button aria-controls="demo-command-dialog" aria-expanded={commandOpen} aria-haspopup="dialog" className="demo-secondary" onClick={openCommandPalette} ref={commandTriggerRef} type="button">打开命令面板 <kbd>⌘K</kbd></button>{commandOpen && <div className="demo-command-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) setCommandOpen(false); }}><div aria-labelledby="demo-command-title" aria-modal={density === "detail" ? true : undefined} className="demo-command-dialog" id="demo-command-dialog" onKeyDown={handleCommandKeyDown} role="dialog"><strong id="demo-command-title">快速操作</strong><label className="demo-command-input"><span className="sr-only">搜索命令</span><MiniIcon>⌕</MiniIcon><input aria-activedescendant={visibleCommands[commandIndex] ? `demo-command-${commandIndex}` : undefined} aria-autocomplete="list" aria-controls="demo-command-list" aria-expanded="true" onChange={(event) => { setCommandQuery(event.target.value); setCommandIndex(0); }} placeholder="输入命令…" ref={commandInputRef} role="combobox" value={commandQuery} /></label><div id="demo-command-list" role="listbox">{visibleCommands.length ? visibleCommands.map((command, index) => <button aria-selected={commandIndex === index} id={`demo-command-${index}`} key={command} onClick={() => chooseCommand(command)} onMouseEnter={() => setCommandIndex(index)} role="option" tabIndex={-1} type="button"><span aria-hidden="true">{["＋", "⌕", "⚙"][commands.indexOf(command)]}</span>{command}</button>) : <p>没有匹配命令</p>}</div>{density === "detail" && <small>↑↓ 导航 · Enter 执行 · Esc 关闭</small>}</div></div>} {!commandOpen && <Status>{selected === "左对齐" ? "⌘K 打开" : `已执行：${selected}`}</Status>}</div>;
     default:
       return null;
   }
@@ -573,6 +751,9 @@ function FeedbackDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const [progress, setProgress] = useState(42);
   const [text, setText] = useState("ui.example");
   const [count, setCount] = useState(3);
+  const [focusTarget, setFocusTarget] = useState(0);
+  const [toastHovered, setToastHovered] = useState(false);
+  const [toastFocusWithin, setToastFocusWithin] = useState(false);
   const feedbackTriggerRef = useRef<HTMLButtonElement>(null);
   const restoreFeedbackFocus = useRef(false);
   const emptyActionRef = useRef<HTMLButtonElement>(null);
@@ -592,8 +773,16 @@ function FeedbackDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     }
   }, [count]);
 
+  useEffect(() => {
+    if (slug !== "toast" || !visible || toastHovered || toastFocusWithin) return;
+    const timeout = window.setTimeout(() => setVisible(false), 3600);
+    return () => window.clearTimeout(timeout);
+  }, [slug, toastFocusWithin, toastHovered, visible]);
+
   const dismissFeedback = () => {
     restoreFeedbackFocus.current = true;
+    setToastHovered(false);
+    setToastFocusWithin(false);
     setVisible(false);
   };
 
@@ -602,13 +791,13 @@ function FeedbackDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     setCount(nextCount);
   };
 
-  const showButton = <button className="demo-primary" onClick={() => setVisible(true)} ref={feedbackTriggerRef} type="button">显示提示</button>;
+  const showButton = <button className="demo-primary" onClick={() => { setToastHovered(false); setToastFocusWithin(false); setVisible(true); }} ref={feedbackTriggerRef} type="button">显示提示</button>;
 
   switch (slug) {
     case "alert":
       return visible ? <div className="demo-alert" role="alert"><MiniIcon>i</MiniIcon><span><strong>新的组件已收录</strong><small>你可以在反馈与状态中找到它。</small></span><button aria-label="关闭提示" onClick={dismissFeedback} type="button">×</button></div> : <div className="demo-centered">{showButton}</div>;
     case "toast":
-      return <div className="demo-notification-scene">{!visible && showButton}{visible && <div className="demo-toast" role="status"><MiniIcon>✓</MiniIcon><span>链接已复制</span><button aria-label="关闭" onClick={dismissFeedback} type="button">×</button></div>}</div>;
+      return <div className="demo-notification-scene">{!visible && showButton}{visible && <div aria-atomic="true" className="demo-toast" onBlurCapture={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setToastFocusWithin(false); }} onFocusCapture={() => setToastFocusWithin(true)} onPointerEnter={() => setToastHovered(true)} onPointerLeave={() => setToastHovered(false)} role="status"><MiniIcon>✓</MiniIcon><span>链接已复制</span><button aria-label="关闭" onClick={dismissFeedback} type="button">×</button></div>}</div>;
     case "snackbar":
       return <div className="demo-notification-scene">{!visible && <button className="demo-secondary" onClick={() => setVisible(true)} ref={feedbackTriggerRef} type="button">归档项目</button>}{visible && <div className="demo-snackbar" role="status"><span>项目已归档</span><button onClick={dismissFeedback} type="button">撤销</button></div>}</div>;
     case "inline-validation": {
@@ -625,6 +814,12 @@ function FeedbackDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
       return <div className="demo-centered"><button className="demo-bell" onClick={() => setCount((value) => (value + 1) % 10)} type="button"><span aria-hidden="true">♢</span><span className="demo-badge">{count}</span><span className="sr-only">通知，{count} 条</span></button><Status>点击增加通知</Status></div>;
     case "empty-state":
       return count ? <div className="demo-empty"><span aria-hidden="true">⌁</span><strong>还没有收藏</strong><small>收藏的组件会出现在这里。</small><button className="demo-primary" onClick={() => changeEmptyState(0)} ref={emptyActionRef} type="button">模拟收藏一个</button></div> : <div className="demo-loaded-card"><span className="demo-avatar-small">✓</span><span><strong>已收藏 Slider</strong><small>你的第一个收藏</small></span><button aria-label="清空收藏" onClick={() => changeEmptyState(1)} ref={emptyActionRef} type="button">×</button></div>;
+    case "focus-ring": {
+      const targets = ["主要操作", "次要操作", "文字链接"].slice(0, density === "detail" ? 3 : 2);
+      return <div className="demo-focus-ring"><small>按 Tab 移动焦点，或点击预览</small><div aria-label="焦点环示例" role="group">{targets.map((target, index) => <button aria-pressed={focusTarget === index} className={focusTarget === index ? "is-focus-preview" : ""} key={target} onClick={() => setFocusTarget(index)} onFocus={() => setFocusTarget(index)} type="button">{target}</button>)}</div><Status>焦点：{targets[focusTarget] ?? targets[0]}</Status></div>;
+    }
+    case "progress-ring":
+      return <div className="demo-progress-ring-wrap"><div aria-label="导入进度" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress} aria-valuetext={`已完成 ${progress}%`} className="demo-progress-ring" role="progressbar"><svg aria-hidden="true" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" /><circle cx="22" cy="22" pathLength="100" r="18" style={{ strokeDashoffset: 100 - progress }} /></svg><output>{progress}%</output></div><button className="demo-secondary" onClick={() => setProgress((value) => value >= 100 ? 0 : Math.min(100, value + 17))} type="button">推进进度</button></div>;
     default:
       return null;
   }
@@ -639,19 +834,21 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     "hover-card",
     "side-sheet",
     "lightbox",
+    "scrim",
   ].includes(slug);
   const [open, setOpen] = useState(previewOpen || slug === "accordion" || slug === "disclosure");
-  const [openAccordionSections, setOpenAccordionSections] = useState<Set<number>>(
-    () => new Set([0]),
-  );
+  const [openAccordionIndex, setOpenAccordionIndex] = useState<number | null>(0);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const hoverTriggerRef = useRef<HTMLAnchorElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const safeActionRef = useRef<HTMLButtonElement>(null);
   const openedOnce = useRef(
     previewOpen && !["tooltip", "hover-card"].includes(slug),
   );
   const focusOnOpen = useRef(false);
-  const isModal = ["dialog", "alert-dialog", "lightbox"].includes(slug);
+  const isModal = ["dialog", "alert-dialog", "lightbox", "scrim"].includes(slug);
+  const lightboxItems = ["界面总览", "组件细节", "移动端预览"];
 
   useEffect(() => {
     if ((density === "detail" || focusOnOpen.current) && open && !["accordion", "disclosure", "tooltip", "hover-card"].includes(slug)) {
@@ -674,6 +871,12 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   }, [density, isModal, open, slug]);
 
   const handleOverlayKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (slug === "lightbox" && open && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+      event.preventDefault();
+      const direction = event.key === "ArrowRight" ? 1 : -1;
+      setLightboxIndex((index) => (index + direction + lightboxItems.length) % lightboxItems.length);
+      return;
+    }
     if (event.key === "Escape" && open) {
       event.stopPropagation();
       setOpen(false);
@@ -699,12 +902,7 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     }
   };
   const toggleAccordionSection = (index: number) => {
-    setOpenAccordionSections((current) => {
-      const next = new Set(current);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
+    setOpenAccordionIndex((current) => current === index ? null : index);
   };
   const openOverlay = () => {
     openedOnce.current = true;
@@ -714,24 +912,26 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const trigger = (label = "打开演示") => <button aria-expanded={open} className="demo-primary" onClick={openOverlay} ref={triggerRef} type="button">{label}</button>;
 
   switch (slug) {
+    case "scrim":
+      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("显示遮罩")}{open && <div className="demo-scrim-layer" onPointerDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}><div aria-describedby="scrim-copy" aria-labelledby="scrim-title" aria-modal={density === "detail" ? true : undefined} className="demo-scrim-card" ref={panelRef} role="dialog" tabIndex={-1}><strong id="scrim-title">继续编辑？</strong><small id="scrim-copy">遮罩弱化后方内容并聚焦当前任务。</small><button className="demo-primary" onClick={() => setOpen(false)} type="button">继续</button></div></div>}</div>;
     case "dialog":
-      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("编辑资料")}{open && <div className="demo-backdrop"><div aria-labelledby="dialog-title" aria-modal="true" className="demo-dialog" ref={panelRef} role="dialog" tabIndex={-1}><strong id="dialog-title">编辑资料</strong><label className="demo-field"><span>显示名称</span><input defaultValue="林间团队" /></label><div className="demo-dialog-actions"><button onClick={() => setOpen(false)} type="button">取消</button><button className="demo-primary" onClick={() => setOpen(false)} type="button">保存</button></div></div></div>}</div>;
+      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("编辑资料")}{open && <div className="demo-backdrop"><div aria-labelledby="dialog-title" aria-modal={density === "detail" ? true : undefined} className="demo-dialog" ref={panelRef} role="dialog" tabIndex={-1}><strong id="dialog-title">编辑资料</strong><label className="demo-field"><span>显示名称</span><input defaultValue="林间团队" /></label><div className="demo-dialog-actions"><button onClick={() => setOpen(false)} type="button">取消</button><button className="demo-primary" onClick={() => setOpen(false)} type="button">保存</button></div></div></div>}</div>;
     case "alert-dialog":
-      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("移除项目")}{open && <div className="demo-backdrop"><div aria-describedby="alert-copy" aria-labelledby="alert-title" aria-modal="true" className="demo-dialog is-alert" ref={panelRef} role="alertdialog" tabIndex={-1}><span className="demo-warning">!</span><strong id="alert-title">移除这个项目？</strong><small id="alert-copy">这是模拟操作，不会删除任何内容。</small><div className="demo-dialog-actions"><button onClick={() => setOpen(false)} ref={safeActionRef} type="button">取消</button><button className="demo-danger" onClick={() => setOpen(false)} type="button">确认移除</button></div></div></div>}</div>;
+      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("移除项目")}{open && <div className="demo-backdrop"><div aria-describedby="alert-copy" aria-labelledby="alert-title" aria-modal={density === "detail" ? true : undefined} className="demo-dialog is-alert" ref={panelRef} role="alertdialog" tabIndex={-1}><span className="demo-warning">!</span><strong id="alert-title">移除这个项目？</strong><small id="alert-copy">这是模拟操作，不会删除任何内容。</small><div className="demo-dialog-actions"><button onClick={() => setOpen(false)} ref={safeActionRef} type="button">取消</button><button className="demo-danger" onClick={() => setOpen(false)} type="button">确认移除</button></div></div></div>}</div>;
     case "popover":
       return <div className="demo-overlay-scene demo-popup-wrap" onKeyDown={handleOverlayKeyDown}>{trigger("查看详情")}{open && <div aria-labelledby="popover-title" className="demo-popover" ref={panelRef} role="dialog" tabIndex={-1}><strong id="popover-title">Slider · 滑块</strong><p>沿轨道拖动圆点，选择一个数值。</p><button onClick={() => setOpen(false)} type="button">知道了</button></div>}</div>;
     case "tooltip":
       return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlur={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onFocus={() => setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); triggerRef.current?.focus(); } }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}><button aria-describedby={open ? "tooltip-content" : undefined} aria-label="查看术语解释" className="demo-icon-button" onClick={() => setOpen((value) => !value)} ref={triggerRef} type="button">?</button>{open && <div className="demo-tooltip" id="tooltip-content" role="tooltip">查看术语解释</div>}</div></div>;
     case "hover-card":
-      return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlur={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onFocus={() => setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); triggerRef.current?.focus(); } }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}><button aria-describedby={open ? "hover-card-content" : undefined} className="demo-text-link" onClick={() => setOpen((value) => !value)} ref={triggerRef} type="button">@design-system</button>{open && <div className="demo-hover-card" id="hover-card-content"><span className="demo-avatar-small">DS</span><span><strong>Design System</strong><small>收录 75 个常用组件</small></span></div>}</div></div>;
+      return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlur={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onFocus={() => setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); hoverTriggerRef.current?.focus(); } }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}><a aria-describedby={open ? "hover-card-content" : undefined} className="demo-text-link" href="#design-system-profile" onClick={(event) => { event.preventDefault(); setOpen((value) => !value); }} ref={hoverTriggerRef}>@design-system</a>{open && <div className="demo-hover-card" id="hover-card-content"><span className="demo-avatar-small">DS</span><span><strong>Design System</strong><small>收录 81 个常用组件</small></span></div>}</div></div>;
     case "side-sheet":
       return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("打开设置")}{open && <div aria-labelledby="sheet-title" className="demo-side-sheet" ref={panelRef} role="dialog" tabIndex={-1}><div><strong id="sheet-title">页面设置</strong><button aria-label="关闭" onClick={() => setOpen(false)} type="button">×</button></div><label className="demo-check"><input defaultChecked type="checkbox" />显示网格</label><label className="demo-check"><input type="checkbox" />紧凑模式</label>{density === "detail" && <button className="demo-primary" onClick={() => setOpen(false)} type="button">应用</button>}</div>}</div>;
     case "accordion":
-      return <div className="demo-accordion">{["什么是 Slider？", "何时使用？"].slice(0, density === "detail" ? 2 : 1).map((label, index) => { const expanded = openAccordionSections.has(index); const triggerId = `accordion-trigger-${density}-${index}`; const panelId = `accordion-panel-${density}-${index}`; return <div key={label}><button aria-controls={panelId} aria-expanded={expanded} id={triggerId} onClick={() => toggleAccordionSection(index)} type="button"><strong>{label}</strong><span>{expanded ? "−" : "+"}</span></button>{expanded && <p aria-labelledby={triggerId} id={panelId} role="region">{index === 0 ? "一种让用户在连续范围内选择数值的输入控件。" : "当用户更关心相对值，并且范围有明确上下界时使用。"}</p>}</div>; })}</div>;
+      return <div className="demo-accordion">{[["什么是 Slider？", "一种让用户在连续范围内选择数值的输入控件。"], ["何时使用？", "适合有明确上下界、强调相对值的场景。"], ["键盘如何操作？", "聚焦滑块后，使用方向键逐步调整数值。"]].map(([label, copy], index) => { const expanded = openAccordionIndex === index; const triggerId = `accordion-trigger-${density}-${index}`; const panelId = `accordion-panel-${density}-${index}`; return <div key={label}><h3><button aria-controls={panelId} aria-expanded={expanded} id={triggerId} onClick={() => toggleAccordionSection(index)} type="button"><span>{label}</span><span aria-hidden="true">{expanded ? "−" : "+"}</span></button></h3>{expanded && <div aria-labelledby={triggerId} className="demo-accordion-panel" id={panelId} role="region">{copy}</div>}</div>; })}</div>;
     case "disclosure":
       return <div className="demo-disclosure"><button aria-expanded={open} onClick={() => setOpen((value) => !value)} type="button"><span className={`demo-chevron ${open ? "is-open" : ""}`}>›</span><strong>显示高级选项</strong></button>{open && <div><label className="demo-check"><input defaultChecked type="checkbox" />启用键盘步进</label>{density === "detail" && <label className="demo-field"><span>步长</span><input defaultValue="5" type="number" /></label>}</div>}</div>;
     case "lightbox":
-      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}><button aria-label="放大图片" className="demo-photo-thumb" onClick={openOverlay} ref={triggerRef} type="button"><span>UI</span><small>点击放大</small></button>{open && <div aria-label="组件图鉴封面" aria-modal="true" className="demo-lightbox" ref={panelRef} role="dialog" tabIndex={-1}><button aria-label="关闭灯箱" onClick={() => setOpen(false)} type="button">×</button><div><span>UI</span><small>组件图鉴封面</small></div></div>}</div>;
+      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}><button aria-label="打开三张组件预览" className="demo-photo-thumb" onClick={openOverlay} ref={triggerRef} type="button"><span>UI</span><small>3 张 · 点击放大</small></button>{open && <div aria-label="组件预览灯箱" aria-modal={density === "detail" ? true : undefined} className="demo-lightbox" ref={panelRef} role="dialog" tabIndex={-1}><button aria-label="关闭灯箱" className="demo-lightbox-close" onClick={() => setOpen(false)} type="button">×</button><button aria-label="上一张" className="demo-lightbox-nav is-previous" onClick={() => setLightboxIndex((index) => (index - 1 + lightboxItems.length) % lightboxItems.length)} type="button">‹</button><figure aria-atomic="true" aria-live="polite"><div className={`tone-${lightboxIndex}`}><span>{["UI", "02", "M"][lightboxIndex]}</span></div><figcaption><strong>{lightboxItems[lightboxIndex]}</strong><span>{lightboxIndex + 1} / {lightboxItems.length}</span></figcaption></figure><button aria-label="下一张" className="demo-lightbox-nav is-next" onClick={() => setLightboxIndex((index) => (index + 1) % lightboxItems.length)} type="button">›</button></div>}</div>;
     default:
       return null;
   }
@@ -758,6 +958,10 @@ function ContentDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
       return <div className="demo-gallery"><div className={`demo-gallery-main tone-${active}`}><span>{["A", "B", "C"][active]}</span></div><div>{[0, 1, 2].map((item) => <button aria-label={`查看图片 ${item + 1}`} aria-pressed={active === item} className={`tone-${item} ${active === item ? "is-active" : ""}`} key={item} onClick={() => setActive(item)} type="button"><span>{["A", "B", "C"][item]}</span></button>)}</div></div>;
     case "truncated-text":
       return <div className="demo-truncated"><p className={expanded ? "is-expanded" : ""} id="truncated-copy">设计系统中的组件名称常常因平台而异。理解标准术语，可以更准确地检索文档、描述需求，也能让 AI 更快理解你想实现的交互效果。</p><button aria-controls="truncated-copy" aria-expanded={expanded} className="demo-text-link" onClick={() => setExpanded((value) => !value)} type="button">{expanded ? "收起" : "显示更多"}</button></div>;
+    case "divider": {
+      const vertical = active === 1;
+      return <div className="demo-divider-wrap"><div className={`demo-divider-example ${vertical ? "is-vertical" : ""}`}><span><strong>{density === "detail" ? "主要内容" : "内容 A"}</strong><small>上一个区域</small></span><div aria-label="内容分隔线" aria-orientation={vertical ? "vertical" : "horizontal"} className="demo-divider-rule" role="separator" /><span><strong>{density === "detail" ? "补充内容" : "内容 B"}</strong><small>下一个区域</small></span></div><button aria-pressed={vertical} className="demo-secondary" onClick={() => setActive((value) => value === 1 ? 0 : 1)} type="button">切换为{vertical ? "水平" : "垂直"}分隔线</button></div>;
+    }
     default:
       return null;
   }
@@ -782,6 +986,7 @@ function DataDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const absoluteMonth = 6 + monthOffset;
   const calendarYear = 2026 + Math.floor(absoluteMonth / 12);
   const calendarMonth = ((absoluteMonth % 12) + 12) % 12 + 1;
+  const calendarEvents: Record<number, string> = { 10: "设计评审", 14: "发布检查", 18: "团队同步" };
 
   const handleGridKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
     const position = index - 3;
@@ -857,7 +1062,7 @@ function DataDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
       return <div className="demo-timeline">{["创建词条", "补充演示", "发布上线"].map((item, index) => <button aria-current={index === active ? "step" : undefined} className={index <= active ? "is-active" : ""} key={item} onClick={() => setActive(index)} type="button"><span>{index < active ? "✓" : index + 1}</span><span><strong>{item}</strong><small>{["09:20", "10:45", "待完成"][index]}</small></span></button>)}</div>;
     case "calendar-view": {
       const days = Array.from({ length: 14 }, (_, index) => index + 7);
-      return <div className="demo-calendar"><div><button aria-label="上个月" onClick={() => setMonthOffset((value) => value - 1)} type="button">‹</button><strong>{calendarYear} 年 {calendarMonth} 月</strong><button aria-label="下个月" onClick={() => setMonthOffset((value) => value + 1)} type="button">›</button></div><div aria-label={`${calendarYear} 年 ${calendarMonth} 月日期`} className="demo-calendar-grid" role="grid">{[days.slice(0, 7), days.slice(7)].map((week, weekIndex) => <div className="demo-calendar-row" key={weekIndex} role="row">{week.map((day) => <button aria-selected={selectedDay === day} className={selectedDay === day ? "is-active" : ""} data-day={day} key={day} onClick={() => setSelectedDay(day)} onKeyDown={(event) => handleCalendarKeyDown(event, day)} role="gridcell" tabIndex={selectedDay === day ? 0 : -1} type="button">{day}</button>)}</div>)}</div><Status>{calendarMonth} 月 {selectedDay} 日</Status></div>;
+      return <div className="demo-calendar"><div><button aria-label="上个月" onClick={() => setMonthOffset((value) => value - 1)} type="button">‹</button><strong>{calendarYear} 年 {calendarMonth} 月</strong><button aria-label="下个月" onClick={() => setMonthOffset((value) => value + 1)} type="button">›</button></div><div aria-label={`${calendarYear} 年 ${calendarMonth} 月日期`} className="demo-calendar-grid" role="grid">{[days.slice(0, 7), days.slice(7)].map((week, weekIndex) => <div className="demo-calendar-row" key={weekIndex} role="row">{week.map((day) => { const eventName = calendarEvents[day]; return <button aria-label={`${calendarMonth} 月 ${day} 日${eventName ? `，${eventName}` : "，无日程"}`} aria-selected={selectedDay === day} className={`${selectedDay === day ? "is-active" : ""} ${eventName ? "has-event" : ""}`} data-day={day} key={day} onClick={() => setSelectedDay(day)} onKeyDown={(event) => handleCalendarKeyDown(event, day)} role="gridcell" tabIndex={selectedDay === day ? 0 : -1} type="button">{day}{eventName && <span aria-hidden="true" className="demo-calendar-event-dot" />}</button>; })}</div>)}</div><Status>{calendarMonth} 月 {selectedDay} 日 · {calendarEvents[selectedDay] ?? "无日程"}</Status></div>;
     }
     case "chart":
       return <div className="demo-chart"><div className="demo-chart-heading"><span><strong>组件浏览量</strong><small>本周</small></span><Status>{values[active] ?? values[1]}k</Status></div><div className="demo-bars" role="group" aria-label="组件浏览量柱状图">{values.map((value, index) => <button aria-label={`第 ${index + 1} 项，${value}k`} aria-pressed={active === index} className={active === index ? "is-active" : ""} key={value} onClick={() => setActive(index)} style={{ height: `${value}%` }} type="button"><span>{value}k</span></button>)}</div></div>;
@@ -918,7 +1123,7 @@ function MotionDemo({ slug }: DemoProps & { slug: DemoSlug }) {
     case "marquee":
       return <div className="demo-motion-control"><div className={`demo-marquee ${paused ? "is-paused" : ""}`}><div>{["Slider", "Dialog", "Toast", "Carousel", "Slider", "Dialog", "Toast", "Carousel"].map((item, index) => <span key={`${item}-${index}`}>{item} <i>◆</i></span>)}</div></div><button className="demo-secondary" onClick={() => setPaused((value) => !value)} type="button">{paused ? "继续滚动" : "暂停滚动"}</button></div>;
     case "parallax-scrolling":
-      return <div className="demo-parallax"><div><span className="demo-orb orb-one" style={{ transform: `translateY(${active * -0.25}px)` }} /><span className="demo-orb orb-two" style={{ transform: `translateY(${active * 0.4}px)` }} /><strong style={{ transform: `translateY(${active * -0.1}px)` }}>层叠滚动</strong><small>不同图层以不同速度移动</small></div><label><span>滚动位置</span><input max="60" min="-60" onChange={(event) => setActive(Number(event.target.value))} type="range" value={active} /></label></div>;
+      return <div className="demo-parallax"><div aria-label="可滚动的视差预览" className="demo-parallax-scroll" onScroll={(event) => { const maxScroll = event.currentTarget.scrollHeight - event.currentTarget.clientHeight; setActive(maxScroll > 0 ? Math.round((event.currentTarget.scrollTop / maxScroll) * 100) : 0); }} tabIndex={0}><div className="demo-parallax-scene"><span className="demo-orb orb-one" style={{ transform: `translateY(${active * -0.22}px)` }} /><span className="demo-orb orb-two" style={{ transform: `translateY(${active * 0.3}px)` }} /><strong style={{ transform: `translateY(${active * -0.08}px)` }}>层叠滚动</strong><small>滚动这里，观察图层速度差</small></div><div aria-hidden="true" className="demo-parallax-space"><span>SCROLL</span></div></div><Status>滚动位置 {active}%</Status></div>;
     case "scroll-snap":
       return <div className="demo-snap"><div aria-label="可吸附滚动的组件卡片" onKeyDown={(event) => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); snapTo(active + (event.key === "ArrowRight" ? 1 : -1)); } }} onScroll={(event) => { const container = event.currentTarget; const center = container.scrollLeft + container.clientWidth / 2; const cards = Array.from(container.querySelectorAll<HTMLElement>("[data-snap-index]")); const closest = cards.reduce((best, card, index) => Math.abs(card.offsetLeft + card.offsetWidth / 2 - center) < best.distance ? { index, distance: Math.abs(card.offsetLeft + card.offsetWidth / 2 - center) } : best, { index: active, distance: Number.POSITIVE_INFINITY }); setActive(closest.index); }} ref={snapRef} tabIndex={0}>{["Slider", "Dialog", "Toast"].map((item, index) => <button className={`tone-${index} ${active === index ? "is-active" : ""}`} data-snap-index={index} key={item} onClick={() => snapTo(index)} type="button"><span>0{index + 1}</span><strong>{item}</strong></button>)}</div><div className="demo-dots">{[0, 1, 2].map((item) => <button aria-label={`跳到第 ${item + 1} 项`} className={active === item ? "is-active" : ""} key={item} onClick={() => snapTo(item)} type="button" />)}</div></div>;
     case "pan-and-zoom":
@@ -930,15 +1135,40 @@ function MotionDemo({ slug }: DemoProps & { slug: DemoSlug }) {
   }
 }
 
-const navigationSlugs = new Set<DemoSlug>(demoSlugs.slice(0, 9));
-const actionSlugs = new Set<DemoSlug>(demoSlugs.slice(9, 17));
-const inputSlugs = new Set<DemoSlug>(demoSlugs.slice(17, 26));
-const selectionSlugs = new Set<DemoSlug>(demoSlugs.slice(26, 36));
-const feedbackSlugs = new Set<DemoSlug>(demoSlugs.slice(36, 45));
-const overlaySlugs = new Set<DemoSlug>(demoSlugs.slice(45, 54));
-const contentSlugs = new Set<DemoSlug>(demoSlugs.slice(54, 61));
-const dataSlugs = new Set<DemoSlug>(demoSlugs.slice(61, 67));
-const motionSlugs = new Set<DemoSlug>(demoSlugs.slice(67, 75));
+const navigationSlugs = new Set<DemoSlug>([
+  "navigation-bar", "sidebar-navigation", "navigation-drawer", "bottom-navigation", "tabs",
+  "breadcrumb", "pagination", "progress-stepper", "anchor-navigation", "split-view",
+]);
+const actionSlugs = new Set<DemoSlug>([
+  "button", "icon-button", "button-group", "split-button", "toolbar", "dropdown-menu",
+  "context-menu", "overflow-menu", "command-palette",
+]);
+const inputSlugs = new Set<DemoSlug>([
+  "text-field", "textarea", "password-field", "search-field", "spinbutton", "masked-input",
+  "otp-input", "tags-input", "file-upload",
+]);
+const selectionSlugs = new Set<DemoSlug>([
+  "checkbox", "radio-group", "switch", "select", "combobox", "segmented-control", "slider",
+  "range-slider", "date-picker", "color-picker",
+]);
+const feedbackSlugs = new Set<DemoSlug>([
+  "alert", "toast", "snackbar", "inline-validation", "progress-bar", "spinner",
+  "skeleton-screen", "badge", "empty-state", "focus-ring", "progress-ring",
+]);
+const overlaySlugs = new Set<DemoSlug>([
+  "dialog", "alert-dialog", "popover", "tooltip", "hover-card", "side-sheet", "accordion",
+  "disclosure", "lightbox", "scrim",
+]);
+const contentSlugs = new Set<DemoSlug>([
+  "card", "list-item", "avatar", "chip", "carousel", "image-gallery", "truncated-text", "divider",
+]);
+const dataSlugs = new Set<DemoSlug>([
+  "data-table", "data-grid", "tree-view", "timeline", "calendar-view", "chart",
+]);
+const motionSlugs = new Set<DemoSlug>([
+  "drag-and-drop", "infinite-scroll", "lazy-loading", "marquee", "parallax-scrolling",
+  "scroll-snap", "pan-and-zoom", "before-after-slider",
+]);
 
 function DemoBySlug({ slug, density }: DemoStageProps) {
   const typedSlug = slug as DemoSlug;
@@ -968,6 +1198,7 @@ export const demoRegistry = {
   pagination: entry("pagination"),
   "progress-stepper": entry("progress-stepper"),
   "anchor-navigation": entry("anchor-navigation"),
+  "split-view": entry("split-view"),
   button: entry("button"),
   "icon-button": entry("icon-button"),
   "button-group": entry("button-group"),
@@ -976,6 +1207,7 @@ export const demoRegistry = {
   "dropdown-menu": entry("dropdown-menu"),
   "context-menu": entry("context-menu"),
   "overflow-menu": entry("overflow-menu"),
+  "command-palette": entry("command-palette"),
   "text-field": entry("text-field"),
   textarea: entry("textarea"),
   "password-field": entry("password-field"),
@@ -1004,6 +1236,8 @@ export const demoRegistry = {
   "skeleton-screen": entry("skeleton-screen"),
   badge: entry("badge"),
   "empty-state": entry("empty-state"),
+  "focus-ring": entry("focus-ring"),
+  "progress-ring": entry("progress-ring"),
   dialog: entry("dialog"),
   "alert-dialog": entry("alert-dialog"),
   popover: entry("popover"),
@@ -1013,6 +1247,7 @@ export const demoRegistry = {
   accordion: entry("accordion"),
   disclosure: entry("disclosure"),
   lightbox: entry("lightbox"),
+  scrim: entry("scrim"),
   card: entry("card"),
   "list-item": entry("list-item"),
   avatar: entry("avatar"),
@@ -1020,6 +1255,7 @@ export const demoRegistry = {
   carousel: entry("carousel"),
   "image-gallery": entry("image-gallery"),
   "truncated-text": entry("truncated-text"),
+  divider: entry("divider"),
   "data-table": entry("data-table"),
   "data-grid": entry("data-grid"),
   "tree-view": entry("tree-view"),

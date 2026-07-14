@@ -14,12 +14,12 @@ const confusionGuides: ReadonlyArray<{
   text: string;
 }> = [
   {
-    slugs: ["select", "dropdown-menu", "combobox"],
-    text: "Select 从固定选项中选值；Dropdown Menu 执行命令；Combobox 允许输入并筛选建议。",
+    slugs: ["select", "dropdown-menu", "combobox", "command-palette"],
+    text: "Select 从固定选项中选值；Dropdown Menu 执行少量命令；Combobox 输入筛选选值；Command Palette 搜索并执行全局命令。",
   },
   {
-    slugs: ["dialog", "alert-dialog"],
-    text: "Dialog 是浮层容器；Modal 描述它是否阻断背景交互，并非所有 Dialog 都是 Modal。",
+    slugs: ["dialog", "alert-dialog", "scrim"],
+    text: "Dialog 是内容容器；Modal 描述是否阻断背景；Scrim 是变暗并拦截背景交互的遮罩层。",
   },
   {
     slugs: ["toast", "snackbar"],
@@ -30,12 +30,12 @@ const confusionGuides: ReadonlyArray<{
     text: "Tooltip 是短提示；Popover 可交互；Hover Card 用悬停或聚焦预览关联内容。",
   },
   {
-    slugs: ["sidebar-navigation", "navigation-drawer", "side-sheet"],
-    text: "Sidebar 常驻布局；Drawer 临时滑出用于导航；Side Sheet 临时承载任务内容。",
+    slugs: ["sidebar-navigation", "navigation-drawer", "side-sheet", "split-view"],
+    text: "Sidebar 常驻导航；Drawer 临时滑出导航；Side Sheet 临时承载任务；Split View 是可并列调整的两个区域。",
   },
   {
-    slugs: ["slider", "range-slider", "progress-bar"],
-    text: "Slider 选择单值；Range Slider 选择区间；Progress Bar 只展示进度，不供拖动。",
+    slugs: ["slider", "range-slider", "progress-bar", "progress-ring", "spinner"],
+    text: "Slider 选择单值；Range Slider 选择区间；Progress Bar / Ring 展示确定进度；Spinner 只表示处理中。",
   },
   {
     slugs: ["badge", "chip", "tags-input"],

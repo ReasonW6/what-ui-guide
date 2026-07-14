@@ -314,28 +314,58 @@ function makeCode(item: CatalogSeed): CodeBundle {
     case "tabs": {
       html = `<section class="demo stack">
   <div class="row" role="tablist" aria-label="账户设置">
-    <button role="tab" aria-selected="true" aria-controls="profile">资料</button>
-    <button role="tab" aria-selected="false" aria-controls="security">安全</button>
+    <button id="profile-tab" role="tab" aria-selected="true" aria-controls="profile" tabindex="0">资料</button>
+    <button id="security-tab" role="tab" aria-selected="false" aria-controls="security" tabindex="-1">安全</button>
   </div>
-  <div id="profile" role="tabpanel">编辑你的公开资料。</div>
-  <div id="security" role="tabpanel" hidden>管理登录与密码。</div>
+  <div id="profile" role="tabpanel" aria-labelledby="profile-tab">编辑你的公开资料。</div>
+  <div id="security" role="tabpanel" aria-labelledby="security-tab" hidden>管理登录与密码。</div>
 </section>`;
       js = `const tabs = [...document.querySelectorAll('[role="tab"]')];
-tabs.forEach((tab, index) => tab.addEventListener('click', () => {
+const activate = (index, moveFocus = false) => {
   tabs.forEach((item, itemIndex) => {
     const selected = itemIndex === index;
     item.setAttribute('aria-selected', String(selected));
+    item.tabIndex = selected ? 0 : -1;
     document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
   });
-}));`;
+  if (moveFocus) tabs[index].focus();
+};
+tabs.forEach((tab, index) => {
+  tab.addEventListener('click', () => activate(index));
+  tab.addEventListener('keydown', event => {
+    const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length
+      : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length
+        : event.key === 'Home' ? 0
+          : event.key === 'End' ? tabs.length - 1
+            : null;
+    if (next === null) return;
+    event.preventDefault();
+    activate(next, true);
+  });
+});`;
       jsx = `import { useState } from "react";
 export default function Component() {
   const [tab, setTab] = useState("profile");
+  const items = [["profile", "资料", "编辑你的公开资料。"], ["security", "安全", "管理登录与密码。"]];
+  const move = (event, index) => {
+    const next = event.key === "ArrowRight" ? (index + 1) % items.length
+      : event.key === "ArrowLeft" ? (index - 1 + items.length) % items.length
+        : event.key === "Home" ? 0
+          : event.key === "End" ? items.length - 1
+            : null;
+    if (next === null) return;
+    event.preventDefault();
+    setTab(items[next][0]);
+    event.currentTarget.parentElement.querySelectorAll('[role="tab"]')[next].focus();
+  };
   return <section className="demo stack">
     <div className="row" role="tablist" aria-label="账户设置">
-      {[["profile", "资料"], ["security", "安全"]].map(([id, text]) =>
-        <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{text}</button>)}
-    </div><div role="tabpanel">{tab === "profile" ? "编辑你的公开资料。" : "管理登录与密码。"}</div>
+      {items.map(([id, text], index) => <button id={id + "-tab"} key={id} role="tab"
+        aria-controls={id} aria-selected={tab === id} tabIndex={tab === id ? 0 : -1}
+        onClick={() => setTab(id)} onKeyDown={event => move(event, index)}>{text}</button>)}
+    </div>
+    {items.map(([id, , content]) => <div id={id} key={id} role="tabpanel"
+      aria-labelledby={id + "-tab"} hidden={tab !== id}>{content}</div>)}
   </section>;
 }`;
       break;
@@ -365,21 +395,91 @@ export default function Component() {
     case "menu": {
       html = `<div class="demo stack">
   <button type="button" aria-haspopup="menu" aria-expanded="false">打开${item.name.zh}</button>
-  <div role="menu" hidden><button role="menuitem">重命名</button><button role="menuitem">复制</button></div>
+  <div role="menu" hidden><button role="menuitem" tabindex="-1">重命名</button><button role="menuitem" tabindex="-1">复制</button></div>
+  <output>尚未执行操作</output>
 </div>`;
       js = `const trigger = document.querySelector('[aria-haspopup="menu"]');
 const menu = document.querySelector('[role="menu"]');
+const items = [...menu.querySelectorAll('[role="menuitem"]')];
+const output = document.querySelector('.demo output');
+const close = () => {
+  menu.hidden = true;
+  trigger.setAttribute('aria-expanded', 'false');
+  trigger.focus();
+};
 trigger.addEventListener('click', () => {
   const open = trigger.getAttribute('aria-expanded') !== 'true';
+  if (!open) {
+    close();
+    return;
+  }
   trigger.setAttribute('aria-expanded', String(open));
   menu.hidden = !open;
-  if (open) menu.querySelector('[role="menuitem"]').focus();
+  items[0].focus();
+});
+menu.addEventListener('click', event => {
+  const item = event.target.closest('[role="menuitem"]');
+  if (!item) return;
+  output.value = '已执行：' + item.textContent;
+  close();
+});
+menu.addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    close();
+    return;
+  }
+  const current = Math.max(0, items.indexOf(document.activeElement));
+  const next = event.key === 'ArrowDown' ? (current + 1) % items.length
+    : event.key === 'ArrowUp' ? (current - 1 + items.length) % items.length
+      : event.key === 'Home' ? 0
+        : event.key === 'End' ? items.length - 1
+          : null;
+  if (next === null) return;
+  event.preventDefault();
+  items[next].focus();
 });`;
-      jsx = `import { useState } from "react";
+      jsx = `import { useEffect, useRef, useState } from "react";
 export default function Component() {
   const [open, setOpen] = useState(false);
-  return <div className="demo stack"><button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>打开${item.name.zh}</button>
-    {open && <div role="menu"><button role="menuitem">重命名</button><button role="menuitem">复制</button></div>}</div>;
+  const [status, setStatus] = useState("尚未执行操作");
+  const trigger = useRef(null);
+  const menu = useRef(null);
+  const actions = ["重命名", "复制"];
+  useEffect(() => {
+    if (open) menu.current?.querySelector('[role="menuitem"]')?.focus();
+  }, [open]);
+  const close = () => {
+    setOpen(false);
+    requestAnimationFrame(() => trigger.current?.focus());
+  };
+  const choose = action => {
+    setStatus("已执行：" + action);
+    close();
+  };
+  const navigate = event => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+      return;
+    }
+    const items = [...event.currentTarget.querySelectorAll('[role="menuitem"]')];
+    const current = Math.max(0, items.indexOf(document.activeElement));
+    const next = event.key === "ArrowDown" ? (current + 1) % items.length
+      : event.key === "ArrowUp" ? (current - 1 + items.length) % items.length
+        : event.key === "Home" ? 0
+          : event.key === "End" ? items.length - 1
+            : null;
+    if (next === null) return;
+    event.preventDefault();
+    items[next].focus();
+  };
+  return <div className="demo stack"><button aria-haspopup="menu" aria-expanded={open}
+    onClick={() => open ? close() : setOpen(true)} ref={trigger}>打开${item.name.zh}</button>
+    {open && <div onKeyDown={navigate} ref={menu} role="menu">{actions.map(action =>
+      <button key={action} onClick={() => choose(action)} role="menuitem" tabIndex={-1}>{action}</button>)}</div>}
+    <output>{status}</output>
+  </div>;
 }`;
       break;
     }
@@ -640,6 +740,31 @@ export default function Component() { const [count, setCount] = useState(3); ret
   // Shared family samples stay deliberately small; these overrides preserve the
   // semantics of components that are commonly confused with a nearby pattern.
   switch (item.slug) {
+    case "navigation-bar":
+      html = `<nav class="demo row" aria-label="主导航">
+  <a href="/" aria-label="Acme 首页"><strong>Acme</strong></a>
+  <a href="#overview" aria-current="page">概览</a>
+  <a href="#components">组件</a>
+  <button id="account-menu" type="button" aria-label="打开账户菜单">WX</button>
+  <output>尚未打开全局操作</output>
+</nav>`;
+      js = `const accountButton = document.getElementById('account-menu');
+const output = document.querySelector('.demo output');
+accountButton.addEventListener('click', () => {
+  output.value = '账户菜单已打开';
+});`;
+      jsx = `import { useState } from "react";
+export default function Component() {
+  const [status, setStatus] = useState("尚未打开全局操作");
+  return <nav className="demo row" aria-label="主导航">
+    <a href="/" aria-label="Acme 首页"><strong>Acme</strong></a>
+    <a href="#overview" aria-current="page">概览</a><a href="#components">组件</a>
+    <button type="button" aria-label="打开账户菜单"
+      onClick={() => setStatus("账户菜单已打开")}>WX</button>
+    <output>{status}</output>
+  </nav>;
+}`;
+      break;
     case "navigation-drawer":
       html = `<div class="demo">
   <button id="drawer-trigger" type="button" aria-expanded="false" aria-controls="nav-drawer">打开导航</button>
@@ -694,6 +819,62 @@ export default function Component() {
   </div>;
 }`;
       break;
+    case "split-view":
+      html = `<section class="demo split-view" aria-label="项目浏览器">
+  <aside><strong>项目</strong><a href="#split-content" aria-current="page">设计系统</a></aside>
+  <div class="splitter" role="separator" aria-label="调整侧栏宽度" aria-orientation="vertical"
+    aria-valuemin="25" aria-valuemax="60" aria-valuenow="36" tabindex="0"></div>
+  <main id="split-content"><h2>设计系统</h2><p>在右侧查看所选项目。</p></main>
+</section>`;
+      js = `const view = document.querySelector('.split-view');
+const separator = document.querySelector('[role="separator"]');
+let size = 36;
+const setSize = value => {
+  size = Math.max(25, Math.min(60, value));
+  view.style.gridTemplateColumns = size + '% 6px 1fr';
+  separator.setAttribute('aria-valuenow', String(Math.round(size)));
+};
+separator.addEventListener('keydown', event => {
+  if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+  event.preventDefault();
+  setSize(size + (event.key === 'ArrowRight' ? 2 : -2));
+});
+separator.addEventListener('pointerdown', event => {
+  separator.setPointerCapture(event.pointerId);
+});
+separator.addEventListener('pointermove', event => {
+  if (!separator.hasPointerCapture(event.pointerId)) return;
+  const bounds = view.getBoundingClientRect();
+  setSize((event.clientX - bounds.left) / bounds.width * 100);
+});`;
+      extraCss = `.split-view { display: grid; grid-template-columns: 36% 6px 1fr; min-height: 12rem; padding: 0; overflow: hidden; }
+.split-view :is(aside, main) { display: grid; align-content: start; gap: .6rem; padding: 1rem; }
+.splitter { touch-action: none; background: #29415f; cursor: col-resize; }
+.splitter:focus-visible { background: #60a5fa; }`;
+      jsx = `import { useState } from "react";
+export default function Component() {
+  const [size, setSize] = useState(36);
+  const resize = event => {
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault();
+    setSize(value => Math.max(25, Math.min(60, value + (event.key === "ArrowRight" ? 2 : -2))));
+  };
+  const resizeAtPointer = event => {
+    const bounds = event.currentTarget.parentElement.getBoundingClientRect();
+    setSize(Math.max(25, Math.min(60, (event.clientX - bounds.left) / bounds.width * 100)));
+  };
+  return <section className="demo split-view" aria-label="项目浏览器"
+    style={{ gridTemplateColumns: size + "% 6px 1fr" }}>
+    <aside><strong>项目</strong><a href="#split-content" aria-current="page">设计系统</a></aside>
+    <div className="splitter" role="separator" aria-label="调整侧栏宽度"
+      aria-orientation="vertical" aria-valuemin={25} aria-valuemax={60}
+      aria-valuenow={Math.round(size)} tabIndex={0} onKeyDown={resize}
+      onPointerDown={event => event.currentTarget.setPointerCapture(event.pointerId)}
+      onPointerMove={event => event.currentTarget.hasPointerCapture(event.pointerId) && resizeAtPointer(event)} />
+    <main id="split-content"><h2>设计系统</h2><p>在右侧查看所选项目。</p></main>
+  </section>;
+}`;
+      break;
     case "button-group":
       html = `<div class="demo stack">
   <div class="row" role="group" aria-label="文本对齐">
@@ -718,6 +899,72 @@ export default function Component() {
         <button type="button" key={value} onClick={() => setSelected(value)}>{value}</button>)}
     </div>
     <output>{selected ? "已选择：" + selected : "尚未选择"}</output>
+  </div>;
+}`;
+      break;
+    case "command-palette":
+      html = `<div class="demo stack">
+  <button id="open-commands" type="button">打开命令面板</button>
+  <dialog aria-labelledby="command-title">
+    <h2 id="command-title">快速操作</h2>
+    <label for="command-search">搜索命令</label><input id="command-search" type="search">
+    <div id="command-list"><button type="button">新建项目</button><button type="button">打开设置</button></div>
+    <button id="close-commands" type="button">关闭</button>
+  </dialog>
+  <output>尚未执行命令</output>
+</div>`;
+      js = `const trigger = document.getElementById('open-commands');
+const dialog = document.querySelector('dialog');
+const search = document.getElementById('command-search');
+const output = document.querySelector('.demo output');
+trigger.addEventListener('click', () => {
+  dialog.showModal();
+  search.focus();
+});
+document.getElementById('close-commands').addEventListener('click', () => dialog.close());
+dialog.addEventListener('close', () => trigger.focus());
+search.addEventListener('input', () => {
+  document.querySelectorAll('#command-list button').forEach(button => {
+    button.hidden = !button.textContent.includes(search.value);
+  });
+});
+document.getElementById('command-list').addEventListener('click', event => {
+  const command = event.target.closest('button');
+  if (!command) return;
+  output.value = '已执行：' + command.textContent;
+  dialog.close();
+});`;
+      extraCss = `dialog, [role="dialog"] { width: min(28rem, calc(100% - 2rem)); padding: 1rem; color: #e8f1ff; background: #0d1726; border: 1px solid #29415f; border-radius: 12px; }
+#command-list { display: grid; gap: .5rem; margin-block: .75rem; }`;
+      jsx = `import { useRef, useState } from "react";
+export default function Component() {
+  const commands = ["新建项目", "打开设置"];
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("尚未执行命令");
+  const trigger = useRef(null);
+  const dialog = useRef(null);
+  const search = useRef(null);
+  const open = () => {
+    setQuery("");
+    dialog.current?.showModal();
+    requestAnimationFrame(() => search.current?.focus());
+  };
+  const close = () => dialog.current?.close();
+  const run = command => {
+    setStatus("已执行：" + command);
+    close();
+  };
+  return <div className="demo stack">
+    <button ref={trigger} type="button" onClick={open}>打开命令面板</button>
+    <dialog ref={dialog} aria-labelledby="command-title" onClose={() => trigger.current?.focus()}>
+      <h2 id="command-title">快速操作</h2><label htmlFor="command-search">搜索命令</label>
+      <input ref={search} id="command-search" type="search" value={query}
+        onChange={event => setQuery(event.target.value)} />
+      <div>{commands.filter(command => command.includes(query)).map(command =>
+        <button type="button" key={command} onClick={() => run(command)}>{command}</button>)}</div>
+      <button type="button" onClick={close}>关闭</button>
+    </dialog>
+    <output>{status}</output>
   </div>;
 }`;
       break;
@@ -749,16 +996,19 @@ export default function Component() {
       break;
     case "split-button":
       html = `<div class="demo row">
-  <button id="save" type="button">保存</button>
-  <button type="button" aria-label="更多保存选项" aria-haspopup="menu" aria-expanded="false">▾</button>
-  <div role="menu" hidden><button role="menuitem" data-action="另存为副本">另存为副本</button></div>
-  <output>尚未保存</output>
+  <button id="publish" type="button">立即发布</button>
+  <button type="button" aria-label="更多发布选项" aria-haspopup="menu" aria-expanded="false">▾</button>
+  <div role="menu" hidden>
+    <button role="menuitem" data-action="定时发布">定时发布</button>
+    <button role="menuitem" data-action="保存草稿">保存草稿</button>
+  </div>
+  <output>尚未发布</output>
 </div>`;
       js = `const trigger = document.querySelector('[aria-haspopup="menu"]');
 const menu = document.querySelector('[role="menu"]');
 const output = document.querySelector('.demo output');
-document.getElementById('save').addEventListener('click', () => {
-  output.value = '已保存';
+document.getElementById('publish').addEventListener('click', () => {
+  output.value = '已立即发布';
 });
 trigger.addEventListener('click', () => {
   const open = trigger.getAttribute('aria-expanded') !== 'true';
@@ -775,15 +1025,17 @@ menu.addEventListener('click', event => {
       jsx = `import { useState } from "react";
 export default function Component() {
   const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState("尚未保存");
+  const [status, setStatus] = useState("尚未发布");
+  const alternatives = ["定时发布", "保存草稿"];
   return <div className="demo row">
-    <button type="button" onClick={() => setStatus("已保存")}>保存</button>
-    <button type="button" aria-label="更多保存选项" aria-haspopup="menu"
+    <button type="button" onClick={() => setStatus("已立即发布")}>立即发布</button>
+    <button type="button" aria-label="更多发布选项" aria-haspopup="menu"
       aria-expanded={open} onClick={() => setOpen(!open)}>▾</button>
-    {open && <div role="menu"><button role="menuitem" onClick={() => {
-      setStatus("已执行：另存为副本");
-      setOpen(false);
-    }}>另存为副本</button></div>}
+    {open && <div role="menu">{alternatives.map(action =>
+      <button role="menuitem" key={action} onClick={() => {
+        setStatus("已执行：" + action);
+        setOpen(false);
+      }}>{action}</button>)}</div>}
     <output>{status}</output>
   </div>;
 }`;
@@ -906,6 +1158,59 @@ export default function Component() { const [on, setOn] = useState(false); retur
       js = `document.getElementById('city').addEventListener('input', event => event.currentTarget.setAttribute('aria-expanded', String(Boolean(event.currentTarget.value))));`;
       jsx = `export default function Component() { return <label className="demo stack"><span>城市</span><input role="combobox" aria-expanded="false" list="cities" /><datalist id="cities"><option value="北京" /><option value="上海" /><option value="深圳" /></datalist></label>; }`;
       break;
+    case "toast":
+      html = `<div class="demo stack">
+  <button id="show-toast" type="button">保存更改</button>
+  <div id="toast" role="status" tabindex="0" hidden>更改已保存</div>
+</div>`;
+      js = `const showButton = document.getElementById('show-toast');
+const toast = document.getElementById('toast');
+let timer;
+let hovered = false;
+let focused = false;
+const scheduleDismiss = () => {
+  clearTimeout(timer);
+  if (!hovered && !focused) timer = setTimeout(() => toast.hidden = true, 4000);
+};
+showButton.addEventListener('click', () => {
+  toast.hidden = false;
+  scheduleDismiss();
+});
+toast.addEventListener('pointerenter', () => {
+  hovered = true;
+  clearTimeout(timer);
+});
+toast.addEventListener('pointerleave', () => {
+  hovered = false;
+  scheduleDismiss();
+});
+toast.addEventListener('focusin', () => {
+  focused = true;
+  clearTimeout(timer);
+});
+toast.addEventListener('focusout', event => {
+  if (toast.contains(event.relatedTarget)) return;
+  focused = false;
+  scheduleDismiss();
+});`;
+      jsx = `import { useEffect, useState } from "react";
+export default function Component() {
+  const [visible, setVisible] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!visible || hovered || focused) return;
+    const timer = setTimeout(() => setVisible(false), 4000);
+    return () => clearTimeout(timer);
+  }, [visible, hovered, focused]);
+  return <div className="demo stack">
+    {!visible && <button type="button" onClick={() => setVisible(true)}>保存更改</button>}
+    {visible && <div role="status" tabIndex={0}
+      onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>更改已保存</div>}
+  </div>;
+}`;
+      break;
     case "inline-validation":
       html = `<div class="demo stack">
   <label for="email">邮箱</label>
@@ -932,6 +1237,62 @@ export default function Component() {
       onChange={event => setValue(event.target.value)} />
     {invalid && <p id="email-error" role="alert">请输入完整邮箱地址。</p>}
   </div>;
+}`;
+      break;
+    case "focus-ring":
+      html = `<section class="demo stack" aria-label="焦点环示例">
+  <p>按 Tab 键移动焦点，观察控件外侧的高对比焦点环。</p>
+  <div class="row"><a href="#focus-target">跳到示例</a><label>名称 <input value="示例"></label></div>
+  <span id="focus-target" tabindex="-1">示例目标</span>
+</section>`;
+      js = `// 原生键盘焦点配合 :focus-visible 显示焦点环，不需要 JavaScript。`;
+      extraCss = `.demo :focus { outline: none; }
+.demo :focus-visible { outline: 3px solid #fbbf24; outline-offset: 3px; box-shadow: 0 0 0 6px #0d1726; }`;
+      jsx = `export default function Component() {
+  return <section className="demo stack" aria-label="焦点环示例">
+    <p>按 Tab 键移动焦点，观察控件外侧的高对比焦点环。</p>
+    <div className="row"><a href="#focus-target">跳到示例</a>
+      <label>名称 <input defaultValue="示例" /></label></div>
+    <span id="focus-target" tabIndex={-1}>示例目标</span>
+  </section>;
+}`;
+      break;
+    case "progress-ring":
+      html = `<section class="demo stack">
+  <div class="progress-ring" role="progressbar" aria-label="上传进度" aria-valuemin="0"
+    aria-valuemax="100" aria-valuenow="64">
+    <svg viewBox="0 0 40 40" aria-hidden="true"><circle class="ring-track" cx="20" cy="20" r="16"></circle>
+      <circle class="ring-value" cx="20" cy="20" r="16"></circle></svg><output>64%</output>
+  </div>
+  <label for="ring-control">调整进度</label><input id="ring-control" type="range" min="0" max="100" value="64">
+</section>`;
+      js = `const ring = document.querySelector('.progress-ring');
+const circle = document.querySelector('.ring-value');
+const output = ring.querySelector('output');
+document.getElementById('ring-control').addEventListener('input', event => {
+  const value = Number(event.currentTarget.value);
+  circle.style.strokeDashoffset = String(100.5 * (1 - value / 100));
+  output.value = value + '%';
+  ring.setAttribute('aria-valuenow', String(value));
+});`;
+      extraCss = `.progress-ring { position: relative; display: grid; place-items: center; width: 7rem; aspect-ratio: 1; }
+.progress-ring svg { position: absolute; inset: 0; width: 100%; transform: rotate(-90deg); }
+.progress-ring circle { fill: none; stroke-width: 4; }
+.ring-track { stroke: #29415f; }
+.ring-value { stroke: #60a5fa; stroke-dasharray: 100.5; stroke-dashoffset: 36.2; }`;
+      jsx = `import { useState } from "react";
+export default function Component() {
+  const [value, setValue] = useState(64);
+  return <section className="demo stack">
+    <div className="progress-ring" role="progressbar" aria-label="上传进度"
+      aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}>
+      <svg viewBox="0 0 40 40" aria-hidden="true"><circle className="ring-track" cx="20" cy="20" r="16" />
+        <circle className="ring-value" cx="20" cy="20" r="16"
+          style={{ strokeDashoffset: 100.5 * (1 - value / 100) }} /></svg><output>{value}%</output>
+    </div>
+    <label htmlFor="ring-control">调整进度</label><input id="ring-control" type="range"
+      min="0" max="100" value={value} onChange={event => setValue(Number(event.target.value))} />
+  </section>;
 }`;
       break;
     case "badge":
@@ -982,6 +1343,38 @@ export default function Component() {
       js = `// popover 属性提供显示、外部关闭与 Escape 行为。`;
       jsx = `export default function Component() { return <div className="demo"><button type="button" popoverTarget="filters">筛选</button><div id="filters" popover="auto"><label><input type="checkbox" /> 仅显示可用项</label></div></div>; }`;
       break;
+    case "scrim":
+      html = `<section class="demo scrim-demo">
+  <button id="show-scrim" type="button">打开临时面板</button>
+  <dialog class="scrim-dialog" aria-labelledby="scrim-title">
+    <h2 id="scrim-title">筛选条件</h2><p>遮罩弱化后方内容，并阻止误操作。</p>
+    <button id="hide-scrim" type="button">关闭</button>
+  </dialog>
+</section>`;
+      js = `const dialog = document.querySelector('.scrim-dialog');
+const openButton = document.getElementById('show-scrim');
+const closeButton = document.getElementById('hide-scrim');
+openButton.addEventListener('click', () => dialog.showModal());
+closeButton.addEventListener('click', () => dialog.close());
+dialog.addEventListener('close', () => openButton.focus());`;
+      extraCss = `.scrim-demo { min-height: 14rem; }
+.scrim-dialog { width: min(22rem, calc(100% - 2rem)); padding: 1rem; color: #e8f1ff; background: #172a42; border: 1px solid #496582; border-radius: 10px; }
+.scrim-dialog::backdrop { background: rgb(0 0 0 / .68); }`;
+      jsx = `import { useRef } from "react";
+export default function Component() {
+  const trigger = useRef(null);
+  const dialog = useRef(null);
+  const close = () => dialog.current?.close();
+  return <section className="demo scrim-demo">
+    <button ref={trigger} type="button" onClick={() => dialog.current?.showModal()}>打开临时面板</button>
+    <dialog ref={dialog} className="scrim-dialog" aria-labelledby="scrim-title"
+      onClose={() => trigger.current?.focus()}>
+      <h2 id="scrim-title">筛选条件</h2><p>遮罩弱化后方内容，并阻止误操作。</p>
+      <button type="button" onClick={close}>关闭</button>
+    </dialog>
+  </section>;
+}`;
+      break;
     case "tooltip":
       html = `<div class="demo tooltip-wrap">
   <button type="button" aria-label="查看命令面板说明" aria-describedby="tip">⌘</button>
@@ -1012,11 +1405,11 @@ export default function Component() {
       break;
     case "hover-card":
       html = `<div class="demo hover-card-wrap">
-  维护者：<button type="button" aria-expanded="false" aria-controls="profile">林晨</button>
+  维护者：<a href="/people/lin" aria-expanded="false" aria-controls="profile">林晨</a>
   <aside id="profile" hidden><strong>林晨</strong><span>产品设计师</span><a href="/people/lin">查看资料</a></aside>
 </div>`;
       js = `const wrap = document.querySelector('.hover-card-wrap');
-const trigger = wrap.querySelector('button');
+const trigger = wrap.querySelector('a');
 const card = document.getElementById('profile');
 const setOpen = open => {
   card.hidden = !open;
@@ -1028,9 +1421,16 @@ wrap.addEventListener('focusin', () => setOpen(true));
 wrap.addEventListener('focusout', event => {
   if (!wrap.contains(event.relatedTarget)) setOpen(false);
 });
-trigger.addEventListener('click', () => setOpen(card.hidden));
+trigger.addEventListener('click', event => {
+  if (!card.hidden) return;
+  event.preventDefault();
+  setOpen(true);
+});
 wrap.addEventListener('keydown', event => {
-  if (event.key === 'Escape') setOpen(false);
+  if (event.key === 'Escape') {
+    setOpen(false);
+    trigger.focus();
+  }
 });`;
       extraCss = `#profile { display: inline-grid; gap: .25rem; margin-left: .75rem; padding: .6rem; background: #172a42; border-radius: 8px; }
 #profile[hidden] { display: none; }`;
@@ -1041,8 +1441,12 @@ export default function Component() {
     onPointerLeave={() => setOpen(false)} onFocus={() => setOpen(true)}
     onBlur={event => !event.currentTarget.contains(event.relatedTarget) && setOpen(false)}
     onKeyDown={event => event.key === "Escape" && setOpen(false)}>
-    维护者：<button type="button" aria-expanded={open} aria-controls="profile"
-      onClick={() => setOpen(!open)}>林晨</button>
+    维护者：<a href="/people/lin" aria-expanded={open} aria-controls="profile"
+      onClick={event => {
+        if (open) return;
+        event.preventDefault();
+        setOpen(true);
+      }}>林晨</a>
     {open && <aside id="profile"><strong>林晨</strong><span>产品设计师</span>
       <a href="/people/lin">查看资料</a></aside>}
   </div>;
@@ -1076,34 +1480,102 @@ export default function Component() {
     case "lightbox":
       html = `<div class="demo">
   <button id="open-photo" type="button" aria-label="放大查看海边照片">查看照片</button>
-  <dialog class="lightbox" aria-label="海边照片预览">
-    <figure><div class="photo" role="img" aria-label="蓝色海面"></div><figcaption>海边 · 2026</figcaption></figure>
+  <dialog class="lightbox" aria-label="照片预览">
+    <button id="previous-photo" type="button" aria-label="上一张照片">‹</button>
+    <figure>
+      <div class="photo" role="img" aria-label="蓝色海面"></div>
+      <figcaption aria-live="polite">海边 · 1 / 3</figcaption>
+    </figure>
+    <button id="next-photo" type="button" aria-label="下一张照片">›</button>
     <button id="close-photo" type="button">关闭</button>
   </dialog>
 </div>`;
       js = `const lightbox = document.querySelector('.lightbox');
+const photo = lightbox.querySelector('.photo');
+const caption = lightbox.querySelector('figcaption');
+const slides = [
+  ['蓝色海面', '海边 · 1 / 3', 'linear-gradient(#60a5fa, #1769e0)'],
+  ['紫色晚霞', '晚霞 · 2 / 3', 'linear-gradient(#c084fc, #6d28d9)'],
+  ['绿色山谷', '山谷 · 3 / 3', 'linear-gradient(#6ee7b7, #047857)'],
+];
+let index = 0;
+const render = () => {
+  const [name, text, background] = slides[index];
+  photo.setAttribute('aria-label', name);
+  photo.style.background = background;
+  caption.textContent = text;
+};
 document.getElementById('open-photo').addEventListener('click', () => lightbox.showModal());
+document.getElementById('previous-photo').addEventListener('click', () => {
+  index = (index - 1 + slides.length) % slides.length;
+  render();
+});
+document.getElementById('next-photo').addEventListener('click', () => {
+  index = (index + 1) % slides.length;
+  render();
+});
 document.getElementById('close-photo').addEventListener('click', () => lightbox.close());`;
       extraCss = `.lightbox { max-width: 42rem; background: #07111f; color: #fff; }
+.lightbox figure { margin: 0; }
 .photo { width: min(36rem, 75vw); aspect-ratio: 16 / 9; background: linear-gradient(#60a5fa, #1769e0); }`;
-      jsx = `import { useRef } from "react";
+      jsx = `import { useRef, useState } from "react";
 export default function Component() {
   const lightbox = useRef(null);
+  const [index, setIndex] = useState(0);
+  const slides = [
+    ["蓝色海面", "海边", "linear-gradient(#60a5fa, #1769e0)"],
+    ["紫色晚霞", "晚霞", "linear-gradient(#c084fc, #6d28d9)"],
+    ["绿色山谷", "山谷", "linear-gradient(#6ee7b7, #047857)"],
+  ];
+  const slide = slides[index];
   return <div className="demo">
     <button type="button" aria-label="放大查看海边照片"
       onClick={() => lightbox.current?.showModal()}>查看照片</button>
-    <dialog ref={lightbox} className="lightbox" aria-label="海边照片预览">
-      <figure><div className="photo" role="img" aria-label="蓝色海面" />
-        <figcaption>海边 · 2026</figcaption></figure>
+    <dialog ref={lightbox} className="lightbox" aria-label="照片预览">
+      <button type="button" aria-label="上一张照片"
+        onClick={() => setIndex((index - 1 + slides.length) % slides.length)}>‹</button>
+      <figure><div className="photo" role="img" aria-label={slide[0]}
+        style={{ background: slide[2] }} />
+        <figcaption aria-live="polite">{slide[1]} · {index + 1} / {slides.length}</figcaption></figure>
+      <button type="button" aria-label="下一张照片"
+        onClick={() => setIndex((index + 1) % slides.length)}>›</button>
       <button type="button" onClick={() => lightbox.current?.close()}>关闭</button>
     </dialog>
   </div>;
 }`;
       break;
     case "accordion":
-      html = `<section class="demo stack" aria-label="常见问题"><details><summary>可以键盘操作吗？</summary><p>可以，焦点位于标题时按 Enter 或空格。</p></details><details><summary>能同时展开吗？</summary><p>这个示例允许同时展开。</p></details></section>`;
+      html = `<section class="demo stack" aria-label="常见问题">
+  <details open><summary>什么是 Slider？</summary><p>一种在连续范围内选择数值的控件。</p></details>
+  <details><summary>可以键盘操作吗？</summary><p>可以，焦点位于标题时按 Enter 或空格。</p></details>
+  <details><summary>何时使用？</summary><p>当范围有明确上下界，且用户更关心相对值时使用。</p></details>
+</section>`;
       js = `// details/summary 自带键盘展开行为。`;
-      jsx = `export default function Component() { return <section className="demo stack" aria-label="常见问题"><details><summary>可以键盘操作吗？</summary><p>可以，按 Enter 或空格。</p></details><details><summary>能同时展开吗？</summary><p>这个示例允许同时展开。</p></details></section>; }`;
+      jsx = `export default function Component() {
+  return <section className="demo stack" aria-label="常见问题">
+    <details open><summary>什么是 Slider？</summary><p>一种在连续范围内选择数值的控件。</p></details>
+    <details><summary>可以键盘操作吗？</summary><p>可以，按 Enter 或空格。</p></details>
+    <details><summary>何时使用？</summary><p>范围有明确上下界时使用。</p></details>
+  </section>;
+}`;
+      break;
+    case "divider":
+      html = `<section class="demo stack">
+  <div><strong>账户设置</strong><p class="muted">管理个人资料与登录方式。</p></div>
+  <hr>
+  <div class="row"><span>通知</span><span class="muted">已开启</span></div>
+  <div class="row"><span>隐私</span><span class="muted">仅自己</span></div>
+</section>`;
+      js = `// 原生 hr 已表达主题分隔，不需要 JavaScript。`;
+      extraCss = `.demo hr { width: 100%; margin: .25rem 0; border: 0; border-top: 1px solid #29415f; }`;
+      jsx = `export default function Component() {
+  return <section className="demo stack">
+    <div><strong>账户设置</strong><p className="muted">管理个人资料与登录方式。</p></div>
+    <hr />
+    <div className="row"><span>通知</span><span className="muted">已开启</span></div>
+    <div className="row"><span>隐私</span><span className="muted">仅自己</span></div>
+  </section>;
+}`;
       break;
     case "list-item":
       html = `<ul class="demo stack"><li><a href="/messages/1"><strong>设计评审</strong><br><span class="muted">今天 10:30</span></a></li><li><a href="/messages/2"><strong>版本发布</strong><br><span class="muted">昨天</span></a></li></ul>`;
@@ -1262,10 +1734,94 @@ export default function Component() {
 }`;
       break;
     case "tree-view":
-      html = `<ul class="demo" role="tree" aria-label="文件"><li role="treeitem" aria-expanded="true">组件<ul role="group"><li role="treeitem" tabindex="0">Button.tsx</li><li role="treeitem" tabindex="-1">Slider.tsx</li></ul></li></ul>`;
-      js = `document.querySelector('[aria-expanded]').addEventListener('click', event => { const open = event.currentTarget.getAttribute('aria-expanded') === 'true'; event.currentTarget.setAttribute('aria-expanded', String(!open)); event.currentTarget.querySelector('[role="group"]').hidden = open; });`;
+      html = `<ul class="demo" role="tree" aria-label="文件">
+  <li role="none"><button id="tree-root" role="treeitem" aria-expanded="true" aria-selected="true" tabindex="0">组件</button>
+    <ul role="group"><li role="none"><button role="treeitem" aria-selected="false" tabindex="-1">Button.tsx</button></li>
+      <li role="none"><button role="treeitem" aria-selected="false" tabindex="-1">Slider.tsx</button></li></ul>
+  </li>
+</ul>`;
+      js = `const tree = document.querySelector('[role="tree"]');
+const root = document.getElementById('tree-root');
+const group = tree.querySelector('[role="group"]');
+const items = [root, ...group.querySelectorAll('[role="treeitem"]')];
+const focusItem = index => {
+  items.forEach((item, itemIndex) => {
+    item.tabIndex = itemIndex === index ? 0 : -1;
+    item.setAttribute('aria-selected', String(itemIndex === index));
+  });
+  items[index].focus();
+};
+const setOpen = open => {
+  root.setAttribute('aria-expanded', String(open));
+  group.hidden = !open;
+  if (!open) focusItem(0);
+};
+tree.addEventListener('click', event => {
+  const item = event.target.closest('[role="treeitem"]');
+  if (!item) return;
+  const index = items.indexOf(item);
+  focusItem(index);
+  if (item === root) setOpen(root.getAttribute('aria-expanded') !== 'true');
+});
+tree.addEventListener('keydown', event => {
+  const item = event.target.closest('[role="treeitem"]');
+  if (!item) return;
+  const open = root.getAttribute('aria-expanded') === 'true';
+  const visible = open ? items : [root];
+  const index = visible.indexOf(item);
+  let next = null;
+  if (event.key === 'Home') next = 0;
+  else if (event.key === 'End') next = visible.length - 1;
+  else if (event.key === 'ArrowDown') next = Math.min(visible.length - 1, index + 1);
+  else if (event.key === 'ArrowUp') next = Math.max(0, index - 1);
+  else if (event.key === 'ArrowRight' && item === root && !open) setOpen(true);
+  else if (event.key === 'ArrowRight' && item === root) next = 1;
+  else if (event.key === 'ArrowLeft' && item !== root) next = 0;
+  else if (event.key === 'ArrowLeft' && item === root && open) setOpen(false);
+  else if ((event.key === 'Enter' || event.key === ' ') && item === root) setOpen(!open);
+  else return;
+  event.preventDefault();
+  if (next !== null) focusItem(next);
+});`;
       jsx = `import { useState } from "react";
-export default function Component() { const [open, setOpen] = useState(true); return <ul className="demo" role="tree" aria-label="文件"><li role="treeitem" aria-expanded={open} onClick={() => setOpen(!open)}>组件{open && <ul role="group"><li role="treeitem">Button.tsx</li><li role="treeitem">Slider.tsx</li></ul>}</li></ul>; }`;
+export default function Component() {
+  const [open, setOpen] = useState(true);
+  const [active, setActive] = useState(0);
+  const children = ["Button.tsx", "Slider.tsx"];
+  const focusItem = (event, index) => {
+    const tree = event.currentTarget.closest('[role="tree"]');
+    setActive(index);
+    requestAnimationFrame(() => tree.querySelectorAll('[role="treeitem"]')[index]?.focus());
+  };
+  const handleKey = (event, index) => {
+    let next = null;
+    if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = open ? children.length : 0;
+    else if (event.key === "ArrowDown") next = Math.min(open ? children.length : 0, index + 1);
+    else if (event.key === "ArrowUp") next = Math.max(0, index - 1);
+    else if (event.key === "ArrowRight" && index === 0 && !open) setOpen(true);
+    else if (event.key === "ArrowRight" && index === 0) next = 1;
+    else if (event.key === "ArrowLeft" && index > 0) next = 0;
+    else if (event.key === "ArrowLeft" && index === 0 && open) setOpen(false);
+    else if ((event.key === "Enter" || event.key === " ") && index === 0) setOpen(value => !value);
+    else return;
+    event.preventDefault();
+    if (next !== null) focusItem(event, next);
+    else if (index === 0) setActive(0);
+  };
+  return <ul className="demo" role="tree" aria-label="文件"><li role="none">
+    <button role="treeitem" type="button" aria-expanded={open} aria-selected={active === 0}
+      tabIndex={active === 0 ? 0 : -1} onClick={() => {
+        setActive(0);
+        setOpen(value => !value);
+      }} onKeyDown={event => handleKey(event, 0)}>组件</button>
+    {open && <ul role="group">{children.map((item, index) => <li key={item} role="none">
+      <button role="treeitem" type="button" aria-selected={active === index + 1}
+        tabIndex={active === index + 1 ? 0 : -1} onClick={() => setActive(index + 1)}
+        onKeyDown={event => handleKey(event, index + 1)}>{item}</button>
+    </li>)}</ul>}
+  </li></ul>;
+}`;
       break;
     case "timeline":
       html = `<ol class="demo stack"><li><time datetime="2026-07-14T10:00">10:00</time> 创建任务</li><li><time datetime="2026-07-14T11:30">11:30</time> 完成设计</li><li><time datetime="2026-07-14T14:00">14:00</time> 发布</li></ol>`;
@@ -1273,9 +1829,35 @@ export default function Component() { const [open, setOpen] = useState(true); re
       jsx = `export default function Component() { return <ol className="demo stack"><li><time dateTime="2026-07-14T10:00">10:00</time> 创建任务</li><li><time dateTime="2026-07-14T14:00">14:00</time> 发布</li></ol>; }`;
       break;
     case "calendar-view":
-      html = `<table class="demo"><caption>2026 年 7 月</caption><thead><tr><th scope="col">一</th><th scope="col">二</th><th scope="col">三</th></tr></thead><tbody><tr><td><button aria-label="7 月 13 日">13</button></td><td><button aria-label="7 月 14 日，有 2 个事件">14</button></td><td><button aria-label="7 月 15 日">15</button></td></tr></tbody></table>`;
-      js = `document.querySelectorAll('td button').forEach(button => button.addEventListener('click', () => console.log(button.getAttribute('aria-label'))));`;
-      jsx = `export default function Component() { return <table className="demo"><caption>2026 年 7 月</caption><thead><tr><th scope="col">一</th><th scope="col">二</th><th scope="col">三</th></tr></thead><tbody><tr><td><button aria-label="7 月 13 日">13</button></td><td><button aria-label="7 月 14 日，有 2 个事件">14</button></td><td><button aria-label="7 月 15 日">15</button></td></tr></tbody></table>; }`;
+      html = `<div class="demo stack">
+  <table><caption>2026 年 7 月</caption>
+    <thead><tr><th scope="col">一</th><th scope="col">二</th><th scope="col">三</th></tr></thead>
+    <tbody><tr>
+      <td><button data-selection="7 月 13 日">13</button></td>
+      <td><button data-selection="7 月 14 日：设计评审">14<small>设计评审</small></button></td>
+      <td><button data-selection="7 月 15 日：版本发布">15<small>版本发布</small></button></td>
+    </tr></tbody>
+  </table>
+  <output>尚未选择日期</output>
+</div>`;
+      js = `const output = document.querySelector('.demo output');
+document.querySelectorAll('td button').forEach(button => {
+  button.addEventListener('click', () => {
+    output.value = button.dataset.selection;
+  });
+});`;
+      jsx = `import { useState } from "react";
+export default function Component() {
+  const [selection, setSelection] = useState("尚未选择日期");
+  return <div className="demo stack"><table><caption>2026 年 7 月</caption>
+    <thead><tr><th scope="col">一</th><th scope="col">二</th><th scope="col">三</th></tr></thead>
+    <tbody><tr><td><button onClick={() => setSelection("7 月 13 日")}>13</button></td>
+      <td><button onClick={() => setSelection("7 月 14 日：设计评审")}>14
+        <small>设计评审</small></button></td>
+      <td><button onClick={() => setSelection("7 月 15 日：版本发布")}>15
+        <small>版本发布</small></button></td></tr></tbody>
+  </table><output>{selection}</output></div>;
+}`;
       break;
     case "chart":
       html = `<figure class="demo"><svg viewBox="0 0 240 120" role="img" aria-labelledby="chart-title chart-desc"><title id="chart-title">三个月访问量</title><desc id="chart-desc">五月 40，六月 75，七月 60。</desc><rect x="20" y="60" width="45" height="40"></rect><rect x="95" y="25" width="45" height="75"></rect><rect x="170" y="40" width="45" height="60"></rect></svg><figcaption>访问量（千次）</figcaption></figure>`;
@@ -1536,7 +2118,7 @@ export default function Component() { const [value, setValue] = useState(50); re
 }
 
 const catalogSeeds: readonly CatalogSeed[] = [
-  // 导航与定位（9）
+  // 导航与定位（10）
   seed(
     "navigation-bar", "navigation", ALL, "导航栏", "Navigation Bar",
     "固定在页面顶部或显眼位置，承载品牌、主导航与全局操作。", "A prominent bar that holds branding, primary navigation, and global actions.",
@@ -1600,8 +2182,15 @@ const catalogSeeds: readonly CatalogSeed[] = [
     ["章节链接", "锚点目标", "当前位置指示"], "文档或长文章需要快速浏览章节时。", "页面很短或内容顺序必须逐步完成时。",
     "链接 href 指向唯一标题 id；处理固定头部偏移，并让目标标题可被聚焦。", ["breadcrumb", "sidebar-navigation", "scroll-snap"], "nav",
   ),
+  seed(
+    "split-view", "navigation", WEB_DESKTOP, "分栏视图", "Split View",
+    "把同一工作区分成可并排浏览的主从面板。", "Divides one workspace into adjacent master and detail panes.",
+    ["Split Pane", "Master Detail", "分割视图", "NSSplitView"], ["左右两栏", "可调整侧栏宽度", "主从面板", "resizable panes"],
+    ["主面板", "可调整分隔条", "详情面板"], "用户需要保留列表上下文并同时查看详情时。", "小屏空间不足或两个面板没有持续关系时。",
+    "分隔条使用 separator 语义并支持方向键调整；面板标题和焦点顺序保持清楚。", ["sidebar-navigation", "divider", "side-sheet"], "content",
+  ),
 
-  // 操作与菜单（8）
+  // 操作与菜单（9）
   seed(
     "button", "actions", ALL, "按钮", "Button",
     "触发即时操作或提交任务的可点击控件。", "A control that triggers an immediate action or submits a task.",
@@ -1657,6 +2246,13 @@ const catalogSeeds: readonly CatalogSeed[] = [
     ["More Menu", "Kebab Menu", "Ellipsis Menu", "更多菜单"], ["三个点按钮", "竖着的省略号菜单", "收起不常用操作", "more actions"],
     ["更多按钮", "菜单浮层", "次要操作项"], "操作较多且需要突出少数主要动作时。", "被收纳的是核心或高频操作时。",
     "更多按钮必须有可访问名称；不要仅朗读为省略号，并复用标准菜单键盘行为。", ["dropdown-menu", "toolbar", "icon-button"], "menu",
+  ),
+  seed(
+    "command-palette", "actions", WEB_DESKTOP, "命令面板", "Command Palette",
+    "通过可搜索浮层快速查找并执行应用命令。", "A searchable overlay for finding and running application commands.",
+    ["Command Menu", "Quick Open", "命令菜单", "快捷命令"], ["按快捷键搜索命令", "快速打开功能", "可搜索操作列表", "command k"],
+    ["打开触发器", "搜索框", "命令结果列表"], "功能较多且熟练用户需要快速执行跨区域操作时。", "只有少量操作或命令名称难以理解时。",
+    "浮层使用 dialog 语义；打开后聚焦搜索框，支持 Escape、结果键盘导航和焦点恢复。", ["search-field", "dialog", "dropdown-menu"], "overlay",
   ),
 
   // 文本与文件输入（9）
@@ -1796,7 +2392,7 @@ const catalogSeeds: readonly CatalogSeed[] = [
     "每个色样有文字名称或数值；支持键盘与文本格式，并提示对比度问题。", ["radio-group", "popover", "text-field"], "picker",
   ),
 
-  // 反馈与状态（9）
+  // 反馈与状态（11）
   seed(
     "alert", "feedback", ALL, "警告提示", "Alert",
     "在页面内突出需要注意的重要信息或状态。", "Prominently communicates important information or status within a page.",
@@ -1860,8 +2456,22 @@ const catalogSeeds: readonly CatalogSeed[] = [
     ["标题", "原因或说明", "可选主要操作"], "列表初次为空、筛选无结果或内容已清空时。", "系统仍在加载或发生错误但被误称为空时。",
     "标题清楚描述状态，操作是标准按钮或链接；插图不能承担必要信息。", ["skeleton-screen", "alert", "search-field"], "feedback",
   ),
+  seed(
+    "focus-ring", "feedback", ALL, "焦点环", "Focus Ring",
+    "在键盘聚焦控件外显示清晰轮廓，标示当前操作位置。", "A visible outline indicating the currently keyboard-focused control.",
+    ["Focus Indicator", "Focus Outline", "焦点指示器"], ["tab 键蓝色外框", "键盘焦点在哪里", "控件外侧高亮轮廓", "focus visible"],
+    ["可聚焦控件", "外侧轮廓", "对比背景"], "界面包含任何键盘可操作控件时。", "不要移除焦点环，或只在鼠标点击后制造多余视觉噪声。",
+    "优先使用 :focus-visible；轮廓对比清楚且不被裁切，不能只靠颜色变化。", ["button", "text-field", "tooltip"], "button",
+  ),
+  seed(
+    "progress-ring", "feedback", ALL, "环形进度", "Progress Ring",
+    "用圆环填充比例显示确定性任务的完成进度。", "Shows determinate task completion as a partially filled circular track.",
+    ["Circular Progress", "Radial Progress", "环形进度条"], ["圆圈显示百分比", "环形上传进度", "圆形完成度", "circular progress"],
+    ["圆环轨道", "进度弧线", "数值标签"], "空间紧凑且需要显示单个任务的确定进度时。", "无法估算完成比例或需要比较多个精确值时。",
+    "提供 progressbar 名称、最小最大值与当前值；动画不是唯一信息来源。", ["progress-bar", "spinner", "progress-stepper"], "progress",
+  ),
 
-  // 浮层与展开（9）
+  // 浮层与展开（10）
   seed(
     "dialog", "overlays", ALL, "对话框", "Dialog",
     "在当前页面上方打开一个需要集中处理的独立任务容器。", "Opens a focused task container above the current page.",
@@ -1925,8 +2535,15 @@ const catalogSeeds: readonly CatalogSeed[] = [
     ["遮罩", "放大媒体", "关闭与前后导航"], "缩略图需要不离开页面即可查看大图时。", "媒体需要复杂编辑、下载信息或独立可分享页面时。",
     "实现对话框焦点规则；图片有替代文本，前后与关闭按钮有名称，支持 Escape。", ["image-gallery", "carousel", "dialog"], "overlay",
   ),
+  seed(
+    "scrim", "overlays", ALL, "遮罩层", "Scrim",
+    "覆盖在主内容上方的半透明层，用于弱化背景并承托临时界面。", "A translucent layer that dims content behind a temporary surface.",
+    ["Backdrop", "Dimming Layer", "Overlay", "背景遮罩"], ["弹窗后面变暗", "覆盖页面的半透明黑层", "点击背景关闭", "modal backdrop"],
+    ["半透明覆盖层", "背景内容", "前景界面"], "对话框、抽屉或灯箱需要明确隔离背景时。", "只想装饰性调暗区域，或前景界面并非模态时。",
+    "遮罩本身设为装饰；由前景容器承担 dialog 语义，并正确管理焦点和关闭行为。", ["dialog", "side-sheet", "lightbox"], "overlay",
+  ),
 
-  // 内容与媒体（7）
+  // 内容与媒体（8）
   seed(
     "card", "content", ALL, "卡片", "Card",
     "把一个主题的标题、内容和操作组织成独立视觉单元。", "Groups a single topic's title, content, and actions into a distinct visual unit.",
@@ -1975,6 +2592,13 @@ const catalogSeeds: readonly CatalogSeed[] = [
     ["Read More", "Line Clamp", "Show More", "省略文字"], ["文字末尾三个点", "展开全文", "超过两行省略", "line clamp"],
     ["被截断文本", "渐隐或省略提示", "展开收起按钮"], "长描述会打断列表扫描，但完整内容仍需就地访问时。", "截断会隐藏关键决策信息或文字本来很短时。",
     "使用有明确名称的 button，同步 aria-expanded；全文在展开后仍保持自然阅读顺序。", ["disclosure", "textarea", "card"], "disclosure",
+  ),
+  seed(
+    "divider", "content", ALL, "分隔线", "Divider",
+    "用细线或留白分开相邻内容组，帮助扫描结构。", "Separates adjacent content groups with a line or spacing cue.",
+    ["Separator", "Rule", "Hairline", "分割线"], ["两块内容中间一条线", "菜单项目分组", "水平细线", "hr separator"],
+    ["分隔线", "前一内容组", "后一内容组"], "相邻内容需要视觉分组但不值得增加标题或容器时。", "每个项目都加线会造成噪声，或分组关系已足够清楚时。",
+    "有主题分隔含义时使用 hr；纯装饰线对辅助技术隐藏，不能替代必要标题。", ["card", "toolbar", "split-view"], "content",
   ),
 
   // 数据展示（6）
@@ -2163,7 +2787,7 @@ export function validateCatalog(items: readonly CatalogItem[] = catalog): string
   const errors: string[] = [];
   const slugs = new Set(items.map((item) => item.slug));
 
-  if (items.length !== 75) errors.push(`目录应包含 75 个条目，当前为 ${items.length} 个。`);
+  if (items.length !== 81) errors.push(`目录应包含 81 个条目，当前为 ${items.length} 个。`);
   if (slugs.size !== items.length) errors.push("目录包含重复 slug。");
 
   for (const item of items) {

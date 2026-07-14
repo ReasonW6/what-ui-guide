@@ -5,10 +5,10 @@ import vm from "node:vm";
 import ts from "typescript";
 import { loadCatalogModule } from "./catalog-loader.mjs";
 
-test("catalog contains the planned 75 complete bilingual entries", async () => {
+test("catalog contains the planned 81 complete bilingual entries", async () => {
   const { catalog, categories, validateCatalog } = await loadCatalogModule();
-  assert.equal(catalog.length, 75);
-  assert.equal(new Set(catalog.map((item) => item.slug)).size, 75);
+  assert.equal(catalog.length, 81);
+  assert.equal(new Set(catalog.map((item) => item.slug)).size, 81);
   assert.equal(categories.length, 9);
   assert.deepEqual(validateCatalog(), []);
 
@@ -19,13 +19,13 @@ test("catalog contains the planned 75 complete bilingual entries", async () => {
     ]),
   );
   assert.deepEqual(counts, {
-    navigation: 9,
-    actions: 8,
+    navigation: 10,
+    actions: 9,
     inputs: 9,
     selection: 10,
-    feedback: 9,
-    overlays: 9,
-    content: 7,
+    feedback: 11,
+    overlays: 10,
+    content: 8,
     data: 6,
     motion: 8,
   });
@@ -186,6 +186,8 @@ test("copyable samples preserve the advertised interaction semantics", async () 
   assert.match(code("navigation-drawer", "vanilla", "html"), /drawer-backdrop[\s\S]*<nav/);
   assert.match(code("navigation-drawer", "vanilla", "js"), /Escape/);
   assert.match(code("navigation-drawer", "vanilla", "js"), /trigger\.focus/);
+  assert.match(code("navigation-bar", "vanilla", "html"), /主导航[\s\S]*打开账户菜单/);
+  assert.match(code("navigation-bar", "react", "jsx"), /打开账户菜单[\s\S]*setStatus/);
   assert.match(code("button-group", "react", "jsx"), /role="group"[\s\S]*setSelected/);
   assert.match(code("tags-input", "vanilla", "js"), /addTag[\s\S]*parentElement\.remove/);
   assert.match(code("tags-input", "react", "jsx"), /setTags[\s\S]*onKeyDown/);
@@ -200,17 +202,70 @@ test("copyable samples preserve the advertised interaction semantics", async () 
   assert.match(code("pan-and-zoom", "vanilla", "js"), /translate/);
   assert.match(code("pan-and-zoom", "react", "jsx"), /onPointerMove[\s\S]*setPosition/);
 
-  assert.match(code("split-button", "react", "jsx"), /setStatus[\s\S]*setOpen/);
+  assert.match(code("split-button", "vanilla", "html"), /立即发布[\s\S]*定时发布[\s\S]*保存草稿/);
+  assert.match(code("split-button", "react", "jsx"), /定时发布[\s\S]*保存草稿[\s\S]*setOpen/);
   assert.match(code("toolbar", "react", "jsx"), /role="toolbar"[\s\S]*onClick/);
   assert.match(code("anchor-navigation", "vanilla", "html"), /href="#overview"[\s\S]*id="overview"/);
   assert.match(code("inline-validation", "react", "jsx"), /aria-invalid[\s\S]*onChange/);
   assert.match(code("tooltip", "react", "jsx"), /aria-label="查看命令面板说明"/);
+  assert.match(code("toast", "vanilla", "js"), /setTimeout[\s\S]*pointerenter[\s\S]*focusin/);
+  assert.match(code("toast", "react", "jsx"), /useEffect[\s\S]*hovered[\s\S]*focused/);
+  assert.match(code("hover-card", "vanilla", "html"), /<a href="\/people\/lin"[\s\S]*<aside/);
+  assert.match(code("hover-card", "react", "jsx"), /<a href="\/people\/lin"[\s\S]*<aside/);
+  assert.match(code("lightbox", "vanilla", "html"), /上一张照片[\s\S]*下一张照片/);
+  assert.match(code("lightbox", "react", "jsx"), /setIndex[\s\S]*figcaption/);
+  assert.match(code("calendar-view", "vanilla", "html"), /设计评审[\s\S]*版本发布/);
+  assert.match(code("calendar-view", "react", "jsx"), /setSelection[\s\S]*设计评审/);
+  assert.equal((code("accordion", "vanilla", "html").match(/<details/g) ?? []).length, 3);
+  assert.equal((code("accordion", "react", "jsx").match(/<details/g) ?? []).length, 3);
   assert.match(code("lazy-loading", "react", "css"), /linear-gradient/);
   assert.match(code("lazy-loading", "vanilla", "html"), /R0lGODlhAQABAIAAAAAAAP\/\/\/ywAAAAAAQABAAACAUwAOw==/);
   assert.doesNotMatch(code("lazy-loading", "vanilla", "html"), /R0lGODlhAQABAAAAACw=/);
 });
 
-test("DemoRegistry covers the same 75 slugs as the catalog", async () => {
+test("new reference patterns have specific, runnable code samples", async () => {
+  const { catalog } = await loadCatalogModule();
+  const code = (slug, family, language) => {
+    const item = catalog.find((entry) => entry.slug === slug);
+    const files = family === "vanilla" ? item?.code.vanilla : item?.code.react;
+    const file = files?.find((entry) => entry.language === language);
+    assert.ok(file, `${slug}/${family}/${language} is missing`);
+    return file.code;
+  };
+
+  assert.match(code("split-view", "vanilla", "html"), /role="separator"[\s\S]*aria-valuenow/);
+  assert.match(code("split-view", "react", "jsx"), /setSize[\s\S]*onKeyDown/);
+  assert.match(code("command-palette", "vanilla", "html"), /<dialog[\s\S]*type="search"/);
+  assert.match(code("command-palette", "vanilla", "js"), /showModal[\s\S]*close[\s\S]*trigger\.focus/);
+  assert.match(code("command-palette", "react", "jsx"), /showModal/);
+  assert.match(code("command-palette", "react", "jsx"), /<dialog[\s\S]*onClose/);
+  assert.match(code("command-palette", "react", "jsx"), /commands\.filter[\s\S]*run\(command\)/);
+  assert.match(code("focus-ring", "vanilla", "css"), /:focus-visible[\s\S]*outline/);
+  assert.match(code("progress-ring", "vanilla", "html"), /role="progressbar"[\s\S]*<svg/);
+  assert.match(code("progress-ring", "react", "jsx"), /aria-valuenow=\{value\}[\s\S]*setValue/);
+  assert.match(code("scrim", "vanilla", "html"), /<dialog class="scrim-dialog"/);
+  assert.match(code("scrim", "vanilla", "css"), /::backdrop/);
+  assert.match(code("scrim", "react", "jsx"), /showModal/);
+  assert.match(code("scrim", "react", "jsx"), /<dialog[\s\S]*onClose/);
+  assert.match(code("divider", "vanilla", "html"), /<hr>/);
+  assert.match(code("divider", "react", "jsx"), /<hr\s*\/>/);
+
+  assert.match(code("tabs", "vanilla", "js"), /ArrowRight[\s\S]*Home/);
+  assert.match(code("tabs", "vanilla", "js"), /tabIndex/);
+  assert.match(code("tabs", "react", "jsx"), /aria-controls/);
+  assert.match(code("tabs", "react", "jsx"), /aria-labelledby/);
+  assert.match(code("tabs", "react", "jsx"), /onKeyDown/);
+  assert.match(code("dropdown-menu", "vanilla", "js"), /ArrowDown/);
+  assert.match(code("dropdown-menu", "vanilla", "js"), /Escape/);
+  assert.match(code("dropdown-menu", "vanilla", "js"), /trigger\.focus/);
+  assert.match(code("overflow-menu", "react", "jsx"), /choose\(action\)[\s\S]*role="menuitem"/);
+  assert.match(code("tree-view", "vanilla", "html"), /button[^>]*role="treeitem"[\s\S]*role="group"/);
+  assert.match(code("tree-view", "vanilla", "js"), /ArrowRight[\s\S]*ArrowLeft/);
+  assert.match(code("tree-view", "vanilla", "js"), /focusItem/);
+  assert.match(code("tree-view", "react", "jsx"), /tabIndex[\s\S]*onKeyDown[\s\S]*aria-selected/);
+});
+
+test("DemoRegistry covers the same 81 slugs as the catalog", async () => {
   const { catalog } = await loadCatalogModule();
   const source = await readFile(new URL("../app/ui/DemoStage.tsx", import.meta.url), "utf8");
   const start = source.indexOf("export const demoSlugs = [");
@@ -219,7 +274,7 @@ test("DemoRegistry covers the same 75 slugs as the catalog", async () => {
   const slugs = [...source.slice(start, end).matchAll(/"([a-z0-9-]+)"/g)].map(
     (match) => match[1],
   );
-  assert.equal(slugs.length, 75);
+  assert.equal(slugs.length, 81);
   assert.deepEqual(
     slugs.slice().sort(),
     catalog.map((item) => item.slug).slice().sort(),

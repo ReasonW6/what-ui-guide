@@ -49,7 +49,7 @@ test("home page renders the finished bilingual catalog", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
-test("all 75 component detail routes render and unknown slugs return 404", async () => {
+test("all 81 component detail routes render and unknown slugs return 404", async () => {
   const { catalog } = await loadCatalogModule();
   for (let index = 0; index < catalog.length; index += 10) {
     const batch = catalog.slice(index, index + 10);
@@ -70,7 +70,10 @@ test("all 75 component detail routes render and unknown slugs return 404", async
   assert.match(sliderHtml, /class="detail-layout"/);
   assert.match(sliderHtml, /class="detail-visual-sticky"/);
   assert.match(sliderHtml, /href="#component-content"/);
-  assert.match(sliderHtml, /Slider 选择单值；Range Slider 选择区间；Progress Bar 只展示进度/);
+  assert.match(
+    sliderHtml,
+    /Slider 选择单值；Range Slider 选择区间；Progress Bar \/ Ring 展示确定进度；Spinner 只表示处理中/,
+  );
   assert.match(sliderHtml, /<header[^>]*class="detail-header"[^>]*>[\s\S]*<main[^>]*class="detail-main"[^>]*>[\s\S]*<footer[^>]*class="site-footer"/);
 
   const missing = await render("/components/not-a-real-component");
