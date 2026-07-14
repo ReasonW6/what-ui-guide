@@ -877,10 +877,6 @@ a:focus-visible,
   margin-top: 6px;
 }
 
-.info-panel-wide {
-  grid-column: 1 / -1;
-}
-
 .prompt-box {
   border: 1px solid var(--line);
   border-radius: 10px;

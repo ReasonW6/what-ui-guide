@@ -111,7 +111,7 @@ export default async function ComponentPage({ params }: ComponentPageProps) {
                   <h3>不建议使用</h3>
                   <ul>{item.avoidWhen.map((line) => <li key={line}>{line}</li>)}</ul>
                 </div>
-                <div className="info-panel info-panel-wide">
+                <div className="info-panel">
                   <h3>键盘与无障碍</h3>
                   <ul>{item.accessibility.map((line) => <li key={line}>{line}</li>)}</ul>
                 </div>
