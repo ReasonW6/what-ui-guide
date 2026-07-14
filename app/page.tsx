@@ -28,7 +28,6 @@ export default async function Home({ searchParams }: HomeProps) {
     : "all";
   const cards = catalog.map((item) => ({
     slug: item.slug,
-    order: item.order,
     category: item.category,
     platforms: item.platforms,
     name: item.name,

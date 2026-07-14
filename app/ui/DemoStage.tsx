@@ -139,7 +139,7 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     case "navigation-bar":
       return (
         <nav className="demo-navbar" aria-label="演示主导航">
-          <strong><span className="demo-logo-dot" />NOVA</strong>
+          <strong><span className="demo-logo-dot" />设计笔记</strong>
           {navButtons()}
           <Status>{active}</Status>
         </nav>
@@ -234,7 +234,9 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
 function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const [count, setCount] = useState(0);
   const [selected, setSelected] = useState("左对齐");
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(
+    density === "card" && ["split-button", "dropdown-menu", "context-menu", "overflow-menu"].includes(slug),
+  );
   const [favorite, setFavorite] = useState(false);
   const actions = ["复制链接", "移动到…", "加入收藏"];
   const choose = (value: string) => {
@@ -355,8 +357,8 @@ function SelectionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const [choice, setChoice] = useState("自动");
   const [value, setValue] = useState(62);
   const [secondValue, setSecondValue] = useState(84);
-  const [color, setColor] = useState("#4f8cff");
-  const [query, setQuery] = useState("");
+  const [color, setColor] = useState("#0a6cff");
+  const [query, setQuery] = useState(density === "card" && slug === "combobox" ? "sl" : "");
   const options = ["自动", "Web", "Mobile"];
   const matches = ["Slider · 滑块", "Range slider · 范围滑块", "Switch · 开关"].filter((item) => item.toLowerCase().includes(query.toLowerCase()));
 
@@ -385,7 +387,7 @@ function SelectionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     case "date-picker":
       return <label className="demo-field"><span>选择日期</span><input onChange={(event) => setChoice(event.target.value)} type="date" value={choice.match(/^\d/) ? choice : "2026-07-14"} /><small>{choice.match(/^\d/) ? choice : "2026-07-14"}</small></label>;
     case "color-picker":
-      return <div className="demo-color-picker"><label><span className="sr-only">选择颜色</span><input onChange={(event) => setColor(event.target.value)} type="color" value={color} /></label><div><strong>{color.toUpperCase()}</strong><span className="demo-color-swatch" style={{ backgroundColor: color }} /></div>{density === "detail" && <div className="demo-color-presets">{["#4f8cff", "#a78bfa", "#22c55e", "#f97316"].map((item) => <button aria-label={`使用颜色 ${item}`} key={item} onClick={() => setColor(item)} style={{ backgroundColor: item }} type="button" />)}</div>}</div>;
+      return <div className="demo-color-picker"><label><span className="sr-only">选择颜色</span><input onChange={(event) => setColor(event.target.value)} type="color" value={color} /></label><div><strong>{color.toUpperCase()}</strong><span className="demo-color-swatch" style={{ backgroundColor: color }} /></div>{density === "detail" && <div className="demo-color-presets">{["#0a6cff", "#af52de", "#28cd41", "#ff9500"].map((item) => <button aria-label={`使用颜色 ${item}`} key={item} onClick={() => setColor(item)} style={{ backgroundColor: item }} type="button" />)}</div>}</div>;
     default:
       return null;
   }
@@ -426,20 +428,29 @@ function FeedbackDemo({ slug }: DemoProps & { slug: DemoSlug }) {
 }
 
 function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
-  const [open, setOpen] = useState(slug === "accordion" || slug === "disclosure");
+  const previewOpen = density === "card" && [
+    "dialog",
+    "alert-dialog",
+    "popover",
+    "tooltip",
+    "hover-card",
+    "side-sheet",
+    "lightbox",
+  ].includes(slug);
+  const [open, setOpen] = useState(previewOpen || slug === "accordion" || slug === "disclosure");
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const openedOnce = useRef(false);
 
   useEffect(() => {
-    if (open && !["accordion", "disclosure", "tooltip", "hover-card"].includes(slug)) {
+    if (density === "detail" && open && !["accordion", "disclosure", "tooltip", "hover-card"].includes(slug)) {
       openedOnce.current = true;
       panelRef.current?.focus();
-    } else if (!open && openedOnce.current) {
+    } else if (density === "detail" && !open && openedOnce.current) {
       triggerRef.current?.focus();
       openedOnce.current = false;
     }
-  }, [open, slug]);
+  }, [density, open, slug]);
 
   const handleEscape = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape" && open) {

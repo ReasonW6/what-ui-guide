@@ -14,7 +14,6 @@ type FilterOption = {
 
 type CardItem = {
   slug: string;
-  order: number;
   category: string;
   platforms: readonly string[];
   name: Bilingual;
@@ -90,8 +89,6 @@ export function CatalogBrowser({
   }, [items, query, category, platform]);
 
   const visible = filtered.slice(0, visibleCount);
-  const categoryMap = new Map(categories.map((item) => [item.id, item]));
-  const platformMap = new Map(platforms.map((item) => [item.id, item]));
 
   const clearFilters = () => {
     setQuery("");
@@ -235,39 +232,31 @@ export function CatalogBrowser({
 
         {visible.length ? (
           <div className="catalog-grid">
-            {visible.map((item) => {
-              const categoryLabel = categoryMap.get(item.category);
-              return (
-                <article className="component-card" key={item.slug}>
-                  <div className="preview-shell">
-                    <DemoStage slug={item.slug} density="card" />
-                  </div>
-                  <div className="card-body">
-                    <div className="card-kicker">
-                      <span>{String(item.order).padStart(2, "0")} · {categoryLabel?.zh}</span>
-                      <span>Interactive Demo</span>
-                    </div>
+            {visible.map((item) => (
+              <article className="component-card" key={item.slug}>
+                <div className="preview-shell">
+                  <DemoStage slug={item.slug} density="card" />
+                </div>
+                <div className="card-body">
+                  <div className="card-title-row">
                     <h3>
                       <Link href={`/components/${item.slug}`}>{item.name.zh}</Link>
                     </h3>
-                    <p className="english-name" lang="en">
-                      {item.name.en}
-                    </p>
-                    <p className="card-summary">{item.summary.zh}</p>
-                    <div className="card-footer">
-                      <div className="platform-tags" aria-label="适用平台">
-                        {item.platforms.slice(0, 2).map((id) => (
-                          <span key={id}>{platformMap.get(id)?.en ?? id}</span>
-                        ))}
-                      </div>
-                      <Link className="detail-link" href={`/components/${item.slug}`}>
-                        查看详情 <span aria-hidden="true">↗</span>
-                      </Link>
-                    </div>
+                    <Link
+                      aria-label={`查看${item.name.zh}详情`}
+                      className="detail-link"
+                      href={`/components/${item.slug}`}
+                    >
+                      ↗
+                    </Link>
                   </div>
-                </article>
-              );
-            })}
+                  <p className="english-name" lang="en">
+                    {item.name.en}
+                  </p>
+                  <p className="card-summary">{item.summary.zh}</p>
+                </div>
+              </article>
+            ))}
           </div>
         ) : (
           <div className="empty-results">

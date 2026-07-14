@@ -33,7 +33,7 @@
   background: transparent;
   padding: 6px 9px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 650;
 }
 
@@ -46,7 +46,7 @@
 .code-readonly {
   color: #607086;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 8px;
+  font-size: 11px;
   letter-spacing: 0.13em;
 }
 
@@ -75,7 +75,7 @@
   flex: 0 0 auto;
   border-radius: 7px;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .file-tabs button[aria-selected="true"] {
@@ -115,7 +115,7 @@
   padding: 22px 12px;
   color: #405069;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.7;
   text-align: right;
   user-select: none;
@@ -127,7 +127,7 @@
   padding: 22px;
   color: #cfe1f5;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.7;
   tab-size: 2;
 }
@@ -141,7 +141,7 @@
   padding: 6px 14px;
   color: var(--green);
   background: var(--surface);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 @media (max-width: 680px) {

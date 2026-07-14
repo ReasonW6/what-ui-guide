@@ -3,8 +3,8 @@
 :root {
   color-scheme: dark;
   --ink: #f2f4f7;
-  --muted: #888f99;
-  --muted-strong: #b4bac2;
+  --muted: #a2a8b0;
+  --muted-strong: #c8cdd4;
   --bg: #0a0c0f;
   --surface: #101317;
   --surface-2: #15191e;
@@ -127,7 +127,7 @@ a:focus-visible,
   min-height: 44px;
   display: inline-flex;
   align-items: center;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 750;
   letter-spacing: -0.025em;
 }
@@ -141,7 +141,7 @@ a:focus-visible,
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .site-header nav a,
@@ -173,7 +173,7 @@ a:focus-visible,
   color: var(--muted);
   background: var(--surface-2);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .hero,
@@ -195,7 +195,7 @@ a:focus-visible,
   margin: 0 0 13px;
   color: var(--blue);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.12em;
 }
@@ -215,7 +215,7 @@ a:focus-visible,
   max-width: 600px;
   margin: 19px auto 0;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.75;
 }
 
@@ -253,7 +253,7 @@ a:focus-visible,
   border: 0;
   outline: 0;
   background: transparent;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .search-control input::placeholder {
@@ -267,7 +267,7 @@ a:focus-visible,
   padding: 4px 6px;
   color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .search-examples {
@@ -278,7 +278,7 @@ a:focus-visible,
   align-items: center;
   gap: 5px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .search-examples button {
@@ -309,7 +309,7 @@ a:focus-visible,
 .term-strip h2 {
   margin: 0;
   color: var(--muted-strong);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -329,14 +329,14 @@ a:focus-visible,
   display: block;
   color: var(--blue);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .term-grid p {
   margin: 3px 0 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -364,12 +364,12 @@ a:focus-visible,
 .result-count {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .result-count strong {
   color: var(--ink);
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .filter-bar {
@@ -408,7 +408,7 @@ a:focus-visible,
   background: transparent;
   padding: 8px 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .category-chips button::after {
@@ -444,7 +444,7 @@ a:focus-visible,
   align-items: center;
   gap: 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .platform-filter select {
@@ -453,7 +453,7 @@ a:focus-visible,
   border-radius: 7px;
   background: var(--surface);
   padding: 0 28px 0 10px;
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .catalog-grid {
@@ -487,26 +487,19 @@ a:focus-visible,
 }
 
 .card-body {
-  padding: 13px 4px 0;
+  padding: 15px 3px 0;
 }
 
-.card-kicker {
+.card-title-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 8px;
-  letter-spacing: 0.04em;
-}
-
-.card-kicker span:first-child {
-  color: var(--muted-strong);
+  gap: 12px;
 }
 
 .component-card h3 {
-  margin: 10px 0 0;
-  font-size: 16px;
+  margin: 0;
+  font-size: 20px;
   line-height: 1.3;
   letter-spacing: -0.02em;
 }
@@ -516,53 +509,33 @@ a:focus-visible,
 }
 
 .english-name {
-  margin: 3px 0 0;
+  margin: 4px 0 0;
   color: var(--blue);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .card-summary {
-  min-height: 40px;
+  min-height: 46px;
   margin: 9px 0 0;
   display: -webkit-box;
   overflow: hidden;
   color: var(--muted);
-  font-size: 11px;
-  line-height: 1.65;
+  font-size: 14px;
+  line-height: 1.55;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
-.card-footer {
-  min-height: 36px;
-  margin-top: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.platform-tags {
-  min-width: 0;
-  display: flex;
-  gap: 5px;
-}
-
-.platform-tags span {
-  color: #6f7680;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 8px;
-  text-transform: uppercase;
-}
-
 .detail-link {
+  width: 44px;
   min-height: 44px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   color: var(--muted-strong);
-  font-size: 10px;
+  font-size: 18px;
   font-weight: 650;
 }
 
@@ -584,7 +557,7 @@ a:focus-visible,
   background: var(--surface);
   padding: 9px 15px;
   color: var(--muted-strong);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 650;
 }
 
@@ -641,7 +614,7 @@ a:focus-visible,
   justify-content: space-between;
   gap: 24px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .site-footer strong {
@@ -668,7 +641,7 @@ a:focus-visible,
   align-items: center;
   gap: 7px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .breadcrumbs a:hover {
@@ -704,13 +677,13 @@ a:focus-visible,
   margin: 0;
   color: var(--muted-strong);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 9px;
+  font-size: 12px;
   text-transform: uppercase;
 }
 
 .detail-visual-heading span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .detail-demo-shell {
@@ -733,7 +706,7 @@ a:focus-visible,
 .detail-demo-toolbar span {
   color: var(--green);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 8px;
+  font-size: 12px;
   letter-spacing: 0.08em;
 }
 
@@ -744,7 +717,7 @@ a:focus-visible,
   background: var(--surface-2);
   padding: 5px 9px;
   color: var(--muted-strong);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .detail-demo-toolbar button:hover {
@@ -776,7 +749,7 @@ a:focus-visible,
   display: inline-flex;
   align-items: center;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .detail-jump-nav a:hover {
@@ -810,7 +783,7 @@ a:focus-visible,
   align-items: center;
   gap: 5px 8px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .alias-list span:not(.alias-label) {
@@ -826,14 +799,14 @@ a:focus-visible,
 .detail-summary {
   margin: 23px 0 0;
   color: #d8dce1;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.8;
 }
 
 .detail-summary-en {
   margin: 10px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.7;
 }
 
@@ -854,12 +827,12 @@ a:focus-visible,
 .detail-section-title .eyebrow {
   margin-bottom: 7px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .detail-section-title h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 23px;
   line-height: 1.25;
   letter-spacing: -0.025em;
 }
@@ -868,7 +841,7 @@ a:focus-visible,
 .detail-section-title > div + p {
   margin: 8px 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .info-grid {
@@ -889,14 +862,14 @@ a:focus-visible,
 
 .info-panel h3 {
   margin: 0 0 11px;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .info-panel ul {
   margin: 0;
   padding-left: 16px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.75;
 }
 
@@ -923,7 +896,7 @@ a:focus-visible,
   min-width: 0;
   color: #d4e1ef;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 10px;
+  font-size: 13px;
   line-height: 1.7;
   overflow-wrap: anywhere;
 }
@@ -934,7 +907,7 @@ a:focus-visible,
   border-radius: 7px;
   background: var(--surface-2);
   padding: 7px 10px;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 650;
 }
 
@@ -946,7 +919,7 @@ a:focus-visible,
   min-height: 20px;
   margin: 6px 0 0;
   color: var(--green);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .related-grid {
@@ -976,13 +949,13 @@ a:focus-visible,
   overflow: hidden;
   color: var(--blue);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 8px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .related-card strong {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 @media (max-width: 980px) {
@@ -1031,7 +1004,7 @@ a:focus-visible,
   }
 
   .hero-intro {
-    font-size: 13px;
+    font-size: 15px;
   }
 
   .search-control {
