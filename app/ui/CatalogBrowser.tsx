@@ -124,47 +124,25 @@ export function CatalogBrowser({
 
       <header className="site-header">
         <a className="brand" href="#top" aria-label="这叫啥 UI？返回顶部">
-          <span className="brand-mark" aria-hidden="true">
-            UI
-          </span>
-          <span>
-            这叫啥 <strong>UI？</strong>
-          </span>
+          <span>这叫啥 <strong>UI？</strong></span>
         </a>
         <nav aria-label="站点导航">
           <a href="#catalog">组件目录</a>
-          <a href="#terms">术语说明</a>
+          <button type="button" onClick={() => searchRef.current?.focus()}>
+            搜索 <kbd>⌘ K</kbd>
+          </button>
         </nav>
       </header>
 
       <section className="hero" id="top">
-        <div className="hero-copy">
-          <p className="eyebrow">INTERACTIVE UI / UX DICTIONARY</p>
-          <h1>
-            不知道它叫什么？
-            <span>先亲手试试看。</span>
-          </h1>
-          <p className="hero-intro">
-            75 个常用组件与交互模式，中英名称、使用场景和可复制代码一次看懂。
-          </p>
-        </div>
-        <dl className="hero-stats" aria-label="站点内容统计">
-          <div>
-            <dt>组件条目</dt>
-            <dd>75</dd>
-          </div>
-          <div>
-            <dt>内容分类</dt>
-            <dd>09</dd>
-          </div>
-          <div>
-            <dt>代码方案</dt>
-            <dd>150</dd>
-          </div>
-        </dl>
+        <p className="eyebrow">INTERACTIVE UI / UX DICTIONARY</p>
+        <h1>这个 UI，叫什么<span>？</span></h1>
+        <p className="hero-intro">
+          看见组件却不知道名称？亲手试一试，再用中英文标准术语准确描述它。
+        </p>
 
-        <div className="search-panel">
-          <label htmlFor="component-search">描述你看到的东西</label>
+        <div className="search-panel" id="search">
+          <label className="sr-only" htmlFor="component-search">描述你看到的东西</label>
           <div className="search-control">
             <span aria-hidden="true">⌕</span>
             <input
@@ -173,7 +151,7 @@ export function CatalogBrowser({
               type="search"
               value={query}
               onChange={(event) => updateQuery(event.target.value)}
-              placeholder="例如：可以拖动的圆点、右键出现的菜单……"
+              placeholder="描述你看到的东西，例如：可以拖动的圆点……"
               autoComplete="off"
             />
             <kbd>⌘ / Ctrl K</kbd>
@@ -192,30 +170,19 @@ export function CatalogBrowser({
       </section>
 
       <section className="term-strip" id="terms" aria-labelledby="terms-title">
-        <div className="section-heading compact">
-          <div>
-            <p className="eyebrow">THREE USEFUL TERMS</p>
-            <h2 id="terms-title">先分清这三个说法</h2>
-          </div>
-        </div>
+        <h2 id="terms-title">展示方式</h2>
         <div className="term-grid">
           <article>
-            <span>01</span>
-            <h3>组件预览</h3>
-            <p lang="en">Component Preview</p>
-            <small>像图片一样概览组件外观的整张卡片。</small>
+            <span>Component Preview</span>
+            <p>组件预览 · 像图片一样概览外观</p>
           </article>
           <article>
-            <span>02</span>
-            <h3>交互式演示</h3>
-            <p lang="en">Interactive Demo</p>
-            <small>可以点击、拖动或输入，亲自感受组件行为。</small>
+            <span>Interactive Demo</span>
+            <p>交互式演示 · 可以点击、拖动或输入</p>
           </article>
           <article>
-            <span>03</span>
-            <h3>实时预览</h3>
-            <p lang="en">Live Preview</p>
-            <small>调整参数或内容后，画面会立即同步更新。</small>
+            <span>Live Preview</span>
+            <p>实时预览 · 参数变化会立即反映结果</p>
           </article>
         </div>
       </section>
@@ -224,7 +191,7 @@ export function CatalogBrowser({
         <div className="section-heading">
           <div>
             <p className="eyebrow">EXPLORE THE CATALOG</p>
-            <h2 id="catalog-title">组件目录</h2>
+            <h2 id="catalog-title">浏览组件</h2>
           </div>
           <p className="result-count" aria-live="polite">
             找到 <strong>{filtered.length}</strong> 个结果
@@ -273,16 +240,12 @@ export function CatalogBrowser({
               return (
                 <article className="component-card" key={item.slug}>
                   <div className="preview-shell">
-                    <div className="preview-meta">
-                      <span>INTERACTIVE DEMO</span>
-                      <span className="preview-live-dot">LIVE</span>
-                    </div>
                     <DemoStage slug={item.slug} density="card" />
                   </div>
                   <div className="card-body">
                     <div className="card-kicker">
-                      <span>{String(item.order).padStart(2, "0")}</span>
-                      <span>{categoryLabel?.zh}</span>
+                      <span>{String(item.order).padStart(2, "0")} · {categoryLabel?.zh}</span>
+                      <span>Interactive Demo</span>
                     </div>
                     <h3>
                       <Link href={`/components/${item.slug}`}>{item.name.zh}</Link>

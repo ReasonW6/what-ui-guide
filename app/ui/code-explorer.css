@@ -1,20 +1,20 @@
 .code-explorer {
-  border: 1px solid var(--line-strong);
-  border-radius: 18px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
   overflow: hidden;
-  background: #080d14;
-  box-shadow: 0 20px 60px rgb(0 0 0 / 0.24);
+  background: #090c10;
 }
 
 .code-explorer-head {
-  min-height: 62px;
+  min-height: 50px;
   border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 12px;
   background: var(--surface);
-  padding: 8px 12px;
+  padding: 6px 8px;
 }
 
 .bundle-tabs,
@@ -27,19 +27,19 @@
 .bundle-tabs button,
 .file-tabs button,
 .copy-code {
-  min-height: 42px;
+  min-height: 44px;
   border: 1px solid transparent;
   border-radius: 9px;
   background: transparent;
-  padding: 8px 12px;
+  padding: 6px 9px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 650;
 }
 
 .bundle-tabs button[aria-selected="true"] {
-  border-color: rgb(85 167 255 / 0.56);
-  background: rgb(41 117 194 / 0.18);
+  border-color: var(--line-strong);
+  background: var(--surface-2);
   color: white;
 }
 
@@ -51,13 +51,13 @@
 }
 
 .file-toolbar {
-  min-height: 58px;
+  min-height: 48px;
   border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 8px 12px;
+  padding: 6px 8px;
 }
 
 .file-tabs {
@@ -71,7 +71,7 @@
 }
 
 .file-tabs button {
-  min-height: 38px;
+  min-height: 44px;
   flex: 0 0 auto;
   border-radius: 7px;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
@@ -80,7 +80,7 @@
 
 .file-tabs button[aria-selected="true"] {
   background: var(--surface-3);
-  color: var(--cyan);
+  color: var(--blue);
 }
 
 .copy-code {
@@ -97,7 +97,7 @@
 
 .code-panel {
   position: relative;
-  max-height: 610px;
+  max-height: 520px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   overflow: auto;
