@@ -1140,7 +1140,7 @@ export const catalog: readonly CatalogItem[] = catalogSeeds.map((item, index) =>
   avoidWhen: item.avoidWhen,
   accessibility: item.accessibility,
   related: item.related,
-  aiPrompt: `请实现一个${item.name.zh}（${item.name.en}）：${item.summary.zh}。使用原生语义元素，支持键盘、清晰焦点、触控目标和减少动态偏好；不要依赖第三方组件库。`,
+  aiPrompt: `请在现有项目中实现一个${item.name.zh}（${item.name.en}）。目标：${item.summary.zh}结构应包含：${item.anatomy.join("、")}。请遵循项目已有的技术栈、设计系统和组件规范；若已有合适的成熟组件库，优先复用并按需求定制。按需补齐默认、悬停、聚焦、禁用和错误等适用状态，保证响应式布局、键盘操作、清晰焦点、至少 44px 的触控目标，并尊重 prefers-reduced-motion。无论采用原生实现还是组件库，都要保留正确语义和 ARIA 状态。该组件还需注意：${item.accessibility[0]}请给出可直接运行的组件与必要样式。`,
   code: makeCode(item),
 }));
 

@@ -88,3 +88,13 @@ test("DemoRegistry covers the same 75 slugs as the catalog", async () => {
     catalog.map((item) => item.slug).slice().sort(),
   );
 });
+
+test("all AI prompts are project-ready and library-friendly", async () => {
+  const { catalog } = await loadCatalogModule();
+  for (const item of catalog) {
+    assert.doesNotMatch(item.aiPrompt, /不要依赖第三方组件库/);
+    assert.match(item.aiPrompt, /成熟组件库，优先复用并按需求定制/);
+    assert.ok(item.aiPrompt.includes(item.anatomy[0]), `${item.slug} prompt omits anatomy`);
+    assert.ok(item.aiPrompt.includes(item.accessibility[0]), `${item.slug} prompt omits accessibility guidance`);
+  }
+});
