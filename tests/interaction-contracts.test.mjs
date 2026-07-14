@@ -68,11 +68,33 @@ test("before-after slider uses a horizontal full-area control", async () => {
   assert.match(source, /className="demo-compare-control"/);
   assert.match(source, /className="demo-compare-handle"/);
   assert.match(css, /\.demo-compare-control\s*\{[\s\S]*?inset:\s*0;/);
+  const componentSection = source.slice(
+    source.indexOf('case "before-after-slider"'),
+    source.indexOf("default:", source.indexOf('case "before-after-slider"')),
+  );
+  assert.match(componentSection, /max="100"/);
+  assert.match(componentSection, /min="0"/);
+  assert.doesNotMatch(componentSection, /max="92"|min="8"/);
   const section = css.slice(
     css.indexOf(".demo-stage .demo-before-after"),
     css.indexOf(".demo-stage .demo-unavailable"),
   );
   assert.doesNotMatch(section, /rotate\(90deg\)/);
+  assert.match(section, /\.demo-compare-control input\s*\{[\s\S]*?width:\s*100%;[\s\S]*?height:\s*100%;/);
+  assert.match(section, /\.demo-compare-handle\s*\{[\s\S]*?width:\s*34px;[\s\S]*?height:\s*34px;/);
+});
+
+test("visible scroll areas use the dark scrollbar treatment", async () => {
+  const [globalCss, codeCss, demoCss] = await Promise.all([
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/ui/code-explorer.css", import.meta.url), "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+  assert.match(globalCss, /html\s*\{[\s\S]*?scrollbar-width:\s*thin;/);
+  assert.match(globalCss, /html::\-webkit-scrollbar-thumb/);
+  assert.match(codeCss, /\.code-panel\s*\{[\s\S]*?scrollbar-color:/);
+  assert.match(codeCss, /\.code-panel::\-webkit-scrollbar-corner/);
+  assert.match(demoCss, /\.demo-table-scroll,[\s\S]*?\.demo-feed > div,[\s\S]*?\.demo-snap > div:first-child\s*\{[\s\S]*?scrollbar-width:\s*thin;/);
 });
 
 test("usage guidance renders a complete two-column grid", async () => {

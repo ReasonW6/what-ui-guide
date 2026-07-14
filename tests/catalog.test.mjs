@@ -73,6 +73,17 @@ test("every snippet is present and syntactically parseable", async () => {
   }
 });
 
+test("long code examples contain real formatting line breaks", async () => {
+  const { catalog } = await loadCatalogModule();
+  for (const item of catalog) {
+    for (const file of [...item.code.vanilla, ...item.code.react]) {
+      if (file.code.length > 100) {
+        assert.ok(file.code.includes("\n"), `${item.slug}/${file.name} is an unreadable single line`);
+      }
+    }
+  }
+});
+
 test("DemoRegistry covers the same 75 slugs as the catalog", async () => {
   const { catalog } = await loadCatalogModule();
   const source = await readFile(new URL("../app/ui/DemoStage.tsx", import.meta.url), "utf8");

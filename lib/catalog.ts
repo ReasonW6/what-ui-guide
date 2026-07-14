@@ -150,11 +150,138 @@ const baseCss = `.demo {
 .stack { display: grid; gap: .7rem; }
 .muted { color: #9eb0c5; }`;
 
+const formatBracedCode = (source: string): string => {
+  const lines: string[] = [];
+  let current = "";
+  let indent = 0;
+  let quote: "'" | '"' | "`" | null = null;
+  let escaped = false;
+
+  const flush = () => {
+    const text = current.trim();
+    if (!text) return;
+    const padding = "  ".repeat(indent);
+    const wrapped = text.length > 96
+      ? text.replace(
+          /\.(?=(?:addEventListener|forEach|querySelector|setAttribute|classList)\()/g,
+          `\n${padding}  .`,
+        )
+      : text;
+    lines.push(`${padding}${wrapped}`);
+    current = "";
+  };
+
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+
+    if (quote) {
+      current += character;
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = null;
+      continue;
+    }
+
+    if (character === "'" || character === '"' || character === "`") {
+      quote = character;
+      current += character;
+      continue;
+    }
+
+    if (character === "\n") {
+      flush();
+      continue;
+    }
+
+    if (character === "{") {
+      current = `${current.trimEnd()} {`;
+      flush();
+      indent += 1;
+      continue;
+    }
+
+    if (character === "}") {
+      flush();
+      indent = Math.max(0, indent - 1);
+      current = "}";
+      const next = source.slice(index + 1).match(/\S/)?.[0];
+      if (!next || !")]},;.".includes(next)) flush();
+      continue;
+    }
+
+    if (character === ";") {
+      current = `${current.trimEnd()};`;
+      flush();
+      continue;
+    }
+
+    if (/\s/.test(character)) {
+      if (current && !current.endsWith(" ")) current += " ";
+      continue;
+    }
+
+    current += character;
+  }
+
+  flush();
+  return lines.join("\n");
+};
+
+const formatMarkupCode = (source: string): string => {
+  const voidElements = new Set([
+    "area", "base", "br", "col", "embed", "hr", "img", "input",
+    "link", "meta", "param", "source", "track", "wbr",
+  ]);
+  const expanded = source
+    .trim()
+    .replace(
+      /export default function Component\(\)\s*\{\s*/g,
+      "export default function Component() {\n",
+    )
+    .replace(/;\s*(?=(?:const|let|return)\b)/g, ";\n")
+    .replace(/;\s*}\s*$/g, ";\n}")
+    .replace(/>\s*</g, ">\n<");
+
+  let indent = 0;
+  return expanded
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const openingTags = [...line.matchAll(/<(?!\/|!|\?)([A-Za-z][\w.-]*)\b[^>]*?>/g)]
+        .filter((match) => !match[0].endsWith("/>") && !voidElements.has(match[1].toLowerCase()))
+        .length;
+      const closingTags = (line.match(/<\/[A-Za-z][^>]*>/g) ?? []).length;
+      const openingBraces = (line.match(/\{/g) ?? []).length;
+      const closingBraces = (line.match(/}/g) ?? []).length;
+      const leadingTagClose = line.startsWith("</") ? 1 : 0;
+      const leadingBraceClose = line.startsWith("}") ? 1 : 0;
+
+      indent = Math.max(0, indent - leadingTagClose - leadingBraceClose);
+      const formatted = `${"  ".repeat(indent)}${line}`;
+      indent = Math.max(
+        0,
+        indent
+          + openingTags
+          - (closingTags - leadingTagClose)
+          + openingBraces
+          - (closingBraces - leadingBraceClose),
+      );
+      return formatted;
+    })
+    .join("\n");
+};
+
+const formatCode = (language: CodeFile["language"], source: string): string =>
+  language === "html" || language === "jsx"
+    ? formatMarkupCode(source)
+    : formatBracedCode(source.trim());
+
 const codeFile = (
   name: string,
   language: CodeFile["language"],
   code: string,
-): CodeFile => ({ name, language, code: code.trim() });
+): CodeFile => ({ name, language, code: formatCode(language, code) });
 
 function makeCode(item: CatalogSeed): CodeBundle {
   const label = `${item.name.zh} / ${item.name.en}`;

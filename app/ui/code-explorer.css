@@ -97,6 +97,28 @@
   grid-template-columns: auto minmax(0, 1fr);
   overflow: auto;
   background: #070b11;
+  scrollbar-width: thin;
+  scrollbar-color: #334154 #070b11;
+}
+
+.code-panel::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.code-panel::-webkit-scrollbar-track,
+.code-panel::-webkit-scrollbar-corner {
+  background: #070b11;
+}
+
+.code-panel::-webkit-scrollbar-thumb {
+  border: 2px solid #070b11;
+  border-radius: 999px;
+  background: #334154;
+}
+
+.code-panel::-webkit-scrollbar-thumb:hover {
+  background: #475a73;
 }
 
 .code-gutter {

@@ -2046,8 +2046,8 @@
   z-index: 3;
   top: 50%;
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 34px;
+  height: 34px;
   transform: translate(-50%, -50%);
   place-items: center;
   border: 2px solid #fff;
@@ -2069,6 +2069,42 @@
   border-radius: 7px;
   background: rgba(4, 10, 18, 0.55);
   font-size: 12.5px;
+}
+
+.demo-stage .demo-table-scroll,
+.demo-stage .demo-feed > div,
+.demo-stage .demo-snap > div:first-child {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.22) transparent;
+}
+
+.demo-stage .demo-table-scroll::-webkit-scrollbar,
+.demo-stage .demo-feed > div::-webkit-scrollbar,
+.demo-stage .demo-snap > div:first-child::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.demo-stage .demo-table-scroll::-webkit-scrollbar-track,
+.demo-stage .demo-feed > div::-webkit-scrollbar-track,
+.demo-stage .demo-snap > div:first-child::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.demo-stage .demo-table-scroll::-webkit-scrollbar-thumb,
+.demo-stage .demo-feed > div::-webkit-scrollbar-thumb,
+.demo-stage .demo-snap > div:first-child::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.22);
+  background-clip: padding-box;
+}
+
+.demo-stage .demo-table-scroll::-webkit-scrollbar-thumb:hover,
+.demo-stage .demo-feed > div::-webkit-scrollbar-thumb:hover,
+.demo-stage .demo-snap > div:first-child::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 0.34);
+  background-clip: padding-box;
 }
 
 .demo-stage .demo-unavailable { color: var(--demo-muted); }
