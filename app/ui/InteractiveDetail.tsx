@@ -32,14 +32,17 @@ export function InteractiveDetail({ slug }: { slug: string }) {
 }
 
 export function CopyPrompt({ prompt }: { prompt: string }) {
-  const [status, setStatus] = useState("");
+  const [copyResult, setCopyResult] = useState<{
+    message: string;
+    state: "" | "success" | "error";
+  }>({ message: "", state: "" });
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(prompt);
-      setStatus("提示词已复制");
+      setCopyResult({ message: "提示词已复制", state: "success" });
     } catch {
-      setStatus("复制失败，请手动选择文字");
+      setCopyResult({ message: "复制失败，请手动选择文字", state: "error" });
     }
   };
 
@@ -50,7 +53,7 @@ export function CopyPrompt({ prompt }: { prompt: string }) {
         <button
           aria-label="复制 AI 提示词"
           className="copy-icon-button"
-          data-copied={status === "提示词已复制" || undefined}
+          data-copied={copyResult.state === "success" || undefined}
           title="复制 AI 提示词"
           type="button"
           onClick={copy}
@@ -58,8 +61,13 @@ export function CopyPrompt({ prompt }: { prompt: string }) {
           <span aria-hidden="true" className="copy-icon-button__glyph" />
         </button>
       </div>
-      <p className="copy-inline-status" role="status" aria-live="polite">
-        {status || " "}
+      <p
+        aria-atomic="true"
+        className="copy-inline-status"
+        data-state={copyResult.state || undefined}
+        role={copyResult.state === "error" ? "alert" : "status"}
+      >
+        {copyResult.message || " "}
       </p>
     </>
   );

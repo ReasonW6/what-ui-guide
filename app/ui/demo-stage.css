@@ -929,6 +929,7 @@
 
 .demo-stage .demo-dropzone button { margin-top: 6px; }
 .demo-stage .demo-dropzone.is-ready { border-color: rgba(62, 215, 161, 0.55); }
+.demo-stage .demo-dropzone small.is-error { color: #ff97a6; }
 
 .demo-stage .demo-check,
 .demo-stage .demo-setting-row {
@@ -1688,15 +1689,18 @@
 .demo-stage .demo-table-scroll tbody tr:last-child td { border-bottom: 0; }
 
 .demo-stage .demo-data-grid {
-  display: grid;
-  grid-template-columns: 1.3fr 0.7fr 1fr;
   width: min(100%, 510px);
   overflow: hidden;
   border: 1px solid var(--demo-line);
   border-radius: 9px;
 }
 
-.demo-stage .demo-data-grid > * {
+.demo-stage .demo-data-grid-row {
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr 1fr;
+}
+
+.demo-stage .demo-data-grid-row > * {
   min-height: 46px;
   padding: 0 12px;
   border: 0;
@@ -1706,8 +1710,8 @@
   background: transparent;
 }
 
-.demo-stage .demo-data-grid > *:nth-child(3n) { border-right: 0; }
-.demo-stage .demo-data-grid > *:nth-last-child(-n + 3) { border-bottom: 0; }
+.demo-stage .demo-data-grid-row > *:last-child { border-right: 0; }
+.demo-stage .demo-data-grid-row:last-child > * { border-bottom: 0; }
 .demo-stage .demo-data-grid .is-heading { display: flex; align-items: center; color: var(--demo-muted); background: #2a2a2d; font-size: 12.5px; font-weight: 700; }
 .demo-stage .demo-data-grid button { text-align: left; }
 .demo-stage .demo-data-grid button.is-active { background: rgba(10, 108, 255, 0.17); box-shadow: inset 0 0 0 1px var(--demo-blue); }
@@ -1780,7 +1784,8 @@
 
 .demo-stage .demo-calendar > div:first-child { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .demo-stage .demo-calendar > div:first-child button { padding: 0; border: 0; background: transparent; }
-.demo-stage .demo-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.demo-stage .demo-calendar-grid { display: grid; gap: 3px; overflow-x: auto; }
+.demo-stage .demo-calendar-row { display: grid; grid-template-columns: repeat(7, minmax(44px, 1fr)); min-width: 326px; gap: 3px; }
 .demo-stage .demo-calendar-grid button { min-width: 44px; padding: 0; border-color: transparent; background: transparent; }
 .demo-stage .demo-calendar-grid button.is-active { color: #fff; background: var(--demo-blue); }
 .demo-stage .demo-calendar .demo-status { display: flex; justify-content: center; margin-top: 6px; }
@@ -2086,6 +2091,7 @@
 }
 
 .demo-stage .demo-table-scroll,
+.demo-stage .demo-calendar-grid,
 .demo-stage .demo-feed > div,
 .demo-stage .demo-snap > div:first-child {
   scrollbar-width: thin;
@@ -2093,6 +2099,7 @@
 }
 
 .demo-stage .demo-table-scroll::-webkit-scrollbar,
+.demo-stage .demo-calendar-grid::-webkit-scrollbar,
 .demo-stage .demo-feed > div::-webkit-scrollbar,
 .demo-stage .demo-snap > div:first-child::-webkit-scrollbar {
   width: 8px;
@@ -2100,12 +2107,14 @@
 }
 
 .demo-stage .demo-table-scroll::-webkit-scrollbar-track,
+.demo-stage .demo-calendar-grid::-webkit-scrollbar-track,
 .demo-stage .demo-feed > div::-webkit-scrollbar-track,
 .demo-stage .demo-snap > div:first-child::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .demo-stage .demo-table-scroll::-webkit-scrollbar-thumb,
+.demo-stage .demo-calendar-grid::-webkit-scrollbar-thumb,
 .demo-stage .demo-feed > div::-webkit-scrollbar-thumb,
 .demo-stage .demo-snap > div:first-child::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
@@ -2115,6 +2124,7 @@
 }
 
 .demo-stage .demo-table-scroll::-webkit-scrollbar-thumb:hover,
+.demo-stage .demo-calendar-grid::-webkit-scrollbar-thumb:hover,
 .demo-stage .demo-feed > div::-webkit-scrollbar-thumb:hover,
 .demo-stage .demo-snap > div:first-child::-webkit-scrollbar-thumb:hover {
   background: rgb(255 255 255 / 0.34);
@@ -2168,6 +2178,32 @@
   .demo-stage--card .demo-navbar .demo-nav-list button,
   .demo-stage--card .demo-bottom-nav .demo-nav-list button {
     padding-inline: 7px;
+  }
+
+  .demo-stage .demo-navbar .demo-nav-list button {
+    font-size: 0;
+  }
+
+  .demo-stage .demo-navbar .demo-nav-list button .demo-icon {
+    font-size: 13px;
+  }
+
+  .demo-stage .demo-bottom-nav .demo-nav-list button {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .demo-stage .demo-color-picker {
+    width: 100%;
+    padding-inline: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px 12px;
+  }
+
+  .demo-stage .demo-color-presets {
+    flex-basis: 100%;
+    justify-content: center;
   }
 
   .demo-stage--card .demo-sidebar-layout {
@@ -2228,7 +2264,6 @@
   .demo-stage .demo-stepper li button { font-size: 12.5px; }
   .demo-stage .demo-radio { flex-wrap: wrap; }
   .demo-stage .demo-content-card { grid-template-columns: 90px 1fr; }
-  .demo-stage .demo-calendar-grid button { min-width: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

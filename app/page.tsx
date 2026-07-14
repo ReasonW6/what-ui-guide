@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import { CatalogBrowser } from "./ui/CatalogBrowser";
-import { catalog, categories, platforms } from "@/lib/catalog";
+import {
+  catalog,
+  categories,
+  createCatalogSearchText,
+  platforms,
+} from "@/lib/catalog";
 
 export const metadata: Metadata = {
-  title: "这叫啥 UI？｜交互式 UI/UX 视觉词典",
+  title: "交互式 UI/UX 视觉词典",
   description:
     "亲手试一试，再记住它的标准名称。收录 75 个常用 UI/UX 组件、交互演示与可复制代码。",
 };
@@ -32,14 +37,7 @@ export default async function Home({ searchParams }: HomeProps) {
     platforms: item.platforms,
     name: item.name,
     summary: item.summary,
-    searchText: [
-      item.name.zh,
-      item.name.en,
-      item.summary.zh,
-      item.summary.en,
-      ...item.aliases,
-      ...item.keywords,
-    ].join(" "),
+    searchText: createCatalogSearchText(item),
   }));
 
   return (

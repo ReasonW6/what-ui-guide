@@ -10,7 +10,10 @@ export function CodeExplorer({ code }: { code: CodeBundle }) {
   const id = useId().replace(/:/g, "");
   const [bundle, setBundle] = useState<BundleKey>("vanilla");
   const [fileIndex, setFileIndex] = useState(0);
-  const [status, setStatus] = useState("");
+  const [copyResult, setCopyResult] = useState<{
+    message: string;
+    state: "" | "success" | "error";
+  }>({ message: "", state: "" });
   const bundleRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const fileRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -42,16 +45,16 @@ export function CodeExplorer({ code }: { code: CodeBundle }) {
   const selectBundle = (next: BundleKey) => {
     setBundle(next);
     setFileIndex(0);
-    setStatus("");
+    setCopyResult({ message: "", state: "" });
   };
 
   const copyCurrentFile = async () => {
     if (!activeFile) return;
     try {
       await navigator.clipboard.writeText(activeFile.code);
-      setStatus(`已复制 ${activeFile.name}`);
+      setCopyResult({ message: `已复制 ${activeFile.name}`, state: "success" });
     } catch {
-      setStatus("复制失败，请手动选择代码");
+      setCopyResult({ message: "复制失败，请手动选择代码", state: "error" });
     }
   };
 
@@ -113,7 +116,7 @@ export function CodeExplorer({ code }: { code: CodeBundle }) {
                 tabIndex={fileIndex === index ? 0 : -1}
                 onClick={() => {
                   setFileIndex(index);
-                  setStatus("");
+                  setCopyResult({ message: "", state: "" });
                 }}
                 onKeyDown={(event) =>
                   moveFocus(
@@ -122,7 +125,7 @@ export function CodeExplorer({ code }: { code: CodeBundle }) {
                     files.length,
                     (next) => {
                       setFileIndex(next);
-                      setStatus("");
+                      setCopyResult({ message: "", state: "" });
                     },
                     fileRefs,
                   )
@@ -135,7 +138,7 @@ export function CodeExplorer({ code }: { code: CodeBundle }) {
           <button
             aria-label={`复制 ${activeFile.name}`}
             className="copy-code copy-icon-button"
-            data-copied={status.startsWith("已复制") || undefined}
+            data-copied={copyResult.state === "success" || undefined}
             title={`复制 ${activeFile.name}`}
             type="button"
             onClick={copyCurrentFile}
@@ -159,8 +162,13 @@ export function CodeExplorer({ code }: { code: CodeBundle }) {
             <code>{activeFile.code}</code>
           </pre>
         </div>
-        <p className="copy-status" role="status" aria-live="polite">
-          {status || " "}
+        <p
+          aria-atomic="true"
+          className="copy-status"
+          data-state={copyResult.state || undefined}
+          role={copyResult.state === "error" ? "alert" : "status"}
+        >
+          {copyResult.message || " "}
         </p>
       </div>
     </div>

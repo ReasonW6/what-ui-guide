@@ -60,6 +60,103 @@ test("every range control updates state", async () => {
   assert.deepEqual(unwired, [], `unwired range inputs at lines: ${unwired.join(", ")}`);
 });
 
+test("slug-specific demos start with a valid selected item", async () => {
+  const source = await readFile(demoUrl, "utf8");
+  assert.match(source, /const initialActive = slug === "breadcrumb" \? "滑块" : slug === "anchor-navigation" \? "简介" : labels\[0\];/);
+  assert.match(source, /useState\(slug === "segmented-control" \? "卡片" : "自动"\)/);
+});
+
+test("combobox closes on focus exit and preserves input focus for pointer selection", async () => {
+  const source = await readFile(demoUrl, "utf8");
+  const section = source.slice(
+    source.indexOf('case "combobox"'),
+    source.indexOf('case "segmented-control"'),
+  );
+  assert.match(section, /onBlur=.*setComboOpen\(false\)/);
+  assert.match(section, /onMouseDown=\{\(event\) => event\.preventDefault\(\)\}/);
+});
+
+test("file upload enforces its advertised type and size limits", async () => {
+  const source = await readFile(demoUrl, "utf8");
+  assert.match(source, /\["image\/png", "image\/jpeg"\]\.includes\(file\.type\)/);
+  assert.match(source, /file\.size > 10 \* 1024 \* 1024/);
+  assert.match(source, /文件不能超过 10 MB/);
+  const upload = source.slice(
+    source.indexOf('case "file-upload"'),
+    source.indexOf("default:", source.indexOf('case "file-upload"')),
+  );
+  assert.match(upload, /<input accept="image\/png,image\/jpeg" hidden/);
+  assert.doesNotMatch(upload, /className="sr-only"[^>]*type="file"/);
+});
+
+test("data grid and calendar keep keyboard movement inside valid cells", async () => {
+  const source = await readFile(demoUrl, "utf8");
+  const gridHandler = source.slice(
+    source.indexOf("const handleGridKeyDown"),
+    source.indexOf("const handleTreeKeyDown"),
+  );
+  assert.match(gridHandler, /const row = Math\.floor\(position \/ 3\)/);
+  assert.match(gridHandler, /const column = position % 3/);
+  assert.match(gridHandler, /event\.currentTarget\.closest\("\.demo-data-grid"\)/);
+  assert.doesNotMatch(gridHandler, /ArrowLeft: Math\.max\(3, index - 1\)/);
+  assert.ok(gridHandler.indexOf("event.preventDefault();") < gridHandler.indexOf("if (next === index) return;"));
+
+  const calendarHandler = source.slice(
+    source.indexOf("const handleCalendarKeyDown"),
+    source.indexOf("switch (slug)", source.indexOf("const handleCalendarKeyDown")),
+  );
+  assert.match(calendarHandler, /const next = day \+ offset;/);
+  assert.match(calendarHandler, /if \(next < 7 \|\| next > 20\) return;/);
+  assert.doesNotMatch(calendarHandler, /Math\.max\(7, Math\.min\(20/);
+  assert.ok(calendarHandler.indexOf("event.preventDefault();") < calendarHandler.indexOf("if (next < 7 || next > 20) return;"));
+});
+
+test("tooltip, sortable, and narrow demos keep accessible interaction contracts", async () => {
+  const [source, css] = await Promise.all([
+    readFile(demoUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+  const tooltip = source.slice(
+    source.indexOf('case "tooltip"'),
+    source.indexOf('case "hover-card"'),
+  );
+  assert.match(tooltip, /aria-label="查看术语解释"/);
+
+  const sortable = source.slice(
+    source.indexOf('case "drag-and-drop"'),
+    source.indexOf('case "infinite-scroll"'),
+  );
+  assert.match(sortable, /aria-live="polite"/);
+  assert.match(source, /setSortAnnouncement\(`\$\{items\[(?:index|from)\]\} 已移至第 \$\{(?:nextIndex|to) \+ 1\} 项`\)/);
+
+  const narrow = css.slice(css.indexOf("@container (max-width: 360px)"));
+  assert.match(narrow, /\.demo-color-picker\s*\{[\s\S]*?flex-wrap:\s*wrap;/);
+  assert.match(narrow, /\.demo-color-presets\s*\{[\s\S]*?flex-basis:\s*100%;/);
+  assert.match(css, /\.demo-calendar-grid\s*\{[^}]*overflow-x:\s*auto;/);
+  assert.match(css, /\.demo-calendar-row\s*\{[^}]*minmax\(44px,\s*1fr\)[^}]*min-width:\s*326px;/);
+});
+
+test("tree expansion and ARIA grids follow their keyboard structures", async () => {
+  const source = await readFile(demoUrl, "utf8");
+  assert.match(source, /event\.key === "ArrowRight" && index === 0 && !expanded/);
+
+  const dataGrid = source.slice(
+    source.indexOf('case "data-grid"'),
+    source.indexOf('case "tree-view"'),
+  );
+  assert.match(dataGrid, /className="demo-data-grid-row"[^>]*role="row"/);
+  assert.match(dataGrid, /role="columnheader"/);
+  assert.match(dataGrid, /role="gridcell"/);
+
+  const calendar = source.slice(
+    source.indexOf('case "calendar-view"'),
+    source.indexOf('case "chart"'),
+  );
+  assert.match(calendar, /className="demo-calendar-row"[^>]*role="row"/);
+  assert.match(calendar, /aria-selected=\{selectedDay === day\}/);
+  assert.match(calendar, /role="gridcell"/);
+});
+
 test("before-after slider uses a horizontal full-area control", async () => {
   const [source, css] = await Promise.all([
     readFile(demoUrl, "utf8"),

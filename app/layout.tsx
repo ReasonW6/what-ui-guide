@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     description: "亲手试一试，再记住它的标准名称。",
   },
   twitter: {
-    card: "summary_large_image",
+    card: "summary",
     title: "这叫啥 UI？",
     description: "亲手试一试，再记住它的标准名称。",
   },

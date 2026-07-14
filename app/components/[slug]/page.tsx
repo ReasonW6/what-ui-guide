@@ -9,6 +9,48 @@ type ComponentPageProps = {
   params: Promise<{ slug: string }>;
 };
 
+const confusionGuides: ReadonlyArray<{
+  slugs: readonly string[];
+  text: string;
+}> = [
+  {
+    slugs: ["select", "dropdown-menu", "combobox"],
+    text: "Select 从固定选项中选值；Dropdown Menu 执行命令；Combobox 允许输入并筛选建议。",
+  },
+  {
+    slugs: ["dialog", "alert-dialog"],
+    text: "Dialog 是浮层容器；Modal 描述它是否阻断背景交互，并非所有 Dialog 都是 Modal。",
+  },
+  {
+    slugs: ["toast", "snackbar"],
+    text: "Toast 通常只告知状态；Snackbar 常在底部出现，并可附带一个简短操作。",
+  },
+  {
+    slugs: ["tooltip", "popover", "hover-card"],
+    text: "Tooltip 是短提示；Popover 可交互；Hover Card 用悬停或聚焦预览关联内容。",
+  },
+  {
+    slugs: ["sidebar-navigation", "navigation-drawer", "side-sheet"],
+    text: "Sidebar 常驻布局；Drawer 临时滑出用于导航；Side Sheet 临时承载任务内容。",
+  },
+  {
+    slugs: ["slider", "range-slider", "progress-bar"],
+    text: "Slider 选择单值；Range Slider 选择区间；Progress Bar 只展示进度，不供拖动。",
+  },
+  {
+    slugs: ["badge", "chip", "tags-input"],
+    text: "Badge 显示状态或数量；Chip 表示可操作实体；Tags Input 用于创建和编辑多个标签。",
+  },
+  {
+    slugs: ["carousel", "image-gallery", "lightbox"],
+    text: "Carousel 依次轮播；Gallery 总览一组图片；Lightbox 放大当前媒体并遮罩页面。",
+  },
+  {
+    slugs: ["data-table", "data-grid"],
+    text: "Data Table 侧重阅读与排序；Data Grid 还支持单元格选择、编辑等表格式操作。",
+  },
+];
+
 export function generateStaticParams() {
   return catalog.map((item) => ({ slug: item.slug }));
 }
@@ -35,9 +77,12 @@ export default async function ComponentPage({ params }: ComponentPageProps) {
     .map((relatedSlug) => getCatalogItem(relatedSlug))
     .filter((relatedItem) => relatedItem !== undefined)
     .slice(0, 3);
+  const confusionGuide = confusionGuides.find((group) =>
+    group.slugs.includes(item.slug),
+  )?.text;
 
   return (
-    <main>
+    <>
       <a className="skip-link" href="#component-content">跳到组件内容</a>
       <header className="detail-header">
         <Link className="brand" href="/" aria-label="返回这叫啥 UI？首页">
@@ -46,7 +91,7 @@ export default async function ComponentPage({ params }: ComponentPageProps) {
         <Link className="back-link" href="/#catalog">← 返回组件目录</Link>
       </header>
 
-      <article className="detail-main" id="component-content">
+      <main className="detail-main" id="component-content">
         <nav className="breadcrumbs" aria-label="面包屑">
           <Link href="/">首页</Link>
           <span aria-hidden="true">/</span>
@@ -147,6 +192,7 @@ export default async function ComponentPage({ params }: ComponentPageProps) {
                     <h2 id="related-heading">易混与相关组件</h2>
                   </div>
                 </div>
+                {confusionGuide && <p className="confusion-guide">{confusionGuide}</p>}
                 <div className="related-grid">
                   {related.map((relatedItem) => (
                     <Link
@@ -163,12 +209,12 @@ export default async function ComponentPage({ params }: ComponentPageProps) {
             )}
           </div>
         </div>
-      </article>
+      </main>
 
       <footer className="site-footer">
         <p><strong>这叫啥 UI？</strong> — 把“看起来像”变成“准确地说”。</p>
         <Link href="/#catalog">继续浏览组件 →</Link>
       </footer>
-    </main>
+    </>
   );
 }

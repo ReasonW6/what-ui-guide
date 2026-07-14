@@ -278,7 +278,7 @@ a:focus-visible,
 }
 
 .search-control input::placeholder {
-  color: #686f78;
+  color: var(--muted);
 }
 
 .search-control kbd {
@@ -989,10 +989,23 @@ a:focus-visible,
   font-size: 12px;
 }
 
+.copy-inline-status[data-state="error"] {
+  color: var(--danger);
+}
+
 .related-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+
+.confusion-guide {
+  margin: -2px 0 15px;
+  border-left: 2px solid var(--blue);
+  padding-left: 12px;
+  color: var(--muted-strong);
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .related-card {

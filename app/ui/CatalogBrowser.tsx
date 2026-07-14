@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { filterCatalogSearchEntries } from "@/lib/catalog-search";
 import { DemoStage } from "./DemoStage";
 
 type Bilingual = { zh: string; en: string };
@@ -31,10 +32,6 @@ type CatalogBrowserProps = {
 };
 
 const PAGE_SIZE = 24;
-
-function normalize(value: string) {
-  return value.normalize("NFKC").toLocaleLowerCase().replace(/\s+/g, " ").trim();
-}
 
 export function CatalogBrowser({
   items,
@@ -74,18 +71,7 @@ export function CatalogBrowser({
   }, [query, category, platform]);
 
   const filtered = useMemo(() => {
-    const tokens = normalize(query).split(" ").filter(Boolean);
-    return items.filter((item) => {
-      const matchesQuery = tokens.every((token) =>
-        normalize(item.searchText).includes(token),
-      );
-      const matchesCategory = category === "all" || item.category === category;
-      const matchesPlatform =
-        platform === "all" ||
-        item.platforms.includes(platform) ||
-        item.platforms.includes("universal");
-      return matchesQuery && matchesCategory && matchesPlatform;
-    });
+    return filterCatalogSearchEntries(items, { q: query, category, platform });
   }, [items, query, category, platform]);
 
   const visible = filtered.slice(0, visibleCount);
@@ -114,9 +100,9 @@ export function CatalogBrowser({
   };
 
   return (
-    <main>
-      <a className="skip-link" href="#catalog">
-        跳到组件目录
+    <>
+      <a className="skip-link" href="#main-content">
+        跳到主要内容
       </a>
 
       <header className="site-header">
@@ -131,7 +117,8 @@ export function CatalogBrowser({
         </nav>
       </header>
 
-      <section className="hero" id="top">
+      <main id="main-content">
+        <section className="hero" id="top">
         <p className="eyebrow">INTERACTIVE UI / UX DICTIONARY</p>
         <h1>这个 UI，叫什么<span>？</span></h1>
         <p className="hero-intro">
@@ -164,9 +151,9 @@ export function CatalogBrowser({
             )}
           </div>
         </div>
-      </section>
+        </section>
 
-      <section className="term-strip" id="terms" aria-labelledby="terms-title">
+        <section className="term-strip" id="terms" aria-labelledby="terms-title">
         <h2 id="terms-title">展示方式</h2>
         <div className="term-grid">
           <article>
@@ -182,9 +169,9 @@ export function CatalogBrowser({
             <p>实时预览 · 参数变化会立即反映结果</p>
           </article>
         </div>
-      </section>
+        </section>
 
-      <section className="catalog-section" id="catalog" aria-labelledby="catalog-title">
+        <section className="catalog-section" id="catalog" aria-labelledby="catalog-title">
         <div className="section-heading">
           <div>
             <p className="eyebrow">EXPLORE THE CATALOG</p>
@@ -279,7 +266,8 @@ export function CatalogBrowser({
             </button>
           </div>
         )}
-      </section>
+        </section>
+      </main>
 
       <footer className="site-footer">
         <p>
@@ -287,6 +275,6 @@ export function CatalogBrowser({
         </p>
         <a href="#top">回到顶部 ↑</a>
       </footer>
-    </main>
+    </>
   );
 }

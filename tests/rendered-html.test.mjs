@@ -42,6 +42,10 @@ test("home page renders the finished bilingual catalog", async () => {
   assert.match(html, /组件目录/);
   assert.match(html, /class="catalog-grid"/);
   assert.match(html, /href="\/components\/navigation-bar"/);
+  assert.match(html, /href="#main-content"/);
+  assert.match(html, /<header[^>]*class="site-header"[^>]*>[\s\S]*<main[^>]*id="main-content"[\s\S]*<footer[^>]*class="site-footer"/);
+  assert.match(html, /<meta[^>]+name="twitter:card"[^>]+content="summary"/);
+  assert.match(html, /<title>交互式 UI\/UX 视觉词典｜这叫啥 UI？<\/title>/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -65,6 +69,9 @@ test("all 75 component detail routes render and unknown slugs return 404", async
   assert.match(sliderHtml, /React \+ CSS/);
   assert.match(sliderHtml, /class="detail-layout"/);
   assert.match(sliderHtml, /class="detail-visual-sticky"/);
+  assert.match(sliderHtml, /href="#component-content"/);
+  assert.match(sliderHtml, /Slider 选择单值；Range Slider 选择区间；Progress Bar 只展示进度/);
+  assert.match(sliderHtml, /<header[^>]*class="detail-header"[^>]*>[\s\S]*<main[^>]*class="detail-main"[^>]*>[\s\S]*<footer[^>]*class="site-footer"/);
 
   const missing = await render("/components/not-a-real-component");
   assert.equal(missing.status, 404);

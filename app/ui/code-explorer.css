@@ -43,9 +43,9 @@
 }
 
 .code-readonly {
-  color: #607086;
+  color: var(--muted);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.13em;
 }
 
@@ -159,6 +159,10 @@
   color: var(--green);
   background: var(--surface);
   font-size: 12px;
+}
+
+.copy-status[data-state="error"] {
+  color: var(--danger);
 }
 
 @media (max-width: 680px) {
