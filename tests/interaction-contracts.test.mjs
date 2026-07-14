@@ -66,6 +66,7 @@ test("before-after slider uses a horizontal full-area control", async () => {
     readFile(cssUrl, "utf8"),
   ]);
   assert.match(source, /className="demo-compare-control"/);
+  assert.match(source, /className="demo-compare-line"/);
   assert.match(source, /className="demo-compare-handle"/);
   assert.match(css, /\.demo-compare-control\s*\{[\s\S]*?inset:\s*0;/);
   const componentSection = source.slice(
@@ -75,12 +76,16 @@ test("before-after slider uses a horizontal full-area control", async () => {
   assert.match(componentSection, /max="100"/);
   assert.match(componentSection, /min="0"/);
   assert.doesNotMatch(componentSection, /max="92"|min="8"/);
+  assert.equal(componentSection.split('style={{ left: `${compare}%` }}').length - 1, 2);
   const section = css.slice(
     css.indexOf(".demo-stage .demo-before-after"),
     css.indexOf(".demo-stage .demo-unavailable"),
   );
   assert.doesNotMatch(section, /rotate\(90deg\)/);
+  assert.doesNotMatch(section, /\.demo-before\s*\{[\s\S]*?border-right:/);
+  assert.match(section, /\.demo-before\s*\{[\s\S]*?padding:\s*0;/);
   assert.match(section, /\.demo-compare-control input\s*\{[\s\S]*?width:\s*100%;[\s\S]*?height:\s*100%;/);
+  assert.match(section, /\.demo-compare-line\s*\{[\s\S]*?width:\s*2px;[\s\S]*?transform:\s*translateX\(-50%\);/);
   assert.match(section, /\.demo-compare-handle\s*\{[\s\S]*?width:\s*34px;[\s\S]*?height:\s*34px;/);
 });
 

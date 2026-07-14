@@ -2022,11 +2022,14 @@
   z-index: 1;
   right: auto;
   overflow: hidden;
-  border-right: 2px solid #fff;
+  padding: 0;
   background: #303136;
 }
 
-.demo-stage .demo-before-after .demo-before span { min-width: 90px; }
+.demo-stage .demo-before-after .demo-before span {
+  min-width: 90px;
+  padding: 0 0 15px 15px;
+}
 .demo-stage .demo-before-after .demo-compare-control {
   position: absolute;
   z-index: 4;
@@ -2039,6 +2042,17 @@
   margin: 0;
   opacity: 0;
   cursor: ew-resize;
+}
+
+.demo-stage .demo-before-after .demo-compare-line {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  background: #fff;
+  pointer-events: none;
 }
 
 .demo-stage .demo-before-after .demo-compare-handle {
