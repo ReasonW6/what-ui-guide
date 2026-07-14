@@ -47,7 +47,16 @@ export function CopyPrompt({ prompt }: { prompt: string }) {
     <>
       <div className="prompt-box">
         <code>{prompt}</code>
-        <button type="button" onClick={copy}>复制给 AI</button>
+        <button
+          aria-label="复制 AI 提示词"
+          className="copy-icon-button"
+          data-copied={status === "提示词已复制" || undefined}
+          title="复制 AI 提示词"
+          type="button"
+          onClick={copy}
+        >
+          <span aria-hidden="true" className="copy-icon-button__glyph" />
+        </button>
       </div>
       <p className="copy-inline-status" role="status" aria-live="polite">
         {status || " "}

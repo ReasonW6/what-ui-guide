@@ -80,3 +80,23 @@ test("usage guidance renders a complete two-column grid", async () => {
   assert.doesNotMatch(source, /info-panel-wide/);
   assert.equal((source.match(/className="info-panel"/g) ?? []).length, 4);
 });
+
+test("detail copy actions use the shared top-right icon treatment", async () => {
+  const [promptSource, codeSource, globalCss, codeCss] = await Promise.all([
+    readFile(new URL("../app/ui/InteractiveDetail.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/ui/CodeExplorer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/ui/code-explorer.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(promptSource, /className="copy-icon-button"/);
+  assert.match(codeSource, /className="copy-code copy-icon-button"/);
+  assert.match(globalCss, /\.prompt-box \.copy-icon-button\s*\{[\s\S]*?position:\s*absolute;/);
+  assert.match(codeCss, /\.copy-code\s*\{[\s\S]*?position:\s*absolute;/);
+});
+
+test("desktop detail preview has a full-height sticky containing block", async () => {
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(css, /\.detail-visual\s*\{\s*align-self:\s*stretch;/);
+  assert.match(css, /\.detail-visual-sticky\s*\{[\s\S]*?position:\s*sticky;/);
+  assert.match(css, /@media \(max-width:\s*980px\)[\s\S]*?\.detail-visual-sticky\s*\{\s*position:\s*static;/);
+});

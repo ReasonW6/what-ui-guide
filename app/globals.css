@@ -660,6 +660,10 @@ a:focus-visible,
   min-width: 0;
 }
 
+.detail-visual {
+  align-self: stretch;
+}
+
 .detail-visual-sticky {
   position: sticky;
   top: 82px;
@@ -878,17 +882,15 @@ a:focus-visible,
 }
 
 .prompt-box {
+  position: relative;
   border: 1px solid var(--line);
   border-radius: 10px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
   background: var(--surface);
-  padding: 16px;
+  padding: 16px 62px 16px 16px;
 }
 
 .prompt-box code {
+  display: block;
   min-width: 0;
   color: #d4e1ef;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
@@ -897,18 +899,66 @@ a:focus-visible,
   overflow-wrap: anywhere;
 }
 
-.prompt-box button {
+.copy-icon-button {
+  display: grid;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
   min-height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  background: transparent;
+}
+
+.copy-icon-button__glyph {
+  position: relative;
+  display: block;
+  width: 30px;
+  height: 30px;
+  color: var(--muted-strong);
   border: 1px solid var(--line-strong);
   border-radius: 7px;
   background: var(--surface-2);
-  padding: 7px 10px;
-  font-size: 13px;
-  font-weight: 650;
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
 }
 
-.prompt-box button:hover {
+.copy-icon-button__glyph::before,
+.copy-icon-button__glyph::after {
+  position: absolute;
+  width: 9px;
+  height: 11px;
+  content: "";
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.copy-icon-button__glyph::before {
+  top: 8px;
+  left: 9px;
+}
+
+.copy-icon-button__glyph::after {
+  top: 6px;
+  left: 12px;
+  background: inherit;
+}
+
+.copy-icon-button:hover .copy-icon-button__glyph {
   border-color: var(--blue);
+  color: var(--ink);
+  background: var(--surface-3);
+}
+
+.copy-icon-button[data-copied="true"] .copy-icon-button__glyph {
+  border-color: color-mix(in srgb, var(--green) 60%, var(--line));
+  color: var(--green);
+}
+
+.prompt-box .copy-icon-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
 }
 
 .copy-inline-status {
@@ -1095,13 +1145,6 @@ a:focus-visible,
     max-width: 140px;
   }
 
-  .prompt-box {
-    grid-template-columns: 1fr;
-  }
-
-  .prompt-box button {
-    width: 100%;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

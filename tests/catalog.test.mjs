@@ -89,12 +89,17 @@ test("DemoRegistry covers the same 75 slugs as the catalog", async () => {
   );
 });
 
-test("all AI prompts are project-ready and library-friendly", async () => {
+test("all AI prompts are concise and implementation-ready", async () => {
   const { catalog } = await loadCatalogModule();
+  let promptsWithinFiftyCharacters = 0;
   for (const item of catalog) {
     assert.doesNotMatch(item.aiPrompt, /不要依赖第三方组件库/);
-    assert.match(item.aiPrompt, /成熟组件库，优先复用并按需求定制/);
-    assert.ok(item.aiPrompt.includes(item.anatomy[0]), `${item.slug} prompt omits anatomy`);
-    assert.ok(item.aiPrompt.includes(item.accessibility[0]), `${item.slug} prompt omits accessibility guidance`);
+    assert.doesNotMatch(item.aiPrompt, /请给出可直接运行的组件与必要样式/);
+    assert.ok(item.aiPrompt.includes(item.name.zh), `${item.slug} prompt omits Chinese name`);
+    assert.ok(item.aiPrompt.includes(item.name.en), `${item.slug} prompt omits English name`);
+    assert.ok(item.aiPrompt.includes(item.summary.zh), `${item.slug} prompt omits summary`);
+    assert.ok([...item.aiPrompt].length <= 100, `${item.slug} prompt exceeds 100 characters`);
+    if ([...item.aiPrompt].length <= 50) promptsWithinFiftyCharacters += 1;
   }
+  assert.ok(promptsWithinFiftyCharacters >= 60);
 });

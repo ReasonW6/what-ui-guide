@@ -132,8 +132,15 @@ export function CodeExplorer({ code }: { code: CodeBundle }) {
               </button>
             ))}
           </div>
-          <button className="copy-code" type="button" onClick={copyCurrentFile}>
-            复制当前文件
+          <button
+            aria-label={`复制 ${activeFile.name}`}
+            className="copy-code copy-icon-button"
+            data-copied={status.startsWith("已复制") || undefined}
+            title={`复制 ${activeFile.name}`}
+            type="button"
+            onClick={copyCurrentFile}
+          >
+            <span aria-hidden="true" className="copy-icon-button__glyph" />
           </button>
         </div>
 

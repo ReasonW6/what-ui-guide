@@ -25,8 +25,7 @@
 }
 
 .bundle-tabs button,
-.file-tabs button,
-.copy-code {
+.file-tabs button {
   min-height: 44px;
   border: 1px solid transparent;
   border-radius: 9px;
@@ -51,16 +50,18 @@
 }
 
 .file-toolbar {
+  position: relative;
   min-height: 48px;
   border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 6px 8px;
+  padding: 6px 58px 6px 8px;
 }
 
 .file-tabs {
+  width: 100%;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -84,15 +85,9 @@
 }
 
 .copy-code {
-  flex: 0 0 auto;
-  border-color: var(--line);
-  background: var(--surface-2);
-  color: var(--muted-strong);
-}
-
-.copy-code:hover {
-  border-color: var(--blue);
-  color: white;
+  position: absolute;
+  top: 2px;
+  right: 4px;
 }
 
 .code-panel {
@@ -145,8 +140,7 @@
 }
 
 @media (max-width: 680px) {
-  .code-explorer-head,
-  .file-toolbar {
+  .code-explorer-head {
     align-items: stretch;
     flex-direction: column;
   }
@@ -155,7 +149,4 @@
     display: none;
   }
 
-  .copy-code {
-    width: 100%;
-  }
 }
