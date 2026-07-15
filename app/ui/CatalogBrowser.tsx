@@ -42,10 +42,15 @@ export function CatalogBrowser({
   initialPlatform,
 }: CatalogBrowserProps) {
   const searchRef = useRef<HTMLInputElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState(initialCategory);
   const [platform, setPlatform] = useState(initialPlatform);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  useEffect(() => {
+    mainRef.current?.setAttribute("data-hydrated", "true");
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -64,7 +69,8 @@ export function CatalogBrowser({
       if (query.trim()) params.set("q", query.trim());
       if (category !== "all") params.set("category", category);
       if (platform !== "all") params.set("platform", platform);
-      const next = params.size ? `?${params.toString()}` : window.location.pathname;
+      const search = params.size ? `?${params.toString()}` : "";
+      const next = `${window.location.pathname}${search}${window.location.hash}`;
       window.history.replaceState(null, "", next);
     }, 150);
     return () => window.clearTimeout(timer);
@@ -117,7 +123,7 @@ export function CatalogBrowser({
         </nav>
       </header>
 
-      <main id="main-content">
+      <main id="main-content" ref={mainRef}>
         <section className="hero" id="top">
         <p className="eyebrow">INTERACTIVE UI / UX DICTIONARY</p>
         <h1>这个 UI，叫什么<span>？</span></h1>

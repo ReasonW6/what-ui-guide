@@ -44,7 +44,9 @@ test("home page renders the finished bilingual catalog", async () => {
   assert.match(html, /href="\/components\/navigation-bar"/);
   assert.match(html, /href="#main-content"/);
   assert.match(html, /<header[^>]*class="site-header"[^>]*>[\s\S]*<main[^>]*id="main-content"[\s\S]*<footer[^>]*class="site-footer"/);
-  assert.match(html, /<meta[^>]+name="twitter:card"[^>]+content="summary"/);
+  assert.match(html, /<meta[^>]+name="twitter:card"[^>]+content="summary_large_image"/);
+  assert.match(html, /https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/og-image\.png/);
+  assert.match(html, /<link[^>]+rel="canonical"[^>]+href="https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/"/);
   assert.match(html, /<title>交互式 UI\/UX 视觉词典｜这叫啥 UI？<\/title>/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
@@ -69,6 +71,9 @@ test("all 81 component detail routes render and unknown slugs return 404", async
   assert.match(sliderHtml, /React \+ CSS/);
   assert.match(sliderHtml, /class="detail-layout"/);
   assert.match(sliderHtml, /class="detail-visual-sticky"/);
+  assert.match(sliderHtml, /<meta[^>]+property="og:title"[^>]+content="滑块 \/ Slider"/);
+  assert.match(sliderHtml, /<meta[^>]+property="og:image"[^>]+content="https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/og-image\.png"/);
+  assert.match(sliderHtml, /<link[^>]+rel="canonical"[^>]+href="https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/components\/slider"/);
   assert.match(sliderHtml, /href="#component-content"/);
   assert.match(
     sliderHtml,

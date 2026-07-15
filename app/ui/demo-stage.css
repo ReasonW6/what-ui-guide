@@ -64,6 +64,19 @@
   box-shadow: 0 0 0 2px #171719, 0 0 0 4px var(--demo-blue);
 }
 
+@media (forced-colors: active) {
+  .demo-stage button:focus-visible,
+  .demo-stage a:focus-visible,
+  .demo-stage input:focus-visible,
+  .demo-stage textarea:focus-visible,
+  .demo-stage select:focus-visible,
+  .demo-stage [tabindex]:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}
+
 .demo-stage button {
   min-width: 44px;
   min-height: 44px;

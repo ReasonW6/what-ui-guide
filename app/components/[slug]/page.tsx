@@ -61,9 +61,25 @@ export async function generateMetadata({
   const { slug } = await params;
   const item = getCatalogItem(slug);
   if (!item) return { title: "组件未找到" };
+  const title = `${item.name.zh} / ${item.name.en}`;
+  const description = item.summary.zh;
+  const url = `/components/${item.slug}`;
   return {
-    title: `${item.name.zh} / ${item.name.en}`,
-    description: item.summary.zh,
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      description,
+      images: ["/og-image.png"],
+      title,
+      url,
+    },
+    twitter: {
+      card: "summary_large_image",
+      description,
+      images: ["/og-image.png"],
+      title,
+    },
   };
 }
 
