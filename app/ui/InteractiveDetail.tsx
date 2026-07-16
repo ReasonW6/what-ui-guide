@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DemoStage } from "./DemoStage";
 
 export function InteractiveDetail({ slug }: { slug: string }) {
   const [revision, setRevision] = useState(0);
   const [status, setStatus] = useState("");
+  const shellRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    shellRef.current?.setAttribute("data-hydrated", "true");
+  }, []);
 
   return (
-    <div className="detail-demo-shell">
+    <div className="detail-demo-shell" ref={shellRef}>
       <div className="detail-demo-toolbar">
         <span>INTERACTIVE DEMO · LOCAL STATE ONLY</span>
         <button

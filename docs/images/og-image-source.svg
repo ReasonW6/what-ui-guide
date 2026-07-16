@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111114" />
+      <stop offset="1" stop-color="#1b1b22" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0.78" cy="0.18" r="0.62">
+      <stop offset="0" stop-color="#0a6cff" stop-opacity="0.42" />
+      <stop offset="1" stop-color="#0a6cff" stop-opacity="0" />
+    </radialGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#ffffff" stroke-opacity="0.045" />
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="630" rx="36" fill="url(#bg)" />
+  <rect width="1200" height="630" rx="36" fill="url(#grid)" />
+  <rect width="1200" height="630" rx="36" fill="url(#glow)" />
+  <rect x="34" y="34" width="1132" height="562" rx="26" fill="none" stroke="#ffffff" stroke-opacity="0.1" />
+
+  <g font-family="Segoe UI, Microsoft YaHei, Arial, sans-serif">
+    <text x="88" y="112" fill="#69a5ff" font-size="25" font-weight="700" letter-spacing="4">INTERACTIVE UI / UX DICTIONARY</text>
+    <text x="84" y="270" fill="#f7f7fa" font-size="104" font-weight="800" letter-spacing="-5">
+      这叫啥 <tspan fill="#2b7fff">UI？</tspan>
+    </text>
+    <text x="90" y="345" fill="#c8c8d0" font-size="31" font-weight="500">81 个可交互组件 · 中英双语视觉词典</text>
+
+    <g transform="translate(88 414)" font-size="20" font-weight="700" letter-spacing="1.2">
+      <rect width="218" height="72" rx="16" fill="#23242a" stroke="#ffffff" stroke-opacity="0.12" />
+      <circle cx="36" cy="36" r="8" fill="#2b7fff" />
+      <text x="61" y="44" fill="#f7f7fa">SEARCH</text>
+
+      <rect x="238" width="218" height="72" rx="16" fill="#23242a" stroke="#ffffff" stroke-opacity="0.12" />
+      <circle cx="274" cy="36" r="8" fill="#39c793" />
+      <text x="299" y="44" fill="#f7f7fa">TRY IT</text>
+
+      <rect x="476" width="248" height="72" rx="16" fill="#23242a" stroke="#ffffff" stroke-opacity="0.12" />
+      <circle cx="512" cy="36" r="8" fill="#e9ad58" />
+      <text x="537" y="44" fill="#f7f7fa">NAME IT</text>
+    </g>
+
+    <text x="90" y="550" fill="#8f9099" font-size="20" font-weight="600">what-ui-guide.reasonw6.chatgpt.site</text>
+    <text x="1110" y="550" fill="#69a5ff" font-size="28" font-weight="800" text-anchor="end">81</text>
+  </g>
+</svg>

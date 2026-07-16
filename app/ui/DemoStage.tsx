@@ -228,9 +228,9 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
           <button aria-controls="demo-navigation-drawer" aria-expanded={drawerOpen} className="demo-primary" onClick={() => setDrawerOpen(true)} ref={drawerTriggerRef} type="button">
             <MiniIcon>☰</MiniIcon>打开导航抽屉
           </button>
-          {drawerOpen && <><button aria-label="关闭导航抽屉" className="demo-drawer-scrim" onClick={() => setDrawerOpen(false)} tabIndex={-1} type="button" /><div className="demo-drawer is-open" id="demo-navigation-drawer" ref={drawerRef}>
+          {drawerOpen && <><button aria-label="关闭导航抽屉" className="demo-drawer-scrim" onClick={() => setDrawerOpen(false)} tabIndex={-1} type="button" /><div aria-labelledby="demo-navigation-drawer-title" aria-modal={density === "detail" ? true : undefined} className="demo-drawer is-open" id="demo-navigation-drawer" ref={drawerRef} role="dialog">
             <button aria-label="关闭导航抽屉" className="demo-close" onClick={() => setDrawerOpen(false)} ref={drawerCloseRef} type="button">×</button>
-            <strong>浏览</strong>
+            <strong id="demo-navigation-drawer-title">浏览</strong>
             {navButtons(true)}
           </div></>}
         </div>
@@ -276,7 +276,7 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
               >{label}</button>
             ))}
           </div>
-          <div aria-labelledby={`demo-tab-${labels.slice(0, 3).indexOf(active)}`} className="demo-tab-panel" id="demo-tab-panel" role="tabpanel"><strong>{active}</strong><span>这里显示“{active}”内容。</span></div>
+          <div aria-labelledby={`demo-tab-${labels.slice(0, 3).indexOf(active)}`} className="demo-tab-panel" id="demo-tab-panel" role="tabpanel" tabIndex={0}><strong>{active}</strong><span>这里显示“{active}”内容。</span></div>
         </div>
       );
     case "breadcrumb":
@@ -496,6 +496,11 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   };
 
   const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Tab") {
+      menuWasOpened.current = false;
+      setMenuOpen(false);
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       menuWasOpened.current = true;
@@ -516,8 +521,8 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   };
 
   const popup = menuOpen && (
-    <div className="demo-menu" id={`demo-menu-${slug}`} onKeyDown={handleMenuKeyDown} ref={menuRef} role="menu">
-      {menuActions.map((action) => <button key={action} onClick={() => choose(action)} role="menuitem" type="button">{action}</button>)}
+    <div aria-label={slug === "split-button" ? "发布选项" : "操作选项"} className="demo-menu" id={`demo-menu-${slug}`} onKeyDown={handleMenuKeyDown} ref={menuRef} role="menu">
+      {menuActions.map((action) => <button key={action} onClick={() => choose(action)} role="menuitem" tabIndex={-1} type="button">{action}</button>)}
     </div>
   );
 
@@ -598,7 +603,7 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     case "overflow-menu":
       return <div className="demo-popup-wrap" ref={menuHostRef}><div className="demo-record-row"><span className="demo-avatar-small">UI</span><span><strong>组件词典</strong><small>刚刚更新</small></span><button aria-controls={`demo-menu-${slug}`} aria-expanded={menuOpen} aria-haspopup="menu" aria-label="更多操作" className="demo-icon-button" onClick={toggleMenu} ref={menuTriggerRef} type="button">•••</button></div>{popup}</div>;
     case "command-palette":
-      return <div className="demo-command-scene"><button aria-controls="demo-command-dialog" aria-expanded={commandOpen} aria-haspopup="dialog" className="demo-secondary" onClick={openCommandPalette} ref={commandTriggerRef} type="button">打开命令面板 <kbd>⌘K</kbd></button>{commandOpen && <div className="demo-command-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) setCommandOpen(false); }}><div aria-labelledby="demo-command-title" aria-modal={density === "detail" ? true : undefined} className="demo-command-dialog" id="demo-command-dialog" onKeyDown={handleCommandKeyDown} role="dialog"><strong id="demo-command-title">快速操作</strong><label className="demo-command-input"><span className="sr-only">搜索命令</span><MiniIcon>⌕</MiniIcon><input aria-activedescendant={visibleCommands[commandIndex] ? `demo-command-${commandIndex}` : undefined} aria-autocomplete="list" aria-controls="demo-command-list" aria-expanded="true" onChange={(event) => { setCommandQuery(event.target.value); setCommandIndex(0); }} placeholder="输入命令…" ref={commandInputRef} role="combobox" value={commandQuery} /></label><div id="demo-command-list" role="listbox">{visibleCommands.length ? visibleCommands.map((command, index) => <button aria-selected={commandIndex === index} id={`demo-command-${index}`} key={command} onClick={() => chooseCommand(command)} onMouseEnter={() => setCommandIndex(index)} role="option" tabIndex={-1} type="button"><span aria-hidden="true">{["＋", "⌕", "⚙"][commands.indexOf(command)]}</span>{command}</button>) : <p>没有匹配命令</p>}</div>{density === "detail" && <small>↑↓ 导航 · Enter 执行 · Esc 关闭</small>}</div></div>} {!commandOpen && <Status>{selected === "左对齐" ? "⌘K 打开" : `已执行：${selected}`}</Status>}</div>;
+      return <div className="demo-command-scene">{!(density === "card" && commandOpen) && <button aria-controls="demo-command-dialog" aria-expanded={commandOpen} aria-haspopup="dialog" className="demo-secondary" onClick={openCommandPalette} ref={commandTriggerRef} type="button">打开命令面板 <kbd>⌘K</kbd></button>}{commandOpen && <div className="demo-command-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) setCommandOpen(false); }}><div aria-labelledby="demo-command-title" aria-modal={density === "detail" ? true : undefined} className="demo-command-dialog" id="demo-command-dialog" onKeyDown={handleCommandKeyDown} role="dialog"><strong id="demo-command-title">快速操作</strong><label className="demo-command-input"><span className="sr-only">搜索命令</span><MiniIcon>⌕</MiniIcon><input aria-activedescendant={visibleCommands[commandIndex] ? `demo-command-${commandIndex}` : undefined} aria-autocomplete="list" aria-controls="demo-command-list" aria-expanded="true" onChange={(event) => { setCommandQuery(event.target.value); setCommandIndex(0); }} placeholder="输入命令…" ref={commandInputRef} role="combobox" value={commandQuery} /></label><div id="demo-command-list" role="listbox">{visibleCommands.length ? visibleCommands.map((command, index) => <button aria-selected={commandIndex === index} id={`demo-command-${index}`} key={command} onClick={() => chooseCommand(command)} onMouseEnter={() => setCommandIndex(index)} role="option" tabIndex={-1} type="button"><span aria-hidden="true">{["＋", "⌕", "⚙"][commands.indexOf(command)]}</span>{command}</button>) : <p>没有匹配命令</p>}</div>{density === "detail" && <small>↑↓ 导航 · Enter 执行 · Esc 关闭</small>}</div></div>} {!commandOpen && <Status>{selected === "左对齐" ? "⌘K 打开" : `已执行：${selected}`}</Status>}</div>;
     default:
       return null;
   }
@@ -847,7 +852,7 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     previewOpen && !["tooltip", "hover-card"].includes(slug),
   );
   const focusOnOpen = useRef(false);
-  const isModal = ["dialog", "alert-dialog", "lightbox", "scrim"].includes(slug);
+  const isModal = ["dialog", "alert-dialog", "lightbox", "scrim", "side-sheet"].includes(slug);
   const lightboxItems = ["界面总览", "组件细节", "移动端预览"];
 
   useEffect(() => {
@@ -909,7 +914,9 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     focusOnOpen.current = true;
     setOpen(true);
   };
-  const trigger = (label = "打开演示") => <button aria-expanded={open} className="demo-primary" onClick={openOverlay} ref={triggerRef} type="button">{label}</button>;
+  const trigger = (label = "打开演示") => density === "card" && open
+    ? null
+    : <button aria-expanded={open} className="demo-primary" onClick={openOverlay} ref={triggerRef} type="button">{label}</button>;
 
   switch (slug) {
     case "scrim":
@@ -925,7 +932,7 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     case "hover-card":
       return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlur={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onFocus={() => setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); hoverTriggerRef.current?.focus(); } }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}><a aria-describedby={open ? "hover-card-content" : undefined} className="demo-text-link" href="#design-system-profile" onClick={(event) => { event.preventDefault(); setOpen((value) => !value); }} ref={hoverTriggerRef}>@design-system</a>{open && <div className="demo-hover-card" id="hover-card-content"><span className="demo-avatar-small">DS</span><span><strong>Design System</strong><small>收录 81 个常用组件</small></span></div>}</div></div>;
     case "side-sheet":
-      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("打开设置")}{open && <div aria-labelledby="sheet-title" className="demo-side-sheet" ref={panelRef} role="dialog" tabIndex={-1}><div><strong id="sheet-title">页面设置</strong><button aria-label="关闭" onClick={() => setOpen(false)} type="button">×</button></div><label className="demo-check"><input defaultChecked type="checkbox" />显示网格</label><label className="demo-check"><input type="checkbox" />紧凑模式</label>{density === "detail" && <button className="demo-primary" onClick={() => setOpen(false)} type="button">应用</button>}</div>}</div>;
+      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("打开设置")}{open && <div className="demo-side-sheet-layer" onPointerDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}><div aria-labelledby="sheet-title" aria-modal={density === "detail" ? true : undefined} className="demo-side-sheet" ref={panelRef} role="dialog" tabIndex={-1}><div><strong id="sheet-title">页面设置</strong><button aria-label="关闭" onClick={() => setOpen(false)} type="button">×</button></div><label className="demo-check"><input defaultChecked type="checkbox" />显示网格</label><label className="demo-check"><input type="checkbox" />紧凑模式</label>{density === "detail" && <button className="demo-primary" onClick={() => setOpen(false)} type="button">应用</button>}</div></div>}</div>;
     case "accordion":
       return <div className="demo-accordion">{[["什么是 Slider？", "一种让用户在连续范围内选择数值的输入控件。"], ["何时使用？", "适合有明确上下界、强调相对值的场景。"], ["键盘如何操作？", "聚焦滑块后，使用方向键逐步调整数值。"]].map(([label, copy], index) => { const expanded = openAccordionIndex === index; const triggerId = `accordion-trigger-${density}-${index}`; const panelId = `accordion-panel-${density}-${index}`; return <div key={label}><h3><button aria-controls={panelId} aria-expanded={expanded} id={triggerId} onClick={() => toggleAccordionSection(index)} type="button"><span>{label}</span><span aria-hidden="true">{expanded ? "−" : "+"}</span></button></h3>{expanded && <div aria-labelledby={triggerId} className="demo-accordion-panel" id={panelId} role="region">{copy}</div>}</div>; })}</div>;
     case "disclosure":
@@ -1057,7 +1064,7 @@ function DataDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     case "data-grid":
       return <div className="demo-data-grid" role="grid" aria-label="组件数据"><div className="demo-data-grid-row" role="row">{["名称", "评分", "状态"].map((cell) => <div className="is-heading" key={cell} role="columnheader">{cell}</div>)}</div>{[["Slider", "9.4", "推荐"], ["Dialog", "9.1", "常用"]].map((row, rowIndex) => <div className="demo-data-grid-row" key={row[0]} role="row">{row.map((cell, columnIndex) => { const index = 3 + rowIndex * 3 + columnIndex; return <button aria-selected={active === index} className={active === index ? "is-active" : ""} data-grid-index={index} key={`${cell}-${index}`} onClick={() => setActive(index)} onKeyDown={(event) => handleGridKeyDown(event, index)} role="gridcell" tabIndex={active === index ? 0 : -1} type="button">{cell}</button>; })}</div>)}</div>;
     case "tree-view":
-      return <div className="demo-tree" role="tree"><button aria-expanded={expanded} aria-selected={active === 0} onClick={() => { setActive(0); setExpanded((value) => !value); }} onKeyDown={(event) => handleTreeKeyDown(event, 0)} role="treeitem" tabIndex={active === 0 ? 0 : -1} type="button"><span>{expanded ? "⌄" : "›"}</span>组件</button>{expanded && <div role="group"><button aria-selected={active === 1} className={active === 1 ? "is-active" : ""} onClick={() => setActive(1)} onKeyDown={(event) => handleTreeKeyDown(event, 1)} role="treeitem" tabIndex={active === 1 ? 0 : -1} type="button">选择与取值</button><button aria-selected={active === 2} className={active === 2 ? "is-active" : ""} onClick={() => setActive(2)} onKeyDown={(event) => handleTreeKeyDown(event, 2)} role="treeitem" tabIndex={active === 2 ? 0 : -1} type="button">反馈与状态</button></div>}</div>;
+      return <div aria-label="组件分类" className="demo-tree" role="tree"><button aria-expanded={expanded} aria-selected={active === 0} onClick={() => { setActive(0); setExpanded((value) => !value); }} onKeyDown={(event) => handleTreeKeyDown(event, 0)} role="treeitem" tabIndex={active === 0 ? 0 : -1} type="button"><span>{expanded ? "⌄" : "›"}</span>组件</button>{expanded && <div role="group"><button aria-selected={active === 1} className={active === 1 ? "is-active" : ""} onClick={() => setActive(1)} onKeyDown={(event) => handleTreeKeyDown(event, 1)} role="treeitem" tabIndex={active === 1 ? 0 : -1} type="button">选择与取值</button><button aria-selected={active === 2} className={active === 2 ? "is-active" : ""} onClick={() => setActive(2)} onKeyDown={(event) => handleTreeKeyDown(event, 2)} role="treeitem" tabIndex={active === 2 ? 0 : -1} type="button">反馈与状态</button></div>}</div>;
     case "timeline":
       return <div className="demo-timeline">{["创建词条", "补充演示", "发布上线"].map((item, index) => <button aria-current={index === active ? "step" : undefined} className={index <= active ? "is-active" : ""} key={item} onClick={() => setActive(index)} type="button"><span>{index < active ? "✓" : index + 1}</span><span><strong>{item}</strong><small>{["09:20", "10:45", "待完成"][index]}</small></span></button>)}</div>;
     case "calendar-view": {

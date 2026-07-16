@@ -94,15 +94,25 @@ npm run dev
 
 按照终端输出打开本地地址即可。
 
+### 预览生产构建
+
+```bash
+npm run build
+npm start
+```
+
+`npm start` 会使用构建产物中的 Cloudflare Worker 入口，并从 `dist/client` 提供静态资源；Windows 和类 Unix 系统使用同一条启动命令。
+
 ### 验证项目
 
 ```bash
 npm run lint
-npm run build
 npm test
+npx playwright install chromium
+npm run test:browser
 ```
 
-`npm test` 会运行目录与交互契约测试、生产构建及渲染 HTML 测试。现有测试覆盖 81 条目录数据、Demo Registry、双语搜索、关联路由、代码样例语法、常见交互族与未知 slug 的 404 行为。
+`npm test` 会先运行完整 TypeScript 类型检查，再执行目录与交互契约测试、生产构建及渲染 HTML 测试。`npm run test:browser` 使用 Playwright 通过真实生产启动入口验证静态资源、贴边浮层、弹层焦点约束、命令面板快捷键、Tabs / Tree / Data Grid 键盘导航，以及首页筛选状态的 URL 恢复。首次运行浏览器测试前需安装 Chromium。
 
 ## 技术栈
 
@@ -111,7 +121,7 @@ npm test
 - Next.js App Router 风格的文件路由
 - Tailwind CSS 4 与项目自定义 CSS
 - Cloudflare Worker 兼容运行时
-- ESLint 9 与 Node.js 内置测试运行器
+- ESLint 9、Node.js 内置测试运行器与 Playwright 浏览器冒烟测试
 - [OpenAI Sites](https://what-ui-guide.reasonw6.chatgpt.site) 托管
 
 产品内容来自本地静态注册表。演示只维护页面局部状态，不连接数据库，不上传真实文件，也不会执行示例代码字符串。
@@ -175,7 +185,7 @@ worker/index.ts                # vinext Cloudflare Worker 入口
 
 ## 许可
 
-当前仓库尚未选择开源许可证。源码可以在公开仓库中查看，但在添加明确许可证前，默认保留所有权利。
+本项目采用 [0BSD 许可证](./LICENSE)。你可以出于任何目的自由使用、复制、修改和分发这些代码，包括商业用途，并且无需保留署名；软件按原样提供，不附带任何担保。
 
 ---
 
