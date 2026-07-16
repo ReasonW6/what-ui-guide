@@ -1,109 +1,76 @@
-import { readFile } from "node:fs/promises";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { extname, resolve, sep } from "node:path";
+import { spawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 
-const host = "127.0.0.1";
 const port = 4173;
-const clientRoot = resolve(fileURLToPath(new URL("../../dist/client/", import.meta.url)));
-const contentTypes: Record<string, string> = {
-  ".css": "text/css; charset=utf-8",
-  ".gif": "image/gif",
-  ".html": "text/html; charset=utf-8",
-  ".ico": "image/x-icon",
-  ".jpeg": "image/jpeg",
-  ".jpg": "image/jpeg",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".webp": "image/webp",
-  ".woff": "font/woff",
-  ".woff2": "font/woff2",
-};
+const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
+const productionServer = fileURLToPath(new URL("../../scripts/start-production.mjs", import.meta.url));
 
-function requestHeaders(request: IncomingMessage) {
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(request.headers)) {
-    if (Array.isArray(value)) value.forEach((item) => headers.append(name, item));
-    else if (value !== undefined) headers.set(name, value);
-  }
-  return headers;
-}
+async function stopProcessTree(child: ChildProcess) {
+  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
 
-async function fetchAsset(input: Request | string): Promise<Response> {
-  const url = new URL(typeof input === "string" ? input : input.url, `http://${host}:${port}`);
-  let pathname: string;
-  try {
-    pathname = decodeURIComponent(url.pathname);
-  } catch {
-    return new Response("Bad Request", { status: 400 });
-  }
-
-  const path = resolve(clientRoot, `.${pathname}`);
-  if (path !== clientRoot && !path.startsWith(`${clientRoot}${sep}`)) {
-    return new Response("Not Found", { status: 404 });
-  }
-
-  try {
-    const body = await readFile(path);
-    return new Response(new Uint8Array(body), {
-      headers: { "content-type": contentTypes[extname(path).toLowerCase()] ?? "application/octet-stream" },
+  if (process.platform === "win32") {
+    const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+      stdio: "ignore",
+      windowsHide: true,
     });
-  } catch (error) {
-    if (["EISDIR", "ENOENT"].includes((error as NodeJS.ErrnoException).code ?? "")) {
-      return new Response("Not Found", { status: 404 });
-    }
-    throw error;
-  }
-}
-
-async function send(response: Response, request: IncomingMessage, outgoing: ServerResponse) {
-  outgoing.statusCode = response.status;
-  response.headers.forEach((value, name) => outgoing.setHeader(name, value));
-  if (request.method === "HEAD" || !response.body) {
-    outgoing.end();
+    await once(killer, "exit");
     return;
   }
-  outgoing.end(Buffer.from(await response.arrayBuffer()));
+
+  const exitPromise = once(child, "exit");
+  child.kill("SIGTERM");
+  await Promise.race([
+    exitPromise,
+    new Promise((resolveDelay) => setTimeout(resolveDelay, 10_000)),
+  ]);
+  if (child.exitCode === null && child.signalCode === null) {
+    child.kill("SIGKILL");
+    await exitPromise;
+  }
 }
 
 export default async function globalSetup() {
-  const workerUrl = new URL("../../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("browser-test", `${process.pid}-${Date.now()}`);
-  const worker = (await import(workerUrl.href)).default;
-  const server = createServer((request, response) => {
-    void (async () => {
-      try {
-        const url = new URL(request.url ?? "/", `http://${host}:${port}`);
-        const asset = await fetchAsset(url.href);
-        if (asset.status !== 404) {
-          await send(asset, request, response);
-          return;
-        }
+  const child = spawn(
+    process.execPath,
+    [productionServer, "--port", String(port)],
+    {
+      cwd: projectRoot,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    },
+  );
 
-        const rendered = await worker.fetch(
-          new Request(url, { headers: requestHeaders(request), method: request.method }),
-          { ASSETS: { fetch: fetchAsset } },
-          { passThroughOnException() {}, waitUntil() {} },
-        );
-        await send(rendered, request, response);
-      } catch (error) {
-        console.error(error);
-        if (!response.headersSent) response.statusCode = 500;
-        response.end("Internal Server Error");
-      }
-    })();
-  });
-
-  await new Promise<void>((resolveListen, rejectListen) => {
-    server.once("error", rejectListen);
-    server.listen(port, host, resolveListen);
-  });
-
-  return async () => {
-    await new Promise<void>((resolveClose, rejectClose) => {
-      server.close((error) => error ? rejectClose(error) : resolveClose());
-    });
+  let output = "";
+  const collect = (chunk: Buffer) => {
+    output = `${output}${chunk.toString()}`.slice(-16_000);
   };
+  child.stdout?.on("data", collect);
+  child.stderr?.on("data", collect);
+
+  let startupTimeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await new Promise<void>((resolveReady, rejectReady) => {
+      const checkReady = () => {
+        if (output.includes("Production preview ready")) resolveReady();
+      };
+      child.stdout?.on("data", checkReady);
+      child.stderr?.on("data", checkReady);
+      child.once("error", rejectReady);
+      child.once("exit", (code, signal) => {
+        rejectReady(new Error(`Production server exited before startup (${code ?? signal}).\n${output}`));
+      });
+      startupTimeout = setTimeout(() => {
+        rejectReady(new Error(`Timed out waiting for production server.\n${output}`));
+      }, 120_000);
+    });
+  } catch (error) {
+    await stopProcessTree(child);
+    throw error;
+  } finally {
+    if (startupTimeout) clearTimeout(startupTimeout);
+  }
+
+  return async () => stopProcessTree(child);
 }

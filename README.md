@@ -94,6 +94,15 @@ npm run dev
 
 按照终端输出打开本地地址即可。
 
+### 预览生产构建
+
+```bash
+npm run build
+npm start
+```
+
+`npm start` 会使用构建产物中的 Cloudflare Worker 入口，并从 `dist/client` 提供静态资源；Windows 和类 Unix 系统使用同一条启动命令。
+
 ### 验证项目
 
 ```bash
@@ -103,7 +112,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-`npm test` 会先运行完整 TypeScript 类型检查，再执行目录与交互契约测试、生产构建及渲染 HTML 测试。`npm run test:browser` 使用 Playwright 验证弹层焦点约束、命令面板快捷键、Tabs / Tree / Data Grid 键盘导航，以及首页筛选状态的 URL 恢复。首次运行浏览器测试前需安装 Chromium。
+`npm test` 会先运行完整 TypeScript 类型检查，再执行目录与交互契约测试、生产构建及渲染 HTML 测试。`npm run test:browser` 使用 Playwright 通过真实生产启动入口验证静态资源、贴边浮层、弹层焦点约束、命令面板快捷键、Tabs / Tree / Data Grid 键盘导航，以及首页筛选状态的 URL 恢复。首次运行浏览器测试前需安装 Chromium。
 
 ## 技术栈
 

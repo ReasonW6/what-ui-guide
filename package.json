@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
-    "start": "vinext start",
+    "start": "node scripts/start-production.mjs",
     "typecheck": "tsc --noEmit --incremental false",
     "test": "npm run typecheck && node --test tests/catalog.test.mjs tests/interaction-contracts.test.mjs && npm run build && node --test tests/rendered-html.test.mjs",
     "test:browser": "npm run build && playwright test",

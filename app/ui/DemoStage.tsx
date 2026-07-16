@@ -228,7 +228,7 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
           <button aria-controls="demo-navigation-drawer" aria-expanded={drawerOpen} className="demo-primary" onClick={() => setDrawerOpen(true)} ref={drawerTriggerRef} type="button">
             <MiniIcon>☰</MiniIcon>打开导航抽屉
           </button>
-          {drawerOpen && <><button aria-label="关闭导航抽屉" className="demo-drawer-scrim" onClick={() => setDrawerOpen(false)} tabIndex={-1} type="button" /><div aria-labelledby="demo-navigation-drawer-title" className="demo-drawer is-open" id="demo-navigation-drawer" ref={drawerRef} role="dialog">
+          {drawerOpen && <><button aria-label="关闭导航抽屉" className="demo-drawer-scrim" onClick={() => setDrawerOpen(false)} tabIndex={-1} type="button" /><div aria-labelledby="demo-navigation-drawer-title" aria-modal={density === "detail" ? true : undefined} className="demo-drawer is-open" id="demo-navigation-drawer" ref={drawerRef} role="dialog">
             <button aria-label="关闭导航抽屉" className="demo-close" onClick={() => setDrawerOpen(false)} ref={drawerCloseRef} type="button">×</button>
             <strong id="demo-navigation-drawer-title">浏览</strong>
             {navButtons(true)}
@@ -852,7 +852,7 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     previewOpen && !["tooltip", "hover-card"].includes(slug),
   );
   const focusOnOpen = useRef(false);
-  const isModal = ["dialog", "alert-dialog", "lightbox", "scrim"].includes(slug);
+  const isModal = ["dialog", "alert-dialog", "lightbox", "scrim", "side-sheet"].includes(slug);
   const lightboxItems = ["界面总览", "组件细节", "移动端预览"];
 
   useEffect(() => {
@@ -932,7 +932,7 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     case "hover-card":
       return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlur={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onFocus={() => setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); hoverTriggerRef.current?.focus(); } }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}><a aria-describedby={open ? "hover-card-content" : undefined} className="demo-text-link" href="#design-system-profile" onClick={(event) => { event.preventDefault(); setOpen((value) => !value); }} ref={hoverTriggerRef}>@design-system</a>{open && <div className="demo-hover-card" id="hover-card-content"><span className="demo-avatar-small">DS</span><span><strong>Design System</strong><small>收录 81 个常用组件</small></span></div>}</div></div>;
     case "side-sheet":
-      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("打开设置")}{open && <div aria-labelledby="sheet-title" className="demo-side-sheet" ref={panelRef} role="dialog" tabIndex={-1}><div><strong id="sheet-title">页面设置</strong><button aria-label="关闭" onClick={() => setOpen(false)} type="button">×</button></div><label className="demo-check"><input defaultChecked type="checkbox" />显示网格</label><label className="demo-check"><input type="checkbox" />紧凑模式</label>{density === "detail" && <button className="demo-primary" onClick={() => setOpen(false)} type="button">应用</button>}</div>}</div>;
+      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("打开设置")}{open && <div className="demo-side-sheet-layer" onPointerDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}><div aria-labelledby="sheet-title" aria-modal={density === "detail" ? true : undefined} className="demo-side-sheet" ref={panelRef} role="dialog" tabIndex={-1}><div><strong id="sheet-title">页面设置</strong><button aria-label="关闭" onClick={() => setOpen(false)} type="button">×</button></div><label className="demo-check"><input defaultChecked type="checkbox" />显示网格</label><label className="demo-check"><input type="checkbox" />紧凑模式</label>{density === "detail" && <button className="demo-primary" onClick={() => setOpen(false)} type="button">应用</button>}</div></div>}</div>;
     case "accordion":
       return <div className="demo-accordion">{[["什么是 Slider？", "一种让用户在连续范围内选择数值的输入控件。"], ["何时使用？", "适合有明确上下界、强调相对值的场景。"], ["键盘如何操作？", "聚焦滑块后，使用方向键逐步调整数值。"]].map(([label, copy], index) => { const expanded = openAccordionIndex === index; const triggerId = `accordion-trigger-${density}-${index}`; const panelId = `accordion-panel-${density}-${index}`; return <div key={label}><h3><button aria-controls={panelId} aria-expanded={expanded} id={triggerId} onClick={() => toggleAccordionSection(index)} type="button"><span>{label}</span><span aria-hidden="true">{expanded ? "−" : "+"}</span></button></h3>{expanded && <div aria-labelledby={triggerId} className="demo-accordion-panel" id={panelId} role="region">{copy}</div>}</div>; })}</div>;
     case "disclosure":
