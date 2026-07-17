@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { filterCatalogSearchEntries } from "@/lib/catalog-search";
 import { DemoStage } from "./DemoStage";
+import { GitHubLink } from "./GitHubLink";
+import { IdentificationWorkspace } from "./IdentificationWorkspace";
 
 type Bilingual = { zh: string; en: string };
 
@@ -112,10 +114,14 @@ export function CatalogBrowser({
       </a>
 
       <header className="site-header">
-        <a className="brand" href="#top" aria-label="这叫啥 UI？返回顶部">
-          <span>这叫啥 <strong>UI？</strong></span>
-        </a>
+        <div className="header-left">
+          <a className="brand" href="#top" aria-label="这叫啥 UI？返回顶部">
+            <span>这叫啥 <strong>UI？</strong></span>
+          </a>
+          <GitHubLink />
+        </div>
         <nav aria-label="站点导航">
+          <a href="#identify">AI 识别</a>
           <a href="#catalog">组件目录</a>
           <button type="button" onClick={() => searchRef.current?.focus()}>
             搜索 <kbd>⌘ K</kbd>
@@ -128,35 +134,16 @@ export function CatalogBrowser({
         <p className="eyebrow">INTERACTIVE UI / UX DICTIONARY</p>
         <h1>这个 UI，叫什么<span>？</span></h1>
         <p className="hero-intro">
-          看见组件却不知道名称？亲手试一试，再用中英文标准术语准确描述它。
+          上传截图或输入公开网页，让 AI 解释它为什么像某个组件，如何区分、如何实现。
         </p>
+        </section>
 
-        <div className="search-panel" id="search">
-          <label className="sr-only" htmlFor="component-search">描述你看到的东西</label>
-          <div className="search-control">
-            <span aria-hidden="true">⌕</span>
-            <input
-              ref={searchRef}
-              id="component-search"
-              type="search"
-              value={query}
-              onChange={(event) => updateQuery(event.target.value)}
-              placeholder="描述你看到的东西，例如：可以拖动的圆点……"
-              autoComplete="off"
-            />
-            <kbd>⌘ / Ctrl K</kbd>
-          </div>
-          <div className="search-examples" aria-label="搜索示例">
-            <span>试试：</span>
-            {["从侧边滑出来", "短暂出现的提示", "图片左右对比"].map(
-              (example) => (
-                <button key={example} type="button" onClick={() => updateQuery(example)}>
-                  {example}
-                </button>
-              ),
-            )}
-          </div>
-        </div>
+        <section
+          aria-labelledby="identify-title"
+          className="analyzer-section"
+          id="identify"
+        >
+          <IdentificationWorkspace />
         </section>
 
         <section className="term-strip" id="terms" aria-labelledby="terms-title">
@@ -186,6 +173,33 @@ export function CatalogBrowser({
           <p className="result-count" aria-live="polite">
             找到 <strong>{filtered.length}</strong> 个结果
           </p>
+        </div>
+
+        <div className="search-panel" id="search">
+          <label className="sr-only" htmlFor="component-search">描述你看到的东西</label>
+          <div className="search-control">
+            <span aria-hidden="true">⌕</span>
+            <input
+              ref={searchRef}
+              id="component-search"
+              type="search"
+              value={query}
+              onChange={(event) => updateQuery(event.target.value)}
+              placeholder="只浏览词典？输入外观、行为或名称……"
+              autoComplete="off"
+            />
+            <kbd>⌘ / Ctrl K</kbd>
+          </div>
+          <div className="search-examples" aria-label="搜索示例">
+            <span>试试：</span>
+            {["从侧边滑出来", "短暂出现的提示", "图片左右对比"].map(
+              (example) => (
+                <button key={example} type="button" onClick={() => updateQuery(example)}>
+                  {example}
+                </button>
+              ),
+            )}
+          </div>
         </div>
 
         <div className="filter-bar" aria-label="筛选组件">

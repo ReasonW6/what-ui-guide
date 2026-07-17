@@ -11,7 +11,7 @@
     "build": "vinext build",
     "start": "node scripts/start-production.mjs",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "npm run typecheck && node --test tests/catalog.test.mjs tests/interaction-contracts.test.mjs && npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run typecheck && node --test tests/catalog.test.mjs tests/interaction-contracts.test.mjs tests/identification.test.mjs tests/identification-ui.test.mjs && npm run build && node scripts/run-production-tests.mjs",
     "test:browser": "npm run build && playwright test",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern work --ignore-pattern outputs",
     "db:generate": "drizzle-kit generate"

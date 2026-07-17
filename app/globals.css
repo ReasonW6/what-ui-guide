@@ -157,6 +157,40 @@ a:focus-visible,
   color: var(--blue);
 }
 
+.header-left {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.github-link {
+  width: 44px;
+  height: 44px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-strong);
+}
+
+.github-link:hover {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.github-link img {
+  filter: invert(1);
+  opacity: 0.78;
+}
+
+.github-link:hover img {
+  opacity: 1;
+}
+
 .site-header nav {
   display: flex;
   align-items: center;
@@ -244,6 +278,11 @@ a:focus-visible,
   max-width: 680px;
   margin: 34px auto 0;
   text-align: left;
+}
+
+.catalog-section .search-panel {
+  max-width: none;
+  margin: 0 0 24px;
 }
 
 .search-control {

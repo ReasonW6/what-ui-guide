@@ -2,11 +2,11 @@
 
 # 这叫啥 UI？
 
-**What UI Is This? — 一份可以亲手试玩的中英双语 UI / UX 视觉词典。**
+**What UI Is This? — 一份可以看图识别、用网址分析，也可以亲手试玩的中英双语 UI / UX 视觉词典。**
 
-当你知道一个界面“长什么样、怎么操作”，却不知道它叫什么时，直接描述它。
+当你知道一个界面“长什么样、怎么操作”，却不知道它叫什么时，上传截图、框选区域，或提供公开网页地址。
 
-[在线体验](https://what-ui-guide.reasonw6.chatgpt.site) · [浏览全部组件](https://what-ui-guide.reasonw6.chatgpt.site/#catalog) · [查看手风琴示例](https://what-ui-guide.reasonw6.chatgpt.site/components/accordion)
+[在线体验](https://what-ui-guide.reasonw6.chatgpt.site) · [AI 识别](https://what-ui-guide.reasonw6.chatgpt.site/#identify) · [浏览全部组件](https://what-ui-guide.reasonw6.chatgpt.site/#catalog) · [GitHub](https://github.com/ReasonW6/what-ui-guide)
 
 ![81 components](https://img.shields.io/badge/components-81-2496ff?style=flat-square)
 ![React 19](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=111827)
@@ -23,10 +23,11 @@ UI / UX 术语往往比界面本身更难找。你可能知道“右键后出现
 
 “这叫啥 UI？”把抽象术语变成可操作的视觉索引：
 
-- 用自然语言描述你看到的界面，而不是先猜专业名词。
+- 上传截图并框选真正想问的区域，减少页面其他元素对识别的干扰。
+- 输入公开网页 URL；满足安全白名单时读取浏览器快照，否则使用受限的公开网页语义检索。
+- 获得 1–3 个候选术语，以及证据、置信度、不确定性、易混项和后续追问。
 - 直接在目录卡片中点击、输入、拖动或展开，确认它是不是你想找的组件。
-- 同时查看中文名称、英文标准术语、别名、平台叫法和容易混淆的概念。
-- 把简短、准确的描述复制给编程助手，再进入实现阶段。
+- 同时查看中文名称、英文标准术语、实现结构、行为、样式、无障碍建议和可复制代码。
 
 > 这是组件视觉词典与教学演示，不是可安装的生产级 UI 组件库。
 
@@ -34,6 +35,10 @@ UI / UX 术语往往比界面本身更难找。你可能知道“右键后出现
 
 | 能力 | 说明 |
 | --- | --- |
+| 截图与区域识别 | 支持上传、拖放或粘贴截图，并用百分比坐标框选区域；分析前在浏览器中裁剪，不必把整张页面都交给模型。 |
+| 公开网页分析 | 对安全白名单内的网页优先使用浏览器快照；未配置快照能力时退化为按目标域名限制的公开网页语义分析。 |
+| 可解释候选结果 | 返回 1–3 个目录内候选，逐项说明视觉或行为证据、区别点、置信度、不确定性与必要的后续问题。 |
+| 实现工作台 | 选中候选后可继续查看交互演示、易混术语、结构 / 行为 / 样式 / 无障碍指导，以及原生与 React 代码。 |
 | 自然语言搜索 | 匹配中文名、英文名、别名、关键词、组成结构、使用建议、分类与平台；支持“可以拖动的圆点”等描述。 |
 | 81 个交互条目 | 9 个分类，覆盖导航、菜单、输入、选择、反馈、浮层、内容、数据和交互模式。 |
 | 三层展示语言 | `Component Preview` 用于识别外观，`Interactive Demo` 用于亲手操作，`Live Preview` 用于观察参数变化。 |
@@ -42,6 +47,19 @@ UI / UX 术语往往比界面本身更难找。你可能知道“右键后出现
 | AI 描述提示词 | 为每个术语提供简短、聚焦的实现描述，方便粘贴给编程助手。 |
 | URL 可恢复筛选 | 搜索、分类和平台状态同步到查询参数，刷新或分享后仍可恢复。 |
 | 响应式与键盘友好 | 从 320px 到宽屏自适应，并为菜单、Tabs、Grid、Tree、Slider、弹层和拖放等提供键盘路径。 |
+
+## AI 识别工作台
+
+识别不是只返回一个可能错误的名字，而是围绕“为什么像、还可能是什么、下一步怎么实现”组织结果：
+
+1. **截图路径**：上传、拖放或粘贴 `PNG / JPEG / WebP / GIF`，框选组件区域，也可分析整图。
+2. **网页路径**：输入公开的 `https://` 地址。只有配置在 `BROWSER_ALLOWED_HOSTS` 中的精确主机名可以进入浏览器快照流程；其他公共网页使用限定域名的语义检索，不会由服务器直接抓取任意 HTML。
+3. **候选判断**：模型只能从本项目目录 slug 中选择候选，并返回识别状态、证据、区别、不确定性与追问；无法可靠识别时会明确给出 `unknown`，而不是硬猜。
+4. **落地实现**：候选会重新关联到本地可信目录数据，展示真实演示、易混术语、实现指导与两套代码示例，而不是采用模型生成的未知代码。
+
+截图或网页内容只在当前分析请求中处理，本项目不保存截图、URL、识别结果、API Key 或历史记录。OpenAI Responses 请求设置 `store: false`。如果部署方没有配置托管 Key，界面会要求 BYOK；该 Key 只保存在当前页面内存并随请求发送，不写入 `localStorage`、数据库或日志，刷新页面后即清除。
+
+> AI 结果是辅助判断，不是确定性的 DOM 检查器。登录态、内网或需要交互后才出现的页面请改用截图；不要上传包含密钥、身份信息或其他敏感数据的画面。
 
 ## 详情页不只是“大号预览”
 
@@ -92,7 +110,41 @@ npm install
 npm run dev
 ```
 
-按照终端输出打开本地地址即可。
+如果想使用部署方托管的 OpenAI Key，先复制环境变量示例并填入自己的值：
+
+```bash
+# macOS / Linux
+cp .env.example .env.local
+
+# Windows PowerShell
+Copy-Item .env.example .env.local
+```
+
+按照终端输出打开本地地址即可。也可以不配置服务端 Key，直接在识别界面临时输入自己的 OpenAI API Key（BYOK）。
+
+### 环境变量
+
+| 变量 | 必需 | 用途 |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | 否 | 部署方托管的 OpenAI API Key；未设置时启用 BYOK。不要提交真实值。 |
+| `OPENAI_MODEL` | 否 | 识别模型，默认 `gpt-5.6-sol`。 |
+| `BROWSER_ALLOWED_HOSTS` | 否 | 允许浏览器快照的精确主机名，逗号分隔，例如 `yoursite.com,www.yoursite.com`。不支持通配符。 |
+| `CLOUDFLARE_ACCOUNT_ID` | 否 | 使用 Cloudflare Browser Rendering REST 快照时的账户 ID。 |
+| `CLOUDFLARE_API_TOKEN` | 否 | 使用 Browser Rendering REST 快照时的最小权限令牌。 |
+| `BROWSER` | 否 | Cloudflare Worker Browser Rendering binding；这是部署绑定，不是写入 `.env.local` 的字符串。 |
+
+浏览器快照有两种可选接入方式：Cloudflare Worker 的 `BROWSER` binding，或 `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN`。无论采用哪种方式，都必须同时配置 `BROWSER_ALLOWED_HOSTS`；未满足条件时，URL 分析自动使用公共网页语义模式。
+
+`.env.example` 可以提交，`.env`、`.env.local` 等实际环境文件仍被 Git 忽略。线上部署请通过托管平台的 Secret / Environment Variables 功能配置，不要把值写进仓库。
+
+### 输入限制与安全边界
+
+- 单张截图最大 `8 MiB`；支持 `PNG`、`JPEG`、`WebP` 与非动画 `GIF`。上传后先在浏览器端校验并裁剪，再发往识别接口。
+- URL 仅接受公共 `https` 页面；`localhost`、环回地址、私网 IP、带用户名密码的 URL 和非 Web 协议会被拒绝。
+- 浏览器快照只允许 `BROWSER_ALLOWED_HOSTS` 中的精确主机名，避免把服务变成开放代理或 SSRF 入口。
+- 未配置浏览器快照时，URL 分析只能依据公开搜索结果与页面语义，不能看到登录态、悬停态、弹层或滚动后才出现的 UI。
+- 服务端托管 Key 会使用基础请求频率限制，以控制滥用与费用；BYOK 请求仍受输入校验和上游 API 限制。
+- 产品不提供账户、云端历史或持久化收藏；刷新页面会清除尚未复制的识别状态与临时 Key。
 
 ### 预览生产构建
 
@@ -121,25 +173,34 @@ npm run test:browser
 - Next.js App Router 风格的文件路由
 - Tailwind CSS 4 与项目自定义 CSS
 - Cloudflare Worker 兼容运行时
+- OpenAI Responses API（视觉输入、结构化输出与受限 Web Search）
+- 可选 Cloudflare Browser Rendering（白名单网页快照）
 - ESLint 9、Node.js 内置测试运行器与 Playwright 浏览器冒烟测试
 - [OpenAI Sites](https://what-ui-guide.reasonw6.chatgpt.site) 托管
 
-产品内容来自本地静态注册表。演示只维护页面局部状态，不连接数据库，不上传真实文件，也不会执行示例代码字符串。
+目录内容与演示来自本地静态注册表，演示只维护页面局部状态，也不会执行示例代码字符串。只有用户主动发起识别时，裁剪后的截图或公开 URL 才会被发送到识别接口；应用本身不持久化这些输入或结果。
 
 ## 项目结构
 
 ```text
 app/
 ├─ page.tsx                    # 首页与目录入口
+├─ api/identify/route.ts       # 截图 / URL 识别接口与能力探测
 ├─ components/[slug]/page.tsx # 81 个静态详情路由
 └─ ui/
    ├─ CatalogBrowser.tsx       # 搜索、筛选与分批加载
+   ├─ IdentificationWorkspace.tsx # 上传、框选、URL 与请求状态
+   ├─ RegionSelector.tsx       # 截图区域选择与浏览器端裁剪
+   ├─ AnalysisResults.tsx      # 候选证据、指导、演示与代码
    ├─ DemoStage.tsx            # 交互演示与 Demo Registry
    ├─ InteractiveDetail.tsx    # 详情演示重置与提示词复制
    └─ CodeExplorer.tsx         # 原生 / React 示例与文件复制
 lib/
 ├─ catalog.ts                  # CatalogItem 注册表与构建时校验
-└─ catalog-search.ts           # 搜索和筛选逻辑
+├─ catalog-search.ts           # 搜索和筛选逻辑
+├─ identification-contract.ts  # 模型结构化结果契约与输入校验
+├─ openai-identification.ts    # Responses API 请求与结果验证
+└─ webpage-capture.ts          # 白名单网页快照适配
 tests/                         # 目录、交互契约与渲染路由测试
 worker/index.ts                # vinext Cloudflare Worker 入口
 .openai/hosting.json           # Sites 部署声明
@@ -182,6 +243,11 @@ worker/index.ts                # vinext Cloudflare Worker 入口
 ## 致谢
 
 产品视觉与“用真实名称解释界面”的方向受到 [Name That UI](https://namethatui.com/) 启发。README 的信息组织参考了 [shadcn/ui](https://github.com/shadcn-ui/ui)、[Storybook](https://github.com/storybookjs/storybook)、[Cal.com](https://github.com/calcom/cal.diy) 与 [Dub](https://github.com/dubinc/dub) 等成熟项目常用的做法：先说明价值，再展示产品，最后给出运行、架构与参与方式。
+
+### 第三方素材与代码来源
+
+- `public/github-mark.svg` 复制并按本站用途使用了 Primer Octicons 的 [`icons/mark-github-24.svg`](https://github.com/primer/octicons/blob/main/icons/mark-github-24.svg)，来源仓库为 [`primer/octicons`](https://github.com/primer/octicons)，依据 [MIT License](https://github.com/primer/octicons/blob/main/LICENSE) 使用。完整版权与许可声明见 [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)。
+- 除上述 GitHub 图标素材外，本项目没有复制或改编其他外部 GitHub 项目的代码。前一段列出的项目仅用于产品方向与 README 信息组织参考，不构成代码复用。
 
 ## 许可
 

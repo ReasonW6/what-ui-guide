@@ -8,9 +8,9 @@ import {
 } from "@/lib/catalog";
 
 export const metadata: Metadata = {
-  title: "交互式 UI/UX 视觉词典",
+  title: "AI UI/UX 视觉词典",
   description:
-    "亲手试一试，再记住它的标准名称。收录 81 个常用 UI/UX 组件、交互演示与可复制代码。",
+    "上传截图或输入公开网页，识别 UI/UX 组件，查看证据、易混区别、实现指导、交互演示与可复制代码。",
 };
 
 type HomeProps = {

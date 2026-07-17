@@ -2,33 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { loadCatalogModule } from "./catalog-loader.mjs";
 
-let workerPromise;
-
-async function getWorker() {
-  if (!workerPromise) {
-    const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-    workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-    workerPromise = import(workerUrl.href).then((module) => module.default);
-  }
-  return workerPromise;
-}
+const baseUrl = process.env.WHAT_UI_TEST_BASE_URL;
+if (!baseUrl) throw new Error("WHAT_UI_TEST_BASE_URL is required for production HTTP tests.");
 
 async function render(pathname = "/") {
-  const worker = await getWorker();
-  return worker.fetch(
-    new Request(`http://localhost${pathname}`, {
-      headers: { accept: "text/html" },
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
-  );
+  return fetch(new URL(pathname, baseUrl), {
+    headers: { accept: "text/html" },
+  });
 }
 
 test("home page renders the finished bilingual catalog", async () => {
@@ -43,11 +23,16 @@ test("home page renders the finished bilingual catalog", async () => {
   assert.match(html, /class="catalog-grid"/);
   assert.match(html, /href="\/components\/navigation-bar"/);
   assert.match(html, /href="#main-content"/);
+  assert.match(html, /id="identify"/);
+  assert.match(html, /截图识别/);
+  assert.match(html, /网页识别/);
+  assert.match(html, /href="https:\/\/github\.com\/ReasonW6\/what-ui-guide"/);
+  assert.match(html, /aria-label="在 GitHub 查看项目（新窗口）"/);
   assert.match(html, /<header[^>]*class="site-header"[^>]*>[\s\S]*<main[^>]*id="main-content"[\s\S]*<footer[^>]*class="site-footer"/);
   assert.match(html, /<meta[^>]+name="twitter:card"[^>]+content="summary_large_image"/);
-  assert.match(html, /https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/og-image\.png/);
+  assert.match(html, /https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/og\.png/);
   assert.match(html, /<link[^>]+rel="canonical"[^>]+href="https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/"/);
-  assert.match(html, /<title>交互式 UI\/UX 视觉词典｜这叫啥 UI？<\/title>/);
+  assert.match(html, /<title>AI UI\/UX 视觉词典｜这叫啥 UI？<\/title>/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -72,7 +57,7 @@ test("all 81 component detail routes render and unknown slugs return 404", async
   assert.match(sliderHtml, /class="detail-layout"/);
   assert.match(sliderHtml, /class="detail-visual-sticky"/);
   assert.match(sliderHtml, /<meta[^>]+property="og:title"[^>]+content="滑块 \/ Slider"/);
-  assert.match(sliderHtml, /<meta[^>]+property="og:image"[^>]+content="https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/og-image\.png"/);
+  assert.match(sliderHtml, /<meta[^>]+property="og:image"[^>]+content="https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/og\.png"/);
   assert.match(sliderHtml, /<link[^>]+rel="canonical"[^>]+href="https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/components\/slider"/);
   assert.match(sliderHtml, /href="#component-content"/);
   assert.match(
