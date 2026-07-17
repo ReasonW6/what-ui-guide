@@ -6,7 +6,7 @@
 
 当你知道一个界面“长什么样、怎么操作”，却不知道它叫什么时，上传截图、框选区域，或提供公开网页地址。
 
-[在线体验](https://what-ui-guide.reasonw6.chatgpt.site) · [AI 识别](https://what-ui-guide.reasonw6.chatgpt.site/#identify) · [浏览全部组件](https://what-ui-guide.reasonw6.chatgpt.site/#catalog) · [GitHub](https://github.com/ReasonW6/what-ui-guide)
+[在线体验](https://what-ui-guide.reasonw6.chatgpt.site) · [浏览全部组件](https://what-ui-guide.reasonw6.chatgpt.site/#catalog) · [GitHub](https://github.com/ReasonW6/what-ui-guide)
 
 ![81 components](https://img.shields.io/badge/components-81-2496ff?style=flat-square)
 ![React 19](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=111827)
@@ -24,6 +24,7 @@ UI / UX 术语往往比界面本身更难找。你可能知道“右键后出现
 “这叫啥 UI？”把抽象术语变成可操作的视觉索引：
 
 - 上传截图并框选真正想问的区域，减少页面其他元素对识别的干扰。
+- 首页保持词典原有布局；只有点击导航栏“AI 识别”后才打开独立浮层，关闭后焦点返回触发按钮。
 - 输入公开网页 URL；满足安全白名单时读取浏览器快照，否则使用受限的公开网页语义检索。
 - 获得 1–3 个候选术语，以及证据、置信度、不确定性、易混项和后续追问。
 - 直接在目录卡片中点击、输入、拖动或展开，确认它是不是你想找的组件。
@@ -36,6 +37,8 @@ UI / UX 术语往往比界面本身更难找。你可能知道“右键后出现
 | 能力 | 说明 |
 | --- | --- |
 | 截图与区域识别 | 支持上传、拖放或粘贴截图，并用百分比坐标框选区域；分析前在浏览器中裁剪，不必把整张页面都交给模型。 |
+| 多服务商 BYOK | 内置 OpenAI、Anthropic、Kimi、DeepSeek、硅基流动、OpenRouter、Gemini、xAI、Groq、Together 与 Mistral 等预设，也支持自定义兼容 API 和模型。 |
+| 本地凭据保险库 | Key 默认只保留在当前页面内存；用户主动选择后，使用 Web Crypto 加密并写入同源 IndexedDB。 |
 | 公开网页分析 | 对安全白名单内的网页优先使用浏览器快照；未配置快照能力时退化为按目标域名限制的公开网页语义分析。 |
 | 可解释候选结果 | 返回 1–3 个目录内候选，逐项说明视觉或行为证据、区别点、置信度、不确定性与必要的后续问题。 |
 | 实现工作台 | 选中候选后可继续查看交互演示、易混术语、结构 / 行为 / 样式 / 无障碍指导，以及原生与 React 代码。 |
@@ -48,7 +51,7 @@ UI / UX 术语往往比界面本身更难找。你可能知道“右键后出现
 | URL 可恢复筛选 | 搜索、分类和平台状态同步到查询参数，刷新或分享后仍可恢复。 |
 | 响应式与键盘友好 | 从 320px 到宽屏自适应，并为菜单、Tabs、Grid、Tree、Slider、弹层和拖放等提供键盘路径。 |
 
-## AI 识别工作台
+## AI 识别浮层
 
 识别不是只返回一个可能错误的名字，而是围绕“为什么像、还可能是什么、下一步怎么实现”组织结果：
 
@@ -57,9 +60,34 @@ UI / UX 术语往往比界面本身更难找。你可能知道“右键后出现
 3. **候选判断**：模型只能从本项目目录 slug 中选择候选，并返回识别状态、证据、区别、不确定性与追问；无法可靠识别时会明确给出 `unknown`，而不是硬猜。
 4. **落地实现**：候选会重新关联到本地可信目录数据，展示真实演示、易混术语、实现指导与两套代码示例，而不是采用模型生成的未知代码。
 
-截图或网页内容只在当前分析请求中处理，本项目不保存截图、URL、识别结果、API Key 或历史记录。OpenAI Responses 请求设置 `store: false`。如果部署方没有配置托管 Key，界面会要求 BYOK；该 Key 只保存在当前页面内存并随请求发送，不写入 `localStorage`、数据库或日志，刷新页面后即清除。
+截图、URL、识别结果和历史记录不会写入本站数据库。OpenAI Responses 请求设置 `store: false`。如果部署方没有配置托管 OpenAI Key，或用户选择了其他服务商，界面会要求 BYOK。Key 默认只保存在当前页面内存，关闭识别浮层后仍可继续使用，刷新页面即清除。
+
+用户也可以主动勾选“在此浏览器加密保存”：浏览器会为凭据生成不可导出的 AES-256-GCM `CryptoKey`，使用独立随机 IV 加密完整配置，再把密钥对象和密文保存到本站来源的 IndexedDB。浏览器同源策略阻止其他网站直接读取这份存储；应用写入 IndexedDB 的凭据 payload 不含明文 API Key，加密密钥由浏览器以不可导出 `CryptoKey` 管理。清除本地配置会删除该记录。
+
+这是一层本地静态防护，不是密码管理器。本站同源 XSS、被攻陷的同源脚本、恶意浏览器扩展、DevTools、受控浏览器或系统恶意软件仍可能在解密后取得 Key，或直接代用户发起请求。每次识别时，Key 都会临时经过本站 Worker，再发送给所选 AI 服务商；应用代码不主动把它写入日志或云端存储。若安全要求更高，请保持默认的会话模式，并使用限额、可撤销的专用 Key。
 
 > AI 结果是辅助判断，不是确定性的 DOM 检查器。登录态、内网或需要交互后才出现的页面请改用截图；不要上传包含密钥、身份信息或其他敏感数据的画面。
+
+### 支持的 AI 服务
+
+| 预设 | 默认模型 | 接口适配 | 图片识别 |
+| --- | --- | --- | --- |
+| OpenAI 官方 | `gpt-5.6-sol` | Responses | 支持；也可对公开网页做限定域名检索 |
+| Anthropic 官方 | `claude-sonnet-5` | Messages | 支持 |
+| Kimi 中国 / Global | `kimi-k2.6` | OpenAI Chat | 支持 |
+| 硅基流动 | `zai-org/GLM-4.5V` | OpenAI Chat | 取决于控制台当前可用视觉模型 |
+| OpenRouter | `google/gemini-3.5-flash` | OpenAI Chat | 取决于所选路由模型 |
+| Google Gemini | `gemini-3.5-flash` | OpenAI Chat 兼容层 | 支持 |
+| xAI | `grok-4.5` | OpenAI Chat | 支持 |
+| GroqCloud | `qwen/qwen3.6-27b` | OpenAI Chat | 支持 |
+| Together AI | `moonshotai/Kimi-K2.6` | OpenAI Chat | 支持 |
+| Mistral AI | `mistral-small-2506` | OpenAI Chat 兼容层 | 支持 |
+| DeepSeek | `deepseek-v4-flash` | OpenAI Chat | 当前官方 V4 为文本模型，本视觉识别功能会停用 |
+| 自定义 API | 用户填写 | OpenAI Chat / Responses / Anthropic Messages | 取决于目标模型 |
+
+模型供应会变化，所以所有模型名都可以在设置中修改。官方预设使用服务端固定的规范地址，浏览器不能覆盖；自定义地址只接受公开 HTTPS 域名，不允许用户名密码、查询参数、显式端口、IP 或内网主机，也不跟随重定向。填写站点根地址时会补全 `/v1`，填写已有路径时会保留，并在发送前展示最终请求地址。自定义接口仍只会收到固定的识别请求结构，不支持任意请求头或任意代理内容。主机名字符串校验无法彻底消除 DNS 重绑定风险；高安全部署应在平台出口层使用域名白名单，或禁用自定义端点。
+
+除 OpenAI 官方的受限网页检索外，其他服务商只有在目标域名已配置受控浏览器快照时才能分析网址；否则界面会要求改用截图。协议和视觉能力依据各服务商官方文档实现：[OpenAI](https://developers.openai.com/api/docs/guides/images-vision)、[Anthropic](https://platform.claude.com/docs/en/build-with-claude/vision)、[Kimi](https://platform.kimi.com/docs/guide/use-kimi-vision-model)、[SiliconFlow](https://docs.siliconflow.cn/cn/userguide/capabilities/multimodal-vision)、[OpenRouter](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding)、[Gemini](https://ai.google.dev/gemini-api/docs/openai)、[xAI](https://docs.x.ai/developers/model-capabilities/images/understanding)、[Groq](https://console.groq.com/docs/vision)、[Together](https://docs.together.ai/docs/inference/vision/overview) 与 [Mistral](https://docs.mistral.ai/studio-api/conversations/vision)。
 
 ## 详情页不只是“大号预览”
 
@@ -120,7 +148,7 @@ cp .env.example .env.local
 Copy-Item .env.example .env.local
 ```
 
-按照终端输出打开本地地址即可。也可以不配置服务端 Key，直接在识别界面临时输入自己的 OpenAI API Key（BYOK）。
+按照终端输出打开本地地址即可。也可以不配置服务端 Key，在识别浮层的设置中选择服务商并输入自己的 API Key（BYOK）。
 
 ### 环境变量
 
@@ -143,8 +171,9 @@ Copy-Item .env.example .env.local
 - URL 仅接受公共 `https` 页面；`localhost`、环回地址、私网 IP、带用户名密码的 URL 和非 Web 协议会被拒绝。
 - 浏览器快照只允许 `BROWSER_ALLOWED_HOSTS` 中的精确主机名，避免把服务变成开放代理或 SSRF 入口。
 - 未配置浏览器快照时，URL 分析只能依据公开搜索结果与页面语义，不能看到登录态、悬停态、弹层或滚动后才出现的 UI。
-- 服务端托管 Key 会使用基础请求频率限制，以控制滥用与费用；BYOK 请求仍受输入校验和上游 API 限制。
-- 产品不提供账户、云端历史或持久化收藏；刷新页面会清除尚未复制的识别状态与临时 Key。
+- 服务端托管 Key 使用 Worker 实例内的基础频率限制，BYOK 自定义端点也有单实例频率限制；它们只能缓解滥用，不是跨实例的账单硬上限。公开提供托管额度时仍应在平台侧配置持久化限流、预算告警与供应商用量上限。
+- 自定义 API 只接受公开 HTTPS 域名，并固定为受支持协议的识别端点；服务端拒绝 IP、常见回环解析域名、内网后缀、凭据 URL、显式端口、查询参数和重定向。上游请求限时 45 秒，响应正文上限 1 MiB。
+- 产品不提供账户、云端历史或持久化收藏；刷新页面会清除尚未复制的识别状态与会话 Key。只有用户主动启用的加密凭据配置会保留在本机浏览器。
 
 ### 预览生产构建
 
@@ -173,7 +202,8 @@ npm run test:browser
 - Next.js App Router 风格的文件路由
 - Tailwind CSS 4 与项目自定义 CSS
 - Cloudflare Worker 兼容运行时
-- OpenAI Responses API（视觉输入、结构化输出与受限 Web Search）
+- OpenAI Responses、OpenAI-compatible Chat 与 Anthropic Messages（视觉输入与结构化结果）
+- Web Crypto AES-GCM + IndexedDB（用户主动启用的本地凭据保存）
 - 可选 Cloudflare Browser Rendering（白名单网页快照）
 - ESLint 9、Node.js 内置测试运行器与 Playwright 浏览器冒烟测试
 - [OpenAI Sites](https://what-ui-guide.reasonw6.chatgpt.site) 托管
@@ -189,7 +219,9 @@ app/
 ├─ components/[slug]/page.tsx # 81 个静态详情路由
 └─ ui/
    ├─ CatalogBrowser.tsx       # 搜索、筛选与分批加载
+   ├─ IdentificationDialog.tsx # 导航触发的独立原生识别浮层
    ├─ IdentificationWorkspace.tsx # 上传、框选、URL 与请求状态
+   ├─ AiProviderSettings.tsx   # 服务商、模型、地址与本地保存设置
    ├─ RegionSelector.tsx       # 截图区域选择与浏览器端裁剪
    ├─ AnalysisResults.tsx      # 候选证据、指导、演示与代码
    ├─ DemoStage.tsx            # 交互演示与 Demo Registry
@@ -199,7 +231,10 @@ lib/
 ├─ catalog.ts                  # CatalogItem 注册表与构建时校验
 ├─ catalog-search.ts           # 搜索和筛选逻辑
 ├─ identification-contract.ts  # 模型结构化结果契约与输入校验
+├─ ai-provider-config.ts       # 官方预设、自定义地址规范化与能力声明
 ├─ openai-identification.ts    # Responses API 请求与结果验证
+├─ provider-identification.ts  # OpenAI Chat / Anthropic 协议适配
+├─ client/credential-vault.ts  # Web Crypto + IndexedDB 凭据保险库
 └─ webpage-capture.ts          # 白名单网页快照适配
 tests/                         # 目录、交互契约与渲染路由测试
 worker/index.ts                # vinext Cloudflare Worker 入口

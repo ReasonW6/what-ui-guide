@@ -36,10 +36,18 @@ async function readTypeScript(relativePath) {
 export async function loadIdentificationModules() {
   if (!modulesPromise) {
     modulesPromise = (async () => {
-      const [contractSource, openaiSource, captureSource] = await Promise.all([
+      const [
+        contractSource,
+        openaiSource,
+        captureSource,
+        providerConfigSource,
+        providerIdentificationSource,
+      ] = await Promise.all([
         readTypeScript("../lib/identification-contract.ts"),
         readTypeScript("../lib/openai-identification.ts"),
         readTypeScript("../lib/webpage-capture.ts"),
+        readTypeScript("../lib/ai-provider-config.ts"),
+        readTypeScript("../lib/provider-identification.ts"),
       ]);
       const contractUrl = dataUrl(
         transpile(contractSource, "identification-contract.ts"),
@@ -54,13 +62,33 @@ export async function loadIdentificationModules() {
       const captureUrl = dataUrl(replaceContractImport(
         transpile(captureSource, "webpage-capture.ts"),
       ));
+      const providerConfigUrl = dataUrl(
+        transpile(providerConfigSource, "ai-provider-config.ts"),
+      );
+      const providerIdentificationUrl = dataUrl(
+        transpile(providerIdentificationSource, "provider-identification.ts")
+          .replace(
+            /from\s+["']\.\/identification-contract["']/g,
+            `from ${JSON.stringify(contractUrl)}`,
+          )
+          .replace(
+            /from\s+["']\.\/openai-identification["']/g,
+            `from ${JSON.stringify(openaiUrl)}`,
+          )
+          .replace(
+            /from\s+["']\.\/ai-provider-config["']/g,
+            `from ${JSON.stringify(providerConfigUrl)}`,
+          ),
+      );
 
-      const [contract, openai, capture] = await Promise.all([
+      const [contract, openai, capture, providerConfig, providerIdentification] = await Promise.all([
         import(contractUrl),
         import(openaiUrl),
         import(captureUrl),
+        import(providerConfigUrl),
+        import(providerIdentificationUrl),
       ]);
-      return { contract, openai, capture };
+      return { contract, openai, capture, providerConfig, providerIdentification };
     })();
   }
   return modulesPromise;

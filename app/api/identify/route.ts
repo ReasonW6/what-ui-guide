@@ -17,11 +17,19 @@ import type {
   IdentificationResponse,
 } from "@/lib/identification-view";
 import {
+  AiProviderConfigError,
+  normalizeAiApiKey,
+  resolveAiProvider,
+  type ResolvedAiProvider,
+} from "@/lib/ai-provider-config";
+import {
   DEFAULT_IDENTIFICATION_MODEL,
-  OpenAIIdentificationError,
-  identifyWithOpenAI,
   type OpenAIIdentificationInput,
 } from "@/lib/openai-identification";
+import {
+  ProviderIdentificationError,
+  identifyWithProvider,
+} from "@/lib/provider-identification";
 import { captureWebpageSnapshot } from "@/lib/webpage-capture";
 
 export const runtime = "edge";
@@ -29,6 +37,7 @@ export const runtime = "edge";
 const MAX_REQUEST_BODY_BYTES = 12 * 1024 * 1024;
 const MAX_CONTEXT_LENGTH = 500;
 const MANAGED_RATE_LIMIT = 8;
+const CUSTOM_PROVIDER_RATE_LIMIT = 30;
 const MANAGED_RATE_WINDOW_MS = 10 * 60 * 1_000;
 
 interface ManagedRateBucket {
@@ -63,7 +72,9 @@ class ApiRouteError extends Error {
 }
 
 const managedRateBuckets = new Map<string, ManagedRateBucket>();
+const customProviderRateBuckets = new Map<string, ManagedRateBucket>();
 let nextRateBucketPrune = 0;
+let nextCustomRateBucketPrune = 0;
 
 const allowedSlugs = catalog.map((item) => item.slug);
 const catalogKnowledge = JSON.stringify(
@@ -240,21 +251,22 @@ async function readJsonBody(request: Request): Promise<Record<string, unknown>> 
 }
 
 function readByokApiKey(request: Request): string | null {
-  const value = request.headers.get("x-openai-api-key");
+  const genericValue = request.headers.get("x-ai-api-key");
+  const legacyValue = request.headers.get("x-openai-api-key");
+  if (genericValue && legacyValue && genericValue !== legacyValue) {
+    throw new ApiRouteError(400, "ambiguous_api_key", "请求包含两个不同的 API Key。");
+  }
+  const value = genericValue ?? legacyValue;
   if (value === null) return null;
-  if (
-    value.length < 20
-    || value.length > 512
-    || !value.startsWith("sk-")
-    || /\s/.test(value)
-  ) {
+  try {
+    return normalizeAiApiKey(value);
+  } catch {
     throw new ApiRouteError(
       401,
       "invalid_api_key",
-      "OpenAI API Key 格式无效。密钥只会用于本次请求。",
+      "API Key 格式无效。密钥只会用于本次请求。",
     );
   }
-  return value;
 }
 
 function readConfiguredModel(): string {
@@ -262,6 +274,35 @@ function readConfiguredModel(): string {
   return configured && /^[A-Za-z0-9._:-]{1,100}$/.test(configured)
     ? configured
     : DEFAULT_IDENTIFICATION_MODEL;
+}
+
+function assertProviderImageLimit(
+  provider: ResolvedAiProvider,
+  imageDataUrl: string,
+  mediaType: string,
+): void {
+  if (
+    provider.allowedImageMediaTypes
+    && !provider.allowedImageMediaTypes.includes(
+      mediaType as (typeof provider.allowedImageMediaTypes)[number],
+    )
+  ) {
+    throw new ApiRouteError(
+      415,
+      "provider_image_type_unsupported",
+      `${provider.label} 只接受 JPEG 或 PNG 图片，请重新上传或使用界面自动转换。`,
+    );
+  }
+  if (
+    provider.maxImageDataUrlChars !== undefined
+    && imageDataUrl.length > provider.maxImageDataUrlChars
+  ) {
+    throw new ApiRouteError(
+      413,
+      "provider_image_too_large",
+      `${provider.label} 的 Base64 图片超过请求预算，请缩小或重新裁剪截图。`,
+    );
+  }
 }
 
 function enforceManagedRateLimit(request: Request): void {
@@ -289,6 +330,33 @@ function enforceManagedRateLimit(request: Request): void {
   }
   bucket.count += 1;
   managedRateBuckets.set(clientId, bucket);
+}
+
+function enforceCustomProviderRateLimit(request: Request): void {
+  const now = Date.now();
+  if (now >= nextCustomRateBucketPrune) {
+    for (const [key, bucket] of customProviderRateBuckets) {
+      if (bucket.resetAt <= now) customProviderRateBuckets.delete(key);
+    }
+    nextCustomRateBucketPrune = now + MANAGED_RATE_WINDOW_MS;
+  }
+
+  const clientId = request.headers.get("cf-connecting-ip") || "unknown";
+  const existing = customProviderRateBuckets.get(clientId);
+  const bucket = existing && existing.resetAt > now
+    ? existing
+    : { count: 0, resetAt: now + MANAGED_RATE_WINDOW_MS };
+  if (bucket.count >= CUSTOM_PROVIDER_RATE_LIMIT) {
+    const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - now) / 1_000));
+    throw new ApiRouteError(
+      429,
+      "custom_provider_rate_limited",
+      "自定义 API 请求过于频繁，请稍后再试。",
+      { "retry-after": String(retryAfter) },
+    );
+  }
+  bucket.count += 1;
+  customProviderRateBuckets.set(clientId, bucket);
 }
 
 function enrichCandidates(result: IdentificationResult): AnalysisCandidate[] {
@@ -360,25 +428,67 @@ function validationApiError(error: IdentificationValidationError): ApiRouteError
   );
 }
 
-function openAiApiError(
-  error: OpenAIIdentificationError,
+function providerApiError(
+  error: ProviderIdentificationError,
   usingManagedKey: boolean,
 ): ApiRouteError {
   if (error.status === 401 || error.status === 403) {
     return usingManagedKey
       ? new ApiRouteError(502, "ai_configuration_error", "站点识别服务配置无效，请稍后再试。")
-      : new ApiRouteError(401, "invalid_api_key", "OpenAI API Key 未通过验证。请检查后重试。");
+      : new ApiRouteError(401, "invalid_api_key", `${error.providerLabel} API Key 未通过验证。请检查后重试。`);
   }
   if (error.status === 429) {
     return new ApiRouteError(
       429,
-      "openai_rate_limited",
-      "OpenAI 当前请求过多或额度不足，请稍后重试。",
+      "provider_rate_limited",
+      `${error.providerLabel} 当前请求过多或额度不足，请稍后重试。`,
       { "retry-after": "15" },
     );
   }
   if (error.code === "refusal") {
     return new ApiRouteError(422, "analysis_refused", "识别服务无法分析这份内容，请换一张截图或网页。");
+  }
+  if (error.code === "incomplete") {
+    return new ApiRouteError(
+      422,
+      "provider_output_incomplete",
+      `${error.providerLabel} 的输出达到长度上限，请缩小截图范围或减少补充说明后重试。`,
+    );
+  }
+  if (error.status === 400) {
+    return new ApiRouteError(
+      400,
+      "provider_request_invalid",
+      `${error.providerLabel} 不接受当前模型或请求参数，请检查模型名称与兼容协议。`,
+    );
+  }
+  if (error.status === 402) {
+    return new ApiRouteError(
+      402,
+      "provider_quota_exhausted",
+      `${error.providerLabel} 账户余额或额度不足，请到服务商控制台检查。`,
+    );
+  }
+  if (error.status === 404) {
+    return new ApiRouteError(
+      400,
+      "provider_model_not_found",
+      `${error.providerLabel} 找不到这个模型或接口，请检查模型名称。`,
+    );
+  }
+  if (error.status === 413) {
+    return new ApiRouteError(
+      413,
+      "provider_image_too_large",
+      `${error.providerLabel} 拒绝了过大的图片，请缩小框选区域后重试。`,
+    );
+  }
+  if (error.status === 422) {
+    return new ApiRouteError(
+      422,
+      "provider_request_rejected",
+      `${error.providerLabel} 不支持当前图片或请求，请更换模型或图片格式。`,
+    );
   }
   return new ApiRouteError(
     502,
@@ -398,6 +508,15 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const body = await readJsonBody(request);
     const context = readOptionalContext(body.context);
+    const requestedProviderId = body.providerId ?? "openai";
+    const requestedModel = body.model
+      ?? (requestedProviderId === "openai" ? readConfiguredModel() : "");
+    let provider = resolveAiProvider(
+      requestedProviderId,
+      requestedModel,
+      body.customBaseUrl,
+      body.customProtocol,
+    );
     let input: OpenAIIdentificationInput;
     let basis: AnalysisBasis;
     let notices: string[];
@@ -410,8 +529,24 @@ export async function POST(request: Request): Promise<Response> {
     } | null = null;
 
     if (body.mode === "screenshot") {
-      assertOnlyKeys(body, ["mode", "imageDataUrl", "context"]);
+      assertOnlyKeys(body, [
+        "mode",
+        "imageDataUrl",
+        "context",
+        "providerId",
+        "model",
+        "customBaseUrl",
+        "customProtocol",
+      ]);
+      if (provider.vision === "unsupported") {
+        throw new ApiRouteError(
+          422,
+          "provider_has_no_vision",
+          `${provider.label} 当前官方模型不支持图片输入，请选择其他服务商。`,
+        );
+      }
       const screenshot = validateScreenshotDataUrl(body.imageDataUrl);
+      assertProviderImageLimit(provider, screenshot.dataUrl, screenshot.mediaType);
       input = {
         mode: "screenshot",
         imageDataUrl: screenshot.dataUrl,
@@ -420,7 +555,15 @@ export async function POST(request: Request): Promise<Response> {
       basis = "screenshot";
       notices = ["分析基于当前选取的静态画面；无法从截图确认的交互行为会标为不确定。"];
     } else if (body.mode === "webpage") {
-      assertOnlyKeys(body, ["mode", "url", "context"]);
+      assertOnlyKeys(body, [
+        "mode",
+        "url",
+        "context",
+        "providerId",
+        "model",
+        "customBaseUrl",
+        "customProtocol",
+      ]);
       const url = normalizePublicWebpageUrl(body.url);
       const hostname = new URL(url).hostname;
       const allowedHosts = parseAllowedBrowserHosts(env.BROWSER_ALLOWED_HOSTS);
@@ -438,17 +581,25 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const byokApiKey = readByokApiKey(request);
-    const managedApiKey = readEnvText(env.OPENAI_API_KEY);
+    const managedApiKey = provider.id === "openai"
+      ? readEnvText(env.OPENAI_API_KEY)
+      : null;
     const apiKey = byokApiKey ?? managedApiKey;
     if (!apiKey) {
       throw new ApiRouteError(
         503,
         "ai_not_configured",
-        "站点尚未配置公共识别额度。请输入自己的 OpenAI API Key 后继续。",
+        provider.id === "openai"
+          ? "站点尚未配置公共识别额度。请在设置中填写自己的 API Key 后继续。"
+          : `请在设置中填写 ${provider.label} 的 API Key 后继续。`,
       );
     }
     usingManagedKey = byokApiKey === null;
-    if (usingManagedKey) enforceManagedRateLimit(request);
+    if (usingManagedKey) {
+      provider = resolveAiProvider("openai", readConfiguredModel());
+      enforceManagedRateLimit(request);
+    }
+    if (provider.id === "custom") enforceCustomProviderRateLimit(request);
 
     if (webpage) {
       let snapshotAttempt: Awaited<ReturnType<typeof captureWebpageSnapshot>> = null;
@@ -464,6 +615,14 @@ export async function POST(request: Request): Promise<Response> {
       }
 
       if (snapshotAttempt?.ok) {
+        const snapshotScreenshot = validateScreenshotDataUrl(
+          snapshotAttempt.snapshot.screenshotDataUrl,
+        );
+        assertProviderImageLimit(
+          provider,
+          snapshotScreenshot.dataUrl,
+          snapshotScreenshot.mediaType,
+        );
         input = {
           mode: "semantic-url",
           url: webpage.url,
@@ -474,6 +633,13 @@ export async function POST(request: Request): Promise<Response> {
         sourcePreview = snapshotAttempt.snapshot.screenshotDataUrl;
         notices = ["分析结合了公开网页的受控浏览器快照；登录态和交互后状态不在本次快照中。"];
       } else {
+        if (provider.webpageAnalysis !== "web-search") {
+          throw new ApiRouteError(
+            422,
+            "provider_requires_snapshot",
+            `${provider.label} 不能直接读取网页。该地址当前无法生成视觉快照，请改用截图，或选择 OpenAI 官方。`,
+          );
+        }
         notices = [
           webpage.allowedHosts.has(webpage.hostname)
             ? "网页视觉快照暂时不可用，本次改用限定到该域名的公开网页信号；如需像素级判断，请上传截图。"
@@ -482,13 +648,22 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
-    const analysis = await identifyWithOpenAI({
+    if (webpage && provider.vision === "unsupported") {
+      throw new ApiRouteError(
+        422,
+        "provider_has_no_vision",
+        `${provider.label} 当前官方模型不支持视觉快照，请选择其他服务商。`,
+      );
+    }
+
+    const analysis = await identifyWithProvider({
       apiKey,
+      provider,
       allowedSlugs,
       catalogKnowledge,
       instructions: identificationInstructions,
       input,
-      model: readConfiguredModel(),
+      signal: request.signal,
     });
     return jsonResponse(buildResponse(analysis.result, basis, {
       notices,
@@ -501,8 +676,10 @@ export async function POST(request: Request): Promise<Response> {
       ? error
       : error instanceof IdentificationValidationError
         ? validationApiError(error)
-        : error instanceof OpenAIIdentificationError
-          ? openAiApiError(error, usingManagedKey)
+        : error instanceof AiProviderConfigError
+          ? new ApiRouteError(400, error.code, error.message)
+        : error instanceof ProviderIdentificationError
+          ? providerApiError(error, usingManagedKey)
           : new ApiRouteError(
               500,
               "internal_error",

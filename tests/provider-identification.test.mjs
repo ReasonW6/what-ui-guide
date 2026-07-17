@@ -1,0 +1,240 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { loadIdentificationModules } from "./identification-loader.mjs";
+
+const {
+  providerConfig,
+  providerIdentification,
+} = await loadIdentificationModules();
+
+const allowedSlugs = ["dialog", "popover"];
+const screenshot = "data:image/png;base64,iVBORw0KGgo=";
+
+function makeResult() {
+  return {
+    status: "identified",
+    summary: "画面中是一个模态对话框。",
+    candidates: [{
+      slug: "dialog",
+      confidence: "high",
+      evidence: ["内容覆盖在页面之上"],
+      distinction: "它会阻塞背景交互。",
+    }],
+    uncertainties: [],
+    implementation: {
+      anatomy: ["标题和内容"],
+      behavior: ["关闭后恢复焦点"],
+      styling: ["使用遮罩"],
+      accessibility: ["使用语义 dialog"],
+    },
+    followUpQuestion: null,
+  };
+}
+
+function options(provider, fetchImpl) {
+  return {
+    apiKey: "provider-test-key",
+    provider,
+    allowedSlugs,
+    catalogKnowledge: JSON.stringify([{ slug: "dialog" }, { slug: "popover" }]),
+    instructions: "请使用简体中文。",
+    input: { mode: "screenshot", imageDataUrl: screenshot },
+    fetchImpl,
+  };
+}
+
+test("provider presets use canonical endpoints and custom URLs are normalized safely", () => {
+  assert.equal(providerConfig.aiProviderPresets.length, 12);
+  assert.equal(
+    providerConfig.normalizeCustomApiBaseUrl("https://api.vendor.com"),
+    "https://api.vendor.com/v1",
+  );
+  assert.equal(
+    providerConfig.normalizeCustomApiBaseUrl("https://api.vendor.com/v1/chat/completions"),
+    "https://api.vendor.com/v1",
+  );
+  assert.equal(
+    providerConfig.normalizeCustomApiBaseUrl("https://api.vendor.com/compatible/v1/"),
+    "https://api.vendor.com/compatible/v1",
+  );
+  for (const unsafe of [
+    "http://api.vendor.com",
+    "https://localhost/v1",
+    "https://127.0.0.1/v1",
+    "https://127.0.0.1.nip.io/v1",
+    "https://169.254.169.254.sslip.io/v1",
+    "https://api.vendor.com:8443/v1",
+    "https://user:pass@api.vendor.com/v1",
+    "https://api.vendor.com/v1?token=secret",
+  ]) {
+    assert.throws(() => providerConfig.normalizeCustomApiBaseUrl(unsafe));
+  }
+
+  const official = providerConfig.resolveAiProvider(
+    "openai",
+    "gpt-5.6-sol",
+    "https://attacker.invalid/v1",
+  );
+  assert.equal(official.baseUrl, "https://api.openai.com/v1");
+  assert.equal(providerConfig.providerEndpoint(official), "https://api.openai.com/v1/responses");
+
+  const deepseek = providerConfig.resolveAiProvider("deepseek", "deepseek-v4-flash");
+  assert.equal(deepseek.vision, "unsupported");
+  const anthropic = providerConfig.resolveAiProvider("anthropic", "claude-sonnet-5");
+  assert.equal(providerConfig.providerEndpoint(anthropic), "https://api.anthropic.com/v1/messages");
+});
+
+test("OpenAI-compatible chat requests honor structured and image-shape capabilities", () => {
+  const kimi = providerConfig.resolveAiProvider("kimi", "kimi-k2.6");
+  const kimiRequest = providerIdentification.createOpenAIChatIdentificationRequest(
+    options(kimi, fetch),
+  );
+  assert.equal(kimiRequest.response_format.type, "json_schema");
+  assert.equal(kimiRequest.messages[1].content[1].image_url.url, screenshot);
+  assert.equal(kimiRequest.temperature, 1);
+
+  const gemini = providerConfig.resolveAiProvider("gemini", "gemini-3.5-flash");
+  const geminiRequest = providerIdentification.createOpenAIChatIdentificationRequest(
+    options(gemini, fetch),
+  );
+  assert.equal(geminiRequest.temperature, 1);
+
+  const openrouter = providerConfig.resolveAiProvider(
+    "openrouter",
+    "google/gemini-3.5-flash",
+  );
+  const openrouterRequest = providerIdentification.createOpenAIChatIdentificationRequest(
+    options(openrouter, fetch),
+  );
+  assert.equal(openrouterRequest.provider.require_parameters, true);
+
+  const groq = providerConfig.resolveAiProvider("groq", "qwen/qwen3.6-27b");
+  assert.equal(groq.maxImageDataUrlChars, 3 * 1024 * 1024);
+  const groqRequest = providerIdentification.createOpenAIChatIdentificationRequest(
+    options(groq, fetch),
+  );
+  assert.deepEqual(groqRequest.response_format, { type: "json_object" });
+
+  const mistral = providerConfig.resolveAiProvider("mistral", "mistral-small-2506");
+  const mistralRequest = providerIdentification.createOpenAIChatIdentificationRequest(
+    options(mistral, fetch),
+  );
+  assert.equal(mistralRequest.messages[1].content[1].image_url, screenshot);
+
+  const xai = providerConfig.resolveAiProvider("xai", "grok-4.5");
+  assert.deepEqual(xai.allowedImageMediaTypes, ["image/jpeg", "image/png"]);
+  assert.throws(() => providerIdentification.createOpenAIChatIdentificationRequest({
+    ...options(xai, fetch),
+    input: {
+      mode: "screenshot",
+      imageDataUrl: "data:image/webp;base64,UklGRjAwMDBXRUJQ",
+    },
+  }), /does not support image\/webp/);
+});
+
+test("compatible Chat and native Anthropic adapters validate structured results", async () => {
+  const kimi = providerConfig.resolveAiProvider("kimi", "kimi-k2.6");
+  let chatRequest;
+  const chatResponse = await providerIdentification.identifyWithProvider(options(
+    kimi,
+    async (url, init) => {
+      chatRequest = { url, init, body: JSON.parse(init.body) };
+      return Response.json({
+        choices: [{ message: { content: JSON.stringify(makeResult()) } }],
+      });
+    },
+  ));
+  assert.equal(chatRequest.url, "https://api.moonshot.cn/v1/chat/completions");
+  assert.equal(chatRequest.init.headers.authorization, "Bearer provider-test-key");
+  assert.equal(chatRequest.init.redirect, "error");
+  assert.equal(chatResponse.result.candidates[0].slug, "dialog");
+  assert.deepEqual(chatResponse.sources, []);
+
+  const anthropic = providerConfig.resolveAiProvider("anthropic", "claude-sonnet-5");
+  let anthropicRequest;
+  const anthropicResponse = await providerIdentification.identifyWithProvider(options(
+    anthropic,
+    async (url, init) => {
+      anthropicRequest = { url, init, body: JSON.parse(init.body) };
+      return Response.json({
+        content: [{
+          type: "tool_use",
+          name: "submit_identification",
+          input: makeResult(),
+        }],
+      });
+    },
+  ));
+  assert.equal(anthropicRequest.url, "https://api.anthropic.com/v1/messages");
+  assert.equal(anthropicRequest.init.headers["x-api-key"], "provider-test-key");
+  assert.equal(anthropicRequest.init.headers["anthropic-version"], "2023-06-01");
+  assert.equal(anthropicRequest.body.tool_choice.name, "submit_identification");
+  assert.equal(anthropicRequest.body.tools[0].strict, true);
+  assert.equal(anthropicResponse.result.status, "identified");
+});
+
+test("provider adapters distinguish truncated outputs from invalid JSON", async () => {
+  const kimi = providerConfig.resolveAiProvider("kimi", "kimi-k2.6");
+  await assert.rejects(
+    providerIdentification.identifyWithProvider(options(
+      kimi,
+      async () => Response.json({
+        choices: [{ finish_reason: "length", message: { content: "{}" } }],
+      }),
+    )),
+    (error) => error instanceof providerIdentification.ProviderIdentificationError
+      && error.code === "incomplete",
+  );
+
+  const anthropic = providerConfig.resolveAiProvider("anthropic", "claude-sonnet-5");
+  await assert.rejects(
+    providerIdentification.identifyWithProvider(options(
+      anthropic,
+      async () => Response.json({ stop_reason: "max_tokens", content: [] }),
+    )),
+    (error) => error instanceof providerIdentification.ProviderIdentificationError
+      && error.code === "incomplete",
+  );
+});
+
+test("custom Responses endpoints are bounded and do not inherit OpenAI-only tools", async () => {
+  const custom = providerConfig.resolveAiProvider(
+    "custom",
+    "vision-model",
+    "https://api.vendor.com",
+    "openai-responses",
+  );
+  let upstreamRequest;
+  const response = await providerIdentification.identifyWithProvider(options(
+    custom,
+    async (url, init) => {
+      upstreamRequest = { url, init, body: JSON.parse(init.body) };
+      return Response.json({
+        status: "completed",
+        output: [{
+          content: [{ type: "output_text", text: JSON.stringify(makeResult()) }],
+        }],
+      });
+    },
+  ));
+  assert.equal(upstreamRequest.url, "https://api.vendor.com/v1/responses");
+  assert.equal(upstreamRequest.init.redirect, "error");
+  assert.equal(upstreamRequest.body.store, false);
+  assert.equal(upstreamRequest.body.reasoning, undefined);
+  assert.equal(upstreamRequest.body.tools, undefined);
+  assert.equal(response.result.summary, makeResult().summary);
+});
+
+test("provider adapters reject oversized upstream responses before parsing", async () => {
+  const kimi = providerConfig.resolveAiProvider("kimi", "kimi-k2.6");
+  await assert.rejects(
+    providerIdentification.identifyWithProvider(options(
+      kimi,
+      async () => new Response("{}", {
+        headers: { "content-length": String(1024 * 1024 + 1) },
+      }),
+    )),
+    (error) => error instanceof providerIdentification.ProviderIdentificationError
+      && error.code === "upstream",
+  );
+});

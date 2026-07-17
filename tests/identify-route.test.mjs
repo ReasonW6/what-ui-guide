@@ -85,3 +85,57 @@ test("valid input without a managed or user key returns a bounded setup error", 
   assert.equal(payload.error.code, "ai_not_configured");
   assert.doesNotMatch(JSON.stringify(payload), /sk-|OPENAI_API_KEY/);
 });
+
+test("identify endpoint rejects unsafe custom APIs and non-visual providers locally", async () => {
+  const unsafeCustom = await requestApi("/api/identify", {
+    body: JSON.stringify({
+      mode: "screenshot",
+      imageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      providerId: "custom",
+      model: "vision-model",
+      customBaseUrl: "https://127.0.0.1/v1",
+      customProtocol: "openai-chat",
+    }),
+    headers: {
+      "content-type": "application/json",
+      "x-ai-api-key": "test-provider-key",
+    },
+    method: "POST",
+  });
+  assert.equal(unsafeCustom.status, 400);
+  assert.equal((await unsafeCustom.json()).error.code, "unsafe_base_url");
+
+  const deepseek = await requestApi("/api/identify", {
+    body: JSON.stringify({
+      mode: "screenshot",
+      imageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      providerId: "deepseek",
+      model: "deepseek-v4-flash",
+    }),
+    headers: {
+      "content-type": "application/json",
+      "x-ai-api-key": "test-provider-key",
+    },
+    method: "POST",
+  });
+  assert.equal(deepseek.status, 422);
+  assert.equal((await deepseek.json()).error.code, "provider_has_no_vision");
+});
+
+test("identify endpoint validates generic provider keys without assuming an sk prefix", async () => {
+  const response = await requestApi("/api/identify", {
+    body: JSON.stringify({
+      mode: "screenshot",
+      imageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      providerId: "openai",
+      model: "gpt-5.6-sol",
+    }),
+    headers: {
+      "content-type": "application/json",
+      "x-ai-api-key": "short",
+    },
+    method: "POST",
+  });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error.code, "invalid_api_key");
+});

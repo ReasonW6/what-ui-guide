@@ -39,6 +39,10 @@ export interface OpenAIIdentificationOptions {
   readonly instructions: string;
   readonly input: OpenAIIdentificationInput;
   readonly model?: string;
+  readonly endpoint?: string;
+  readonly enableWebSearch?: boolean;
+  readonly includeReasoning?: boolean;
+  readonly signal?: AbortSignal;
   readonly fetchImpl?: typeof fetch;
 }
 
@@ -81,6 +85,8 @@ export class OpenAIIdentificationError extends Error {
 
 const MAX_CONTEXT_CHARS = 30_000;
 const MAX_ERROR_MESSAGE_CHARS = 500;
+const MAX_UPSTREAM_RESPONSE_BYTES = 1024 * 1024;
+const UPSTREAM_TIMEOUT_MS = 45_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -201,7 +207,9 @@ export function createOpenAIIdentificationRequest(
 
   return {
     model,
-    reasoning: { effort: "low" },
+    ...(options.includeReasoning !== false
+      ? { reasoning: { effort: "low" } }
+      : {}),
     store: false,
     instructions: buildSystemInstructions(options),
     input: [{ role: "user", content }],
@@ -213,7 +221,7 @@ export function createOpenAIIdentificationRequest(
         schema,
       },
     },
-    ...(semantic
+    ...(semantic && options.enableWebSearch !== false
       ? {
           tools: [
             {
@@ -227,8 +235,33 @@ export function createOpenAIIdentificationRequest(
   };
 }
 
-async function readResponseBody(response: Response): Promise<unknown> {
-  const text = await response.text();
+export function boundedProviderSignal(parent?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
+  return parent ? AbortSignal.any([parent, timeout]) : timeout;
+}
+
+export async function readBoundedResponseBody(response: Response): Promise<unknown> {
+  const declaredLength = response.headers.get("content-length");
+  if (declaredLength !== null && Number(declaredLength) > MAX_UPSTREAM_RESPONSE_BYTES) {
+    throw new Error("Upstream response exceeded the allowed size.");
+  }
+  if (!response.body) return null;
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let received = 0;
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > MAX_UPSTREAM_RESPONSE_BYTES) {
+      await reader.cancel();
+      throw new Error("Upstream response exceeded the allowed size.");
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  text += decoder.decode();
   if (!text) return null;
   try {
     return JSON.parse(text);
@@ -405,13 +438,15 @@ export async function identifyWithOpenAI(
 
   let response: Response;
   try {
-    response = await fetchImpl(OPENAI_RESPONSES_ENDPOINT, {
+    response = await fetchImpl(options.endpoint ?? OPENAI_RESPONSES_ENDPOINT, {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiKey}`,
         "content-type": "application/json",
       },
       body: JSON.stringify(request),
+      redirect: "error",
+      signal: boundedProviderSignal(options.signal),
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : "network request failed";
@@ -424,7 +459,7 @@ export async function identifyWithOpenAI(
 
   let body: unknown;
   try {
-    body = await readResponseBody(response);
+    body = await readBoundedResponseBody(response);
   } catch (error) {
     const detail = error instanceof Error ? error.message : "response read failed";
     throw new OpenAIIdentificationError(

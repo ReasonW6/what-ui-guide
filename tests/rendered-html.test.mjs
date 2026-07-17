@@ -23,9 +23,13 @@ test("home page renders the finished bilingual catalog", async () => {
   assert.match(html, /class="catalog-grid"/);
   assert.match(html, /href="\/components\/navigation-bar"/);
   assert.match(html, /href="#main-content"/);
-  assert.match(html, /id="identify"/);
-  assert.match(html, /截图识别/);
-  assert.match(html, /网页识别/);
+  assert.match(html, /aria-controls="identification-dialog"/);
+  assert.match(html, />AI 识别</);
+  assert.match(html, /id="identification-dialog"/);
+  assert.doesNotMatch(html, /class="analyzer-shell"|class="analyzer-tabs"/);
+  assert.match(html, /看见组件却不知道名称/);
+  assert.ok(html.indexOf('id="component-search"') < html.indexOf('id="terms"'));
+  assert.ok(html.indexOf('id="terms"') < html.indexOf('id="catalog"'));
   assert.match(html, /href="https:\/\/github\.com\/ReasonW6\/what-ui-guide"/);
   assert.match(html, /aria-label="在 GitHub 查看项目（新窗口）"/);
   assert.match(html, /<header[^>]*class="site-header"[^>]*>[\s\S]*<main[^>]*id="main-content"[\s\S]*<footer[^>]*class="site-footer"/);

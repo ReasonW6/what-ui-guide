@@ -280,11 +280,6 @@ a:focus-visible,
   text-align: left;
 }
 
-.catalog-section .search-panel {
-  max-width: none;
-  margin: 0 0 24px;
-}
-
 .search-control {
   height: 58px;
   border: 1px solid var(--line-strong);

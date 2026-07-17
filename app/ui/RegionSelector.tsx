@@ -179,6 +179,7 @@ export function RegionSelector({
 export async function cropScreenshot(
   imageUrl: string,
   selection: RegionSelection | null,
+  outputMediaType: "image/webp" | "image/jpeg" = "image/webp",
 ): Promise<string> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const next = new Image();
@@ -210,5 +211,5 @@ export async function cropScreenshot(
     canvas.width,
     canvas.height,
   );
-  return canvas.toDataURL("image/webp", 0.9);
+  return canvas.toDataURL(outputMediaType, outputMediaType === "image/jpeg" ? 0.92 : 0.9);
 }
