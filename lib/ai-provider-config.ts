@@ -1,16 +1,12 @@
 export type AiProviderId =
   | "openai"
   | "anthropic"
-  | "deepseek"
   | "kimi"
   | "kimi-global"
   | "siliconflow"
   | "openrouter"
   | "gemini"
   | "xai"
-  | "groq"
-  | "together"
-  | "mistral"
   | "custom";
 
 export type AiProviderProtocol =
@@ -85,7 +81,7 @@ export class AiProviderConfigError extends Error {
 export const aiProviderPresets: readonly AiProviderPreset[] = [
   {
     id: "openai",
-    label: "OpenAI 官方",
+    label: "OpenAI",
     shortLabel: "OpenAI",
     baseUrl: "https://api.openai.com/v1",
     defaultModel: "gpt-5.6-sol",
@@ -97,7 +93,7 @@ export const aiProviderPresets: readonly AiProviderPreset[] = [
   },
   {
     id: "anthropic",
-    label: "Anthropic 官方",
+    label: "Anthropic",
     shortLabel: "Anthropic",
     baseUrl: "https://api.anthropic.com/v1",
     defaultModel: "claude-sonnet-5",
@@ -108,20 +104,8 @@ export const aiProviderPresets: readonly AiProviderPreset[] = [
     note: "使用 Claude Messages 原生视觉接口。",
   },
   {
-    id: "deepseek",
-    label: "DeepSeek 官方",
-    shortLabel: "DeepSeek",
-    baseUrl: "https://api.deepseek.com/v1",
-    defaultModel: "deepseek-v4-flash",
-    protocol: "openai-chat",
-    vision: "unsupported",
-    webpageAnalysis: "snapshot-only",
-    structuredOutput: "json-object",
-    note: "当前官方 V4 模型仅支持文本，不能用于截图识别。",
-  },
-  {
     id: "kimi",
-    label: "Kimi / Moonshot 官方",
+    label: "Kimi / Moonshot",
     shortLabel: "Kimi",
     baseUrl: "https://api.moonshot.cn/v1",
     defaultModel: "kimi-k2.6",
@@ -134,7 +118,7 @@ export const aiProviderPresets: readonly AiProviderPreset[] = [
   },
   {
     id: "kimi-global",
-    label: "Kimi Global 官方",
+    label: "Kimi Global",
     shortLabel: "Kimi Global",
     baseUrl: "https://api.moonshot.ai/v1",
     defaultModel: "kimi-k2.6",
@@ -171,7 +155,7 @@ export const aiProviderPresets: readonly AiProviderPreset[] = [
   },
   {
     id: "gemini",
-    label: "Google Gemini 官方",
+    label: "Google Gemini",
     shortLabel: "Gemini",
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     defaultModel: "gemini-3.5-flash",
@@ -180,11 +164,11 @@ export const aiProviderPresets: readonly AiProviderPreset[] = [
     webpageAnalysis: "snapshot-only",
     structuredOutput: "json-schema",
     temperature: 1,
-    note: "使用 Google 官方 OpenAI 兼容端点。",
+    note: "使用 Google 的 OpenAI 兼容端点。",
   },
   {
     id: "xai",
-    label: "xAI Grok 官方",
+    label: "xAI Grok",
     shortLabel: "xAI",
     baseUrl: "https://api.x.ai/v1",
     defaultModel: "grok-4.5",
@@ -194,44 +178,6 @@ export const aiProviderPresets: readonly AiProviderPreset[] = [
     structuredOutput: "json-schema",
     allowedImageMediaTypes: ["image/jpeg", "image/png"],
     note: "使用支持图片理解的 Grok 模型。",
-  },
-  {
-    id: "groq",
-    label: "GroqCloud",
-    shortLabel: "Groq",
-    baseUrl: "https://api.groq.com/openai/v1",
-    defaultModel: "qwen/qwen3.6-27b",
-    protocol: "openai-chat",
-    vision: "supported",
-    webpageAnalysis: "snapshot-only",
-    structuredOutput: "json-object",
-    maxImageDataUrlChars: 3 * 1024 * 1024,
-    note: "默认选择 Groq 当前的视觉模型。",
-  },
-  {
-    id: "together",
-    label: "Together AI",
-    shortLabel: "Together",
-    baseUrl: "https://api.together.ai/v1",
-    defaultModel: "moonshotai/Kimi-K2.6",
-    protocol: "openai-chat",
-    vision: "supported",
-    webpageAnalysis: "snapshot-only",
-    structuredOutput: "json-schema",
-    note: "使用 Together 的 OpenAI 兼容视觉接口。",
-  },
-  {
-    id: "mistral",
-    label: "Mistral AI 官方",
-    shortLabel: "Mistral",
-    baseUrl: "https://api.mistral.ai/v1",
-    defaultModel: "mistral-small-2506",
-    protocol: "openai-chat",
-    vision: "supported",
-    webpageAnalysis: "snapshot-only",
-    structuredOutput: "json-schema",
-    imageUrlShape: "string",
-    note: "使用 Mistral 官方视觉模型。",
   },
 ] as const;
 

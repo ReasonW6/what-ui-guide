@@ -44,7 +44,7 @@ function options(provider, fetchImpl) {
 }
 
 test("provider presets use canonical endpoints and custom URLs are normalized safely", () => {
-  assert.equal(providerConfig.aiProviderPresets.length, 12);
+  assert.equal(providerConfig.aiProviderPresets.length, 8);
   assert.equal(
     providerConfig.normalizeCustomApiBaseUrl("https://api.vendor.com"),
     "https://api.vendor.com/v1",
@@ -70,16 +70,16 @@ test("provider presets use canonical endpoints and custom URLs are normalized sa
     assert.throws(() => providerConfig.normalizeCustomApiBaseUrl(unsafe));
   }
 
-  const official = providerConfig.resolveAiProvider(
+  const openai = providerConfig.resolveAiProvider(
     "openai",
     "gpt-5.6-sol",
     "https://attacker.invalid/v1",
   );
-  assert.equal(official.baseUrl, "https://api.openai.com/v1");
-  assert.equal(providerConfig.providerEndpoint(official), "https://api.openai.com/v1/responses");
-
-  const deepseek = providerConfig.resolveAiProvider("deepseek", "deepseek-v4-flash");
-  assert.equal(deepseek.vision, "unsupported");
+  assert.equal(openai.baseUrl, "https://api.openai.com/v1");
+  assert.equal(providerConfig.providerEndpoint(openai), "https://api.openai.com/v1/responses");
+  for (const removedProvider of ["deepseek", "groq", "together", "mistral"]) {
+    assert.throws(() => providerConfig.resolveAiProvider(removedProvider, "vision-model"));
+  }
   const anthropic = providerConfig.resolveAiProvider("anthropic", "claude-sonnet-5");
   assert.equal(providerConfig.providerEndpoint(anthropic), "https://api.anthropic.com/v1/messages");
 });
@@ -107,19 +107,6 @@ test("OpenAI-compatible chat requests honor structured and image-shape capabilit
     options(openrouter, fetch),
   );
   assert.equal(openrouterRequest.provider.require_parameters, true);
-
-  const groq = providerConfig.resolveAiProvider("groq", "qwen/qwen3.6-27b");
-  assert.equal(groq.maxImageDataUrlChars, 3 * 1024 * 1024);
-  const groqRequest = providerIdentification.createOpenAIChatIdentificationRequest(
-    options(groq, fetch),
-  );
-  assert.deepEqual(groqRequest.response_format, { type: "json_object" });
-
-  const mistral = providerConfig.resolveAiProvider("mistral", "mistral-small-2506");
-  const mistralRequest = providerIdentification.createOpenAIChatIdentificationRequest(
-    options(mistral, fetch),
-  );
-  assert.equal(mistralRequest.messages[1].content[1].image_url, screenshot);
 
   const xai = providerConfig.resolveAiProvider("xai", "grok-4.5");
   assert.deepEqual(xai.allowedImageMediaTypes, ["image/jpeg", "image/png"]);

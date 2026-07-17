@@ -86,7 +86,7 @@ test("valid input without a managed or user key returns a bounded setup error", 
   assert.doesNotMatch(JSON.stringify(payload), /sk-|OPENAI_API_KEY/);
 });
 
-test("identify endpoint rejects unsafe custom APIs and non-visual providers locally", async () => {
+test("identify endpoint rejects unsafe custom APIs and removed providers locally", async () => {
   const unsafeCustom = await requestApi("/api/identify", {
     body: JSON.stringify({
       mode: "screenshot",
@@ -105,7 +105,7 @@ test("identify endpoint rejects unsafe custom APIs and non-visual providers loca
   assert.equal(unsafeCustom.status, 400);
   assert.equal((await unsafeCustom.json()).error.code, "unsafe_base_url");
 
-  const deepseek = await requestApi("/api/identify", {
+  const removedProvider = await requestApi("/api/identify", {
     body: JSON.stringify({
       mode: "screenshot",
       imageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
@@ -118,8 +118,8 @@ test("identify endpoint rejects unsafe custom APIs and non-visual providers loca
     },
     method: "POST",
   });
-  assert.equal(deepseek.status, 422);
-  assert.equal((await deepseek.json()).error.code, "provider_has_no_vision");
+  assert.equal(removedProvider.status, 400);
+  assert.equal((await removedProvider.json()).error.code, "invalid_provider");
 });
 
 test("identify endpoint validates generic provider keys without assuming an sk prefix", async () => {

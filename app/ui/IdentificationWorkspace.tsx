@@ -28,7 +28,10 @@ import {
   subscribeProviderSession,
 } from "@/lib/client/provider-session";
 import { AnalysisResults } from "./AnalysisResults";
-import { AiProviderSettings } from "./AiProviderSettings";
+import {
+  AiProviderSettingsPanel,
+  AiProviderSettingsSummary,
+} from "./AiProviderSettings";
 import {
   cropScreenshot,
   RegionSelector,
@@ -104,6 +107,7 @@ export function IdentificationWorkspace() {
     "idle" | "loading" | "saving" | "saved" | "error"
   >("loading");
   const [providerStatusMessage, setProviderStatusMessage] = useState("");
+  const [providerSettingsOpen, setProviderSettingsOpen] = useState(false);
   const [context, setContext] = useState("");
   const [webpageUrl, setWebpageUrl] = useState("");
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
@@ -344,6 +348,7 @@ export function IdentificationWorkspace() {
       return;
     }
 
+    setProviderSettingsOpen(false);
     const controller = new AbortController();
     abortRef.current = controller;
     setPhase("analyzing");
@@ -457,21 +462,6 @@ export function IdentificationWorkspace() {
 
   return (
     <div className="analyzer-shell">
-      <div className="analyzer-intro">
-        <div>
-          <p className="eyebrow">AI VISUAL IDENTIFICATION</p>
-          <h2 id="identify-title">把截图变成准确的组件名称</h2>
-          <p>
-            上传局部界面或输入公开网页，获得候选术语、可观察证据、易混区别、实现建议和可复制代码。
-          </p>
-        </div>
-        <ul aria-label="分析能力">
-          <li><strong>81</strong><span>个受控术语</span></li>
-          <li><strong>3</strong><span>个候选以内</span></li>
-          <li><strong>0</strong><span>默认持久保存</span></li>
-        </ul>
-      </div>
-
       <div className="analyzer-card">
         <div className="analyzer-tabs" aria-label="选择识别输入方式" role="tablist">
           {(["screenshot", "webpage"] as const).map((item, index) => (
@@ -593,17 +583,12 @@ export function IdentificationWorkspace() {
             </label>
 
             {capabilities && (
-              <AiProviderSettings
-                disabled={isAnalyzing}
+              <AiProviderSettingsSummary
+                disabled={isAnalyzing || providerStatus === "loading"}
                 managedAi={managedAi}
-                onChange={updateProvider}
-                onClear={() => void clearProvider()}
-                onRememberChange={setRememberProvider}
-                onSave={() => void saveProvider()}
-                remember={rememberProvider}
+                onOpenChange={setProviderSettingsOpen}
+                open={providerSettingsOpen}
                 selection={providerSelection}
-                status={providerStatus}
-                statusMessage={providerStatusMessage}
               />
             )}
 
@@ -642,7 +627,21 @@ export function IdentificationWorkspace() {
             </div>
           </div>
 
-          {!result && (
+          {!result && (providerSettingsOpen && capabilities ? (
+            <AiProviderSettingsPanel
+              disabled={isAnalyzing}
+              managedAi={managedAi}
+              onChange={updateProvider}
+              onClear={() => void clearProvider()}
+              onClose={() => setProviderSettingsOpen(false)}
+              onRememberChange={setRememberProvider}
+              onSave={() => void saveProvider()}
+              remember={rememberProvider}
+              selection={providerSelection}
+              status={providerStatus}
+              statusMessage={providerStatusMessage}
+            />
+          ) : (
             <aside className="analyzer-empty-state" aria-label="识别结果说明">
               <span className="analyzer-empty-mark" aria-hidden="true">?</span>
               <h3>结果会告诉你“为什么”</h3>
@@ -652,7 +651,7 @@ export function IdentificationWorkspace() {
                 <li><span>03</span><p><strong>直接实现</strong>提供结构、交互、无障碍与可复制代码。</p></li>
               </ol>
             </aside>
-          )}
+          ))}
         </div>
       </div>
 

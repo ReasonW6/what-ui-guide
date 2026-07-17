@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
   AiProviderConfigError,
   aiProviderPresets,
@@ -12,11 +12,20 @@ import {
   type AiProviderSelection,
 } from "@/lib/ai-provider-config";
 
-type AiProviderSettingsProps = {
+type AiProviderSettingsSummaryProps = {
+  disabled: boolean;
+  managedAi: boolean;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  selection: AiProviderSelection;
+};
+
+type AiProviderSettingsPanelProps = {
   disabled: boolean;
   managedAi: boolean;
   onChange: (selection: AiProviderSelection) => void;
   onClear: () => void;
+  onClose: () => void;
   onRememberChange: (remember: boolean) => void;
   onSave: () => void;
   remember: boolean;
@@ -34,26 +43,91 @@ const protocolOptions: ReadonlyArray<{
   { value: "anthropic-messages", label: "Anthropic Messages" },
 ];
 
+const providerMarks: Record<AiProviderId, string> = {
+  openai: "OA",
+  anthropic: "AN",
+  kimi: "KM",
+  "kimi-global": "KG",
+  siliconflow: "SF",
+  openrouter: "OR",
+  gemini: "GM",
+  xai: "X",
+  custom: "+",
+};
+
+const providerOptions = [
+  ...aiProviderPresets.map((provider) => provider.id),
+  "custom",
+] as const;
+
+function protocolLabel(protocol: AiProviderProtocol): string {
+  return protocolOptions.find((option) => option.value === protocol)?.label ?? protocol;
+}
+
 function maskedKey(value: string): string {
   if (!value) return "未填写 Key";
   if (value.length <= 8) return "已填写 Key";
   return `${value.slice(0, 3)}••••${value.slice(-4)}`;
 }
 
-export function AiProviderSettings({
+export function AiProviderSettingsSummary({
+  disabled,
+  managedAi,
+  onOpenChange,
+  open,
+  selection,
+}: AiProviderSettingsSummaryProps) {
+  const preset = selection.providerId === "custom"
+    ? null
+    : getAiProviderPreset(selection.providerId);
+  const hasApiKey = Boolean(selection.apiKey.trim());
+  const usingManagedOpenAi = managedAi
+    && selection.providerId === "openai"
+    && !hasApiKey;
+
+  return (
+    <section className="provider-settings-summary" aria-label="AI 服务设置">
+      <div>
+        <span>当前服务</span>
+        <strong>{preset?.shortLabel ?? "自定义 API"}</strong>
+        <small>
+          {usingManagedOpenAi ? "本站托管模型" : selection.model || "尚未选择模型"}
+          {" · "}{maskedKey(selection.apiKey.trim())}
+        </small>
+      </div>
+      <button
+        aria-controls={open ? "provider-settings-panel" : undefined}
+        aria-expanded={open}
+        className="provider-settings-toggle"
+        disabled={disabled}
+        id="provider-settings-toggle"
+        onClick={() => onOpenChange(!open)}
+        type="button"
+      >
+        <span aria-hidden="true">⚙</span>
+        {open ? "关闭设置" : "API 设置"}
+      </button>
+    </section>
+  );
+}
+
+export function AiProviderSettingsPanel({
   disabled,
   managedAi,
   onChange,
   onClear,
+  onClose,
   onRememberChange,
   onSave,
   remember,
   selection,
   status,
   statusMessage,
-}: AiProviderSettingsProps) {
-  const [open, setOpen] = useState(false);
+}: AiProviderSettingsPanelProps) {
   const [showKey, setShowKey] = useState(false);
+  const [providerMenuOpen, setProviderMenuOpen] = useState(false);
+  const providerTriggerRef = useRef<HTMLButtonElement>(null);
+  const providerOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const preset = selection.providerId === "custom"
     ? null
     : getAiProviderPreset(selection.providerId);
@@ -62,6 +136,10 @@ export function AiProviderSettings({
     && selection.providerId === "openai"
     && !hasApiKey;
   const settingsBusy = disabled || status === "loading" || status === "saving";
+
+  useEffect(() => {
+    providerTriggerRef.current?.focus();
+  }, []);
 
   const endpointPreview = useMemo(() => {
     try {
@@ -122,61 +200,152 @@ export function AiProviderSettings({
     });
   };
 
-  return (
-    <section className="provider-settings" aria-label="AI 服务设置">
-      <div className="provider-settings-summary">
-        <div>
-          <span>当前服务</span>
-          <strong>{preset?.shortLabel ?? "自定义 API"}</strong>
-          <small>
-            {usingManagedOpenAi ? "本站托管模型" : selection.model || "尚未选择模型"}
-            {" · "}{maskedKey(selection.apiKey.trim())}
-          </small>
-        </div>
-        <button
-          aria-expanded={open}
-          aria-controls={open ? "provider-settings-panel" : undefined}
-          className="provider-settings-toggle"
-          disabled={disabled}
-          onClick={() => setOpen((value) => {
-            if (value) setShowKey(false);
-            return !value;
-          })}
-          type="button"
-        >
-          <span aria-hidden="true">⚙</span>
-          API 设置
-        </button>
-      </div>
+  const focusProviderOption = (index: number) => {
+    const boundedIndex = (index + providerOptions.length) % providerOptions.length;
+    window.requestAnimationFrame(() => providerOptionRefs.current[boundedIndex]?.focus());
+  };
 
-      {open && (
-        <div className="provider-settings-panel" id="provider-settings-panel">
+  const openProviderMenu = (preferredIndex?: number) => {
+    if (settingsBusy) return;
+    setProviderMenuOpen(true);
+    const selectedIndex = providerOptions.indexOf(selection.providerId);
+    focusProviderOption(preferredIndex ?? Math.max(selectedIndex, 0));
+  };
+
+  const closeProviderMenu = (restoreFocus = false) => {
+    setProviderMenuOpen(false);
+    if (restoreFocus) {
+      window.requestAnimationFrame(() => providerTriggerRef.current?.focus());
+    }
+  };
+
+  const onProviderOptionKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    index: number,
+  ) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      focusProviderOption(index + (event.key === "ArrowDown" ? 1 : -1));
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      focusProviderOption(event.key === "Home" ? 0 : providerOptions.length - 1);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeProviderMenu(true);
+    }
+  };
+
+  return (
+    <aside
+      aria-labelledby="provider-settings-title"
+      className="provider-settings-panel"
+      id="provider-settings-panel"
+    >
           <div className="provider-settings-heading">
             <div>
               <p className="eyebrow">YOUR PROVIDER, YOUR KEY</p>
               <h3 id="provider-settings-title">配置 AI 服务</h3>
             </div>
-            <p>字段修改会立即用于下一次识别；保存按钮只决定刷新后是否保留。</p>
+            <button
+              aria-label="关闭 API 设置"
+              className="provider-settings-close"
+              onClick={() => {
+                onClose();
+                window.requestAnimationFrame(() => {
+                  document.getElementById("provider-settings-toggle")?.focus();
+                });
+              }}
+              type="button"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
           </div>
+          <p className="provider-settings-description">
+            字段修改会立即用于下一次识别；保存按钮只决定刷新后是否保留。
+          </p>
 
           <div className="provider-settings-grid">
-            <label className="analyzer-field">
+            <div className="analyzer-field">
               <span>服务商</span>
-              <select
-                disabled={settingsBusy}
-                onChange={(event) => selectProvider(event.target.value as AiProviderId)}
-                value={selection.providerId}
+              <div
+                className="provider-picker"
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                    closeProviderMenu();
+                  }
+                }}
               >
-                <optgroup label="官方与聚合平台">
-                  {aiProviderPresets.map((provider) => (
-                    <option key={provider.id} value={provider.id}>
-                      {provider.label}{provider.vision === "unsupported" ? "（本功能暂不可用）" : ""}
-                    </option>
-                  ))}
-                </optgroup>
-                <option value="custom">自定义 API</option>
-              </select>
-            </label>
+                <button
+                  aria-controls={providerMenuOpen ? "provider-listbox" : undefined}
+                  aria-expanded={providerMenuOpen}
+                  aria-haspopup="listbox"
+                  className="provider-picker-trigger"
+                  disabled={settingsBusy}
+                  onClick={() => {
+                    if (providerMenuOpen) closeProviderMenu();
+                    else openProviderMenu();
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                      event.preventDefault();
+                      openProviderMenu(event.key === "ArrowDown" ? 0 : providerOptions.length - 1);
+                    }
+                  }}
+                  ref={providerTriggerRef}
+                  type="button"
+                >
+                  <span className="provider-picker-mark" aria-hidden="true">
+                    {providerMarks[selection.providerId]}
+                  </span>
+                  <span className="provider-picker-current">
+                    <strong>{preset?.label ?? "自定义 API"}</strong>
+                    <small>{protocolLabel(preset?.protocol ?? selection.customProtocol)}</small>
+                  </span>
+                  <span className="provider-picker-chevron" aria-hidden="true">⌄</span>
+                </button>
+                {providerMenuOpen && (
+                  <div className="provider-picker-list" id="provider-listbox" role="listbox">
+                    {providerOptions.map((providerId, index) => {
+                      const option = providerId === "custom"
+                        ? null
+                        : getAiProviderPreset(providerId);
+                      const selected = selection.providerId === providerId;
+                      return (
+                        <button
+                          aria-selected={selected}
+                          className="provider-picker-option"
+                          key={providerId}
+                          onClick={() => {
+                            selectProvider(providerId);
+                            closeProviderMenu(true);
+                          }}
+                          onKeyDown={(event) => onProviderOptionKeyDown(event, index)}
+                          ref={(node) => {
+                            providerOptionRefs.current[index] = node;
+                          }}
+                          role="option"
+                          tabIndex={selected ? 0 : -1}
+                          type="button"
+                        >
+                          <span className="provider-picker-mark" aria-hidden="true">
+                            {providerMarks[providerId]}
+                          </span>
+                          <span>
+                            <strong>{option?.label ?? "自定义 API"}</strong>
+                            <small>
+                              {option ? protocolLabel(option.protocol) : "手动配置兼容端点"}
+                            </small>
+                          </span>
+                          <span className="provider-picker-check" aria-hidden="true">
+                            {selected ? "✓" : ""}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
 
             {selection.providerId === "custom" && (
               <label className="analyzer-field">
@@ -232,7 +401,7 @@ export function AiProviderSettings({
               <small>
                 {selection.providerId === "custom"
                   ? "填写站点根地址时会自动补 /v1；也可直接填写平台给出的完整 Base URL。"
-                  : "官方预设地址不可由浏览器覆盖。"}
+                  : "预设地址不可由浏览器覆盖。"}
               </small>
             </label>
 
@@ -333,8 +502,6 @@ export function AiProviderSettings({
               清除本地配置
             </button>
           </div>
-        </div>
-      )}
-    </section>
+    </aside>
   );
 }

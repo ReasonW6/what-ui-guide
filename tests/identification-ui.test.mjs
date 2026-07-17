@@ -69,6 +69,9 @@ test("provider settings include mainstream presets and bounded custom endpoints"
     readFile(providerConfigUrl, "utf8"),
   ]);
   assert.match(settings, /API 设置/);
+  assert.match(settings, /role="listbox"/);
+  assert.match(settings, /provider-picker-option/);
+  assert.match(settings, /关闭 API 设置/);
   assert.match(settings, /最终请求地址/);
   assert.match(settings, /在此浏览器加密保存/);
   assert.match(settings, /apiKey: ""/);
@@ -76,20 +79,35 @@ test("provider settings include mainstream presets and bounded custom endpoints"
   for (const provider of [
     "openai",
     "anthropic",
-    "deepseek",
     "kimi",
+    "kimi-global",
     "siliconflow",
     "openrouter",
     "gemini",
     "xai",
-    "groq",
-    "together",
-    "mistral",
   ]) {
     assert.match(providerConfig, new RegExp(`id: "${provider}"`));
   }
+  for (const removedProvider of ["deepseek", "groq", "together", "mistral"]) {
+    assert.doesNotMatch(providerConfig, new RegExp(`id: "${removedProvider}"`));
+  }
+  assert.doesNotMatch(providerConfig, /官方/);
   assert.match(providerConfig, /Only HTTPS|仅支持 HTTPS/);
   assert.match(providerConfig, /provider\.protocol === "anthropic-messages"/);
+});
+
+test("API settings replace the empty result column without expanding the input column", async () => {
+  const [workspace, settings] = await Promise.all([
+    readFile(workspaceUrl, "utf8"),
+    readFile(settingsUrl, "utf8"),
+  ]);
+  assert.doesNotMatch(workspace, /analyzer-intro/);
+  assert.match(workspace, /providerSettingsOpen && capabilities/);
+  assert.match(workspace, /<AiProviderSettingsPanel/);
+  assert.match(workspace, /<AiProviderSettingsSummary/);
+  assert.match(settings, /onOpenChange\(!open\)/);
+  assert.match(settings, /provider-settings-toggle/);
+  assert.match(settings, /providerTriggerRef\.current\?\.focus\(\)/);
 });
 
 test("results contain evidence, uncertainty, implementation, code, and feedback", async () => {

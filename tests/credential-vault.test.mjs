@@ -7,7 +7,7 @@ const vault = await loadCredentialVaultModule();
 
 const credential = {
   id: "openai-primary",
-  label: "OpenAI 官方",
+  label: "OpenAI",
   providerId: "openai",
   protocol: "openai-responses",
   baseUrl: "https://api.openai.com/v1",

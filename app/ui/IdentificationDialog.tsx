@@ -54,6 +54,7 @@ export function IdentificationDialog({
       {open && (
         <div className="identification-dialog-frame">
           <div className="identification-dialog-toolbar">
+            <h2 className="sr-only" id="identify-title">AI 视觉识别</h2>
             <button
               aria-label="关闭 AI 识别"
               className="identification-dialog-close"

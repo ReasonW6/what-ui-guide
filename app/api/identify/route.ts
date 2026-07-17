@@ -542,7 +542,7 @@ export async function POST(request: Request): Promise<Response> {
         throw new ApiRouteError(
           422,
           "provider_has_no_vision",
-          `${provider.label} 当前官方模型不支持图片输入，请选择其他服务商。`,
+          `${provider.label} 当前模型不支持图片输入，请选择其他服务商。`,
         );
       }
       const screenshot = validateScreenshotDataUrl(body.imageDataUrl);
@@ -637,7 +637,7 @@ export async function POST(request: Request): Promise<Response> {
           throw new ApiRouteError(
             422,
             "provider_requires_snapshot",
-            `${provider.label} 不能直接读取网页。该地址当前无法生成视觉快照，请改用截图，或选择 OpenAI 官方。`,
+            `${provider.label} 不能直接读取网页。该地址当前无法生成视觉快照，请改用截图，或选择 OpenAI。`,
           );
         }
         notices = [
@@ -652,7 +652,7 @@ export async function POST(request: Request): Promise<Response> {
       throw new ApiRouteError(
         422,
         "provider_has_no_vision",
-        `${provider.label} 当前官方模型不支持视觉快照，请选择其他服务商。`,
+        `${provider.label} 当前模型不支持视觉快照，请选择其他服务商。`,
       );
     }
 

@@ -37,7 +37,7 @@ UI / UX 术语往往比界面本身更难找。你可能知道“右键后出现
 | 能力 | 说明 |
 | --- | --- |
 | 截图与区域识别 | 支持上传、拖放或粘贴截图，并用百分比坐标框选区域；分析前在浏览器中裁剪，不必把整张页面都交给模型。 |
-| 多服务商 BYOK | 内置 OpenAI、Anthropic、Kimi、DeepSeek、硅基流动、OpenRouter、Gemini、xAI、Groq、Together 与 Mistral 等预设，也支持自定义兼容 API 和模型。 |
+| 多服务商 BYOK | 内置 OpenAI、Anthropic、Kimi、硅基流动、OpenRouter、Gemini 与 xAI 等预设，也支持自定义兼容 API 和模型。 |
 | 本地凭据保险库 | Key 默认只保留在当前页面内存；用户主动选择后，使用 Web Crypto 加密并写入同源 IndexedDB。 |
 | 公开网页分析 | 对安全白名单内的网页优先使用浏览器快照；未配置快照能力时退化为按目标域名限制的公开网页语义分析。 |
 | 可解释候选结果 | 返回 1–3 个目录内候选，逐项说明视觉或行为证据、区别点、置信度、不确定性与必要的后续问题。 |
@@ -72,22 +72,18 @@ UI / UX 术语往往比界面本身更难找。你可能知道“右键后出现
 
 | 预设 | 默认模型 | 接口适配 | 图片识别 |
 | --- | --- | --- | --- |
-| OpenAI 官方 | `gpt-5.6-sol` | Responses | 支持；也可对公开网页做限定域名检索 |
-| Anthropic 官方 | `claude-sonnet-5` | Messages | 支持 |
+| OpenAI | `gpt-5.6-sol` | Responses | 支持；也可对公开网页做限定域名检索 |
+| Anthropic | `claude-sonnet-5` | Messages | 支持 |
 | Kimi 中国 / Global | `kimi-k2.6` | OpenAI Chat | 支持 |
 | 硅基流动 | `zai-org/GLM-4.5V` | OpenAI Chat | 取决于控制台当前可用视觉模型 |
 | OpenRouter | `google/gemini-3.5-flash` | OpenAI Chat | 取决于所选路由模型 |
 | Google Gemini | `gemini-3.5-flash` | OpenAI Chat 兼容层 | 支持 |
 | xAI | `grok-4.5` | OpenAI Chat | 支持 |
-| GroqCloud | `qwen/qwen3.6-27b` | OpenAI Chat | 支持 |
-| Together AI | `moonshotai/Kimi-K2.6` | OpenAI Chat | 支持 |
-| Mistral AI | `mistral-small-2506` | OpenAI Chat 兼容层 | 支持 |
-| DeepSeek | `deepseek-v4-flash` | OpenAI Chat | 当前官方 V4 为文本模型，本视觉识别功能会停用 |
 | 自定义 API | 用户填写 | OpenAI Chat / Responses / Anthropic Messages | 取决于目标模型 |
 
-模型供应会变化，所以所有模型名都可以在设置中修改。官方预设使用服务端固定的规范地址，浏览器不能覆盖；自定义地址只接受公开 HTTPS 域名，不允许用户名密码、查询参数、显式端口、IP 或内网主机，也不跟随重定向。填写站点根地址时会补全 `/v1`，填写已有路径时会保留，并在发送前展示最终请求地址。自定义接口仍只会收到固定的识别请求结构，不支持任意请求头或任意代理内容。主机名字符串校验无法彻底消除 DNS 重绑定风险；高安全部署应在平台出口层使用域名白名单，或禁用自定义端点。
+模型供应会变化，所以所有模型名都可以在设置中修改。内置预设使用服务端固定的规范地址，浏览器不能覆盖；自定义地址只接受公开 HTTPS 域名，不允许用户名密码、查询参数、显式端口、IP 或内网主机，也不跟随重定向。填写站点根地址时会补全 `/v1`，填写已有路径时会保留，并在发送前展示最终请求地址。自定义接口仍只会收到固定的识别请求结构，不支持任意请求头或任意代理内容。主机名字符串校验无法彻底消除 DNS 重绑定风险；高安全部署应在平台出口层使用域名白名单，或禁用自定义端点。
 
-除 OpenAI 官方的受限网页检索外，其他服务商只有在目标域名已配置受控浏览器快照时才能分析网址；否则界面会要求改用截图。协议和视觉能力依据各服务商官方文档实现：[OpenAI](https://developers.openai.com/api/docs/guides/images-vision)、[Anthropic](https://platform.claude.com/docs/en/build-with-claude/vision)、[Kimi](https://platform.kimi.com/docs/guide/use-kimi-vision-model)、[SiliconFlow](https://docs.siliconflow.cn/cn/userguide/capabilities/multimodal-vision)、[OpenRouter](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding)、[Gemini](https://ai.google.dev/gemini-api/docs/openai)、[xAI](https://docs.x.ai/developers/model-capabilities/images/understanding)、[Groq](https://console.groq.com/docs/vision)、[Together](https://docs.together.ai/docs/inference/vision/overview) 与 [Mistral](https://docs.mistral.ai/studio-api/conversations/vision)。
+除 OpenAI 的受限网页检索外，其他服务商只有在目标域名已配置受控浏览器快照时才能分析网址；否则界面会要求改用截图。协议和视觉能力依据各服务商文档实现：[OpenAI](https://developers.openai.com/api/docs/guides/images-vision)、[Anthropic](https://platform.claude.com/docs/en/build-with-claude/vision)、[Kimi](https://platform.kimi.com/docs/guide/use-kimi-vision-model)、[SiliconFlow](https://docs.siliconflow.cn/cn/userguide/capabilities/multimodal-vision)、[OpenRouter](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding)、[Gemini](https://ai.google.dev/gemini-api/docs/openai) 与 [xAI](https://docs.x.ai/developers/model-capabilities/images/understanding)。
 
 ## 详情页不只是“大号预览”
 
@@ -231,7 +227,7 @@ lib/
 ├─ catalog.ts                  # CatalogItem 注册表与构建时校验
 ├─ catalog-search.ts           # 搜索和筛选逻辑
 ├─ identification-contract.ts  # 模型结构化结果契约与输入校验
-├─ ai-provider-config.ts       # 官方预设、自定义地址规范化与能力声明
+├─ ai-provider-config.ts       # 内置预设、自定义地址规范化与能力声明
 ├─ openai-identification.ts    # Responses API 请求与结果验证
 ├─ provider-identification.ts  # OpenAI Chat / Anthropic 协议适配
 ├─ client/credential-vault.ts  # Web Crypto + IndexedDB 凭据保险库
