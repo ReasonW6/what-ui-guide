@@ -366,6 +366,14 @@ function parseOpenAIChatResult(
   return parseAndValidate(content, allowedSlugs, providerLabel);
 }
 
+export function parseOpenAIChatIdentificationResponse(
+  body: unknown,
+  allowedSlugs: readonly string[],
+  providerLabel: string,
+): IdentificationResult {
+  return parseOpenAIChatResult(body, allowedSlugs, providerLabel);
+}
+
 function parseAnthropicResult(
   body: unknown,
   allowedSlugs: readonly string[],

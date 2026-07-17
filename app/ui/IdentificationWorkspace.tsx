@@ -15,6 +15,7 @@ import type {
 } from "@/lib/identification-view";
 import { validateScreenshotDataUrl } from "@/lib/identification-contract";
 import {
+  providerEndpoint,
   resolveAiProvider,
   type AiProviderSelection,
 } from "@/lib/ai-provider-config";
@@ -63,6 +64,8 @@ function responseError(payload: unknown, fallback: string): string {
     const message = (error as { message?: unknown }).message;
     if (typeof message === "string" && message.trim()) return message;
   }
+  const message = (payload as { message?: unknown }).message;
+  if (typeof message === "string" && message.trim()) return message;
   return fallback;
 }
 
@@ -89,6 +92,69 @@ function readFileDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(new Error("无法读取这张截图。"));
     reader.readAsDataURL(file);
   });
+}
+
+async function identifyDirectlyWithSiliconFlow(
+  body: Record<string, string>,
+  apiKey: string,
+  expectedEndpoint: string,
+  signal: AbortSignal,
+): Promise<unknown> {
+  const preparationResponse = await fetch("/api/identify", {
+    body: JSON.stringify({ ...body, action: "prepare-direct" }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    signal,
+  });
+  const preparation: unknown = await preparationResponse.json().catch(() => null);
+  if (!preparationResponse.ok) {
+    throw new Error(responseError(preparation, "无法准备硅基流动直连请求。"));
+  }
+  if (
+    !preparation
+    || typeof preparation !== "object"
+    || !("endpoint" in preparation)
+    || preparation.endpoint !== expectedEndpoint
+    || !("request" in preparation)
+    || !preparation.request
+    || typeof preparation.request !== "object"
+  ) {
+    throw new Error("本站返回的硅基流动直连配置无效。");
+  }
+
+  const upstreamResponse = await fetch(preparation.endpoint, {
+    body: JSON.stringify(preparation.request),
+    headers: {
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json",
+    },
+    method: "POST",
+    signal,
+  });
+  const upstreamPayload: unknown = await upstreamResponse.json().catch(() => null);
+  if (!upstreamResponse.ok) {
+    throw new Error(responseError(
+      upstreamPayload,
+      `硅基流动中国站拒绝了请求（HTTP ${upstreamResponse.status}）。`,
+    ));
+  }
+
+  const finalResponse = await fetch("/api/identify", {
+    body: JSON.stringify({
+      action: "finalize-direct",
+      providerId: body.providerId,
+      model: body.model,
+      upstreamResponse: upstreamPayload,
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+    signal,
+  });
+  const finalPayload: unknown = await finalResponse.json().catch(() => null);
+  if (!finalResponse.ok) {
+    throw new Error(responseError(finalPayload, "无法校验硅基流动识别结果。"));
+  }
+  return finalPayload;
 }
 
 export function IdentificationWorkspace() {
@@ -353,22 +419,32 @@ export function IdentificationWorkspace() {
     abortRef.current = controller;
     setPhase("analyzing");
     try {
-      const headers: Record<string, string> = {
-        accept: "application/json",
-        "content-type": "application/json",
-      };
-      if (providerSelection.apiKey.trim()) {
-        headers["x-ai-api-key"] = providerSelection.apiKey.trim();
-      }
-      const response = await fetch("/api/identify", {
-        body: JSON.stringify(body),
-        headers,
-        method: "POST",
-        signal: controller.signal,
-      });
-      const payload: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(responseError(payload, `分析失败（${response.status}），请稍后重试。`));
+      let payload: unknown;
+      if (resolvedProvider.id === "siliconflow" && body.mode === "screenshot") {
+        payload = await identifyDirectlyWithSiliconFlow(
+          body,
+          providerSelection.apiKey.trim(),
+          providerEndpoint(resolvedProvider),
+          controller.signal,
+        );
+      } else {
+        const headers: Record<string, string> = {
+          accept: "application/json",
+          "content-type": "application/json",
+        };
+        if (providerSelection.apiKey.trim()) {
+          headers["x-ai-api-key"] = providerSelection.apiKey.trim();
+        }
+        const response = await fetch("/api/identify", {
+          body: JSON.stringify(body),
+          headers,
+          method: "POST",
+          signal: controller.signal,
+        });
+        payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(responseError(payload, `分析失败（${response.status}），请稍后重试。`));
+        }
       }
       if (!isIdentificationResponse(payload)) {
         throw new Error("服务返回了无法识别的结果格式，请重试。");

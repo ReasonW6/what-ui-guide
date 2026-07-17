@@ -5,6 +5,7 @@ import {
   AiProviderConfigError,
   aiProviderPresets,
   getAiProviderPreset,
+  providerConnectionEndpoint,
   providerEndpoint,
   resolveAiProvider,
   type AiProviderId,
@@ -71,6 +72,18 @@ function maskedKey(value: string): string {
   if (!value) return "未填写 Key";
   if (value.length <= 8) return "已填写 Key";
   return `${value.slice(0, 3)}••••${value.slice(-4)}`;
+}
+
+function payloadErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== "object") return fallback;
+  if ("error" in payload && payload.error && typeof payload.error === "object") {
+    const message = "message" in payload.error ? payload.error.message : null;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  if ("message" in payload && typeof payload.message === "string" && payload.message.trim()) {
+    return payload.message;
+  }
+  return fallback;
 }
 
 export function AiProviderSettingsSummary({
@@ -253,38 +266,55 @@ export function AiProviderSettingsPanel({
     setConnectionStatus("testing");
     setConnectionMessage("正在验证服务地址、API Key 与模型…");
     try {
-      const response = await fetch("/api/identify", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-ai-api-key": selection.apiKey.trim(),
-        },
-        body: JSON.stringify({
-          action: "connect",
-          providerId: selection.providerId,
-          model: selection.model,
-          customBaseUrl: selection.customBaseUrl,
-          customProtocol: selection.customProtocol,
-        }),
-      });
+      const browserDirect = selection.providerId === "siliconflow";
+      const response = browserDirect
+        ? await fetch(providerConnectionEndpoint(resolveAiProvider(
+            selection.providerId,
+            selection.model,
+            selection.customBaseUrl,
+            selection.customProtocol,
+          )), {
+            headers: { authorization: `Bearer ${selection.apiKey.trim()}` },
+            method: "GET",
+          })
+        : await fetch("/api/identify", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-ai-api-key": selection.apiKey.trim(),
+            },
+            body: JSON.stringify({
+              action: "connect",
+              providerId: selection.providerId,
+              model: selection.model,
+              customBaseUrl: selection.customBaseUrl,
+              customProtocol: selection.customProtocol,
+            }),
+          });
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) {
-        const message = payload
-          && typeof payload === "object"
-          && "error" in payload
-          && payload.error
-          && typeof payload.error === "object"
-          && "message" in payload.error
-          && typeof payload.error.message === "string"
-          ? payload.error.message
-          : `连接检查失败（HTTP ${response.status}）。`;
-        throw new Error(message);
+        throw new Error(payloadErrorMessage(
+          payload,
+          `连接检查失败（HTTP ${response.status}）。`,
+        ));
       }
-      const modelAvailable = payload
-        && typeof payload === "object"
-        && "modelAvailable" in payload
-        ? payload.modelAvailable
-        : null;
+      const modelAvailable = browserDirect
+        ? payload
+          && typeof payload === "object"
+          && "data" in payload
+          && Array.isArray(payload.data)
+          ? payload.data.some((entry) => (
+              entry
+              && typeof entry === "object"
+              && "id" in entry
+              && entry.id === selection.model
+            ))
+          : null
+        : payload
+          && typeof payload === "object"
+          && "modelAvailable" in payload
+          ? payload.modelAvailable
+          : null;
       if (modelAvailable === false) {
         setConnectionStatus("warning");
         setConnectionMessage("服务与 API Key 已连接，但当前模型不在该站点的可用模型列表中。请检查模型名称。");

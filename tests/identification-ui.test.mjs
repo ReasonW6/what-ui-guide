@@ -34,6 +34,8 @@ test("BYOK supports session-only use and encrypted browser storage", async () =>
   ]);
   assert.match(settings, /type=\{showKey \? "text" : "password"\}/);
   assert.match(workspace, /x-ai-api-key/);
+  assert.match(workspace, /action: "prepare-direct"/);
+  assert.match(workspace, /action: "finalize-direct"/);
   assert.match(workspace, /resolvedProvider\.id === "xai" \? "image\/jpeg"/);
   assert.doesNotMatch(`${workspace}\n${settings}`, /localStorage|sessionStorage/i);
   assert.match(vault, /AES-GCM/);
@@ -74,6 +76,7 @@ test("provider settings include mainstream presets and bounded custom endpoints"
   assert.match(settings, /关闭 API 设置/);
   assert.match(settings, /最终请求地址/);
   assert.match(settings, /action: "connect"/);
+  assert.match(settings, /providerConnectionEndpoint/);
   assert.match(settings, /connectionStatus === "testing" \? "连接中…" : "连接"/);
   assert.match(settings, /在此浏览器加密保存/);
   assert.match(settings, /apiKey: ""/);

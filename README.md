@@ -64,7 +64,7 @@ UI / UX 术语往往比界面本身更难找。你可能知道“右键后出现
 
 用户也可以主动勾选“在此浏览器加密保存”：浏览器会为凭据生成不可导出的 AES-256-GCM `CryptoKey`，使用独立随机 IV 加密完整配置，再把密钥对象和密文保存到本站来源的 IndexedDB。浏览器同源策略阻止其他网站直接读取这份存储；应用写入 IndexedDB 的凭据 payload 不含明文 API Key，加密密钥由浏览器以不可导出 `CryptoKey` 管理。清除本地配置会删除该记录。
 
-这是一层本地静态防护，不是密码管理器。本站同源 XSS、被攻陷的同源脚本、恶意浏览器扩展、DevTools、受控浏览器或系统恶意软件仍可能在解密后取得 Key，或直接代用户发起请求。每次识别时，Key 都会临时经过本站 Worker，再发送给所选 AI 服务商；应用代码不主动把它写入日志或云端存储。若安全要求更高，请保持默认的会话模式，并使用限额、可撤销的专用 Key。
+这是一层本地静态防护，不是密码管理器。本站同源 XSS、被攻陷的同源脚本、恶意浏览器扩展、DevTools、受控浏览器或系统恶意软件仍可能在解密后取得 Key，或直接代用户发起请求。通常识别时 Key 会临时经过本站 Worker，再发送给所选 AI 服务商；硅基流动中国站的截图识别会由浏览器直接请求 `api.siliconflow.cn`，Key 不经过本站 Worker。应用代码不主动把 Key 写入日志或云端存储。若安全要求更高，请保持默认的会话模式，并使用限额、可撤销的专用 Key。
 
 > AI 结果是辅助判断，不是确定性的 DOM 检查器。登录态、内网或需要交互后才出现的页面请改用截图；不要上传包含密钥、身份信息或其他敏感数据的画面。
 
@@ -81,9 +81,9 @@ UI / UX 术语往往比界面本身更难找。你可能知道“右键后出现
 | xAI | `grok-4.5` | OpenAI Chat | 支持 |
 | 自定义 API | 用户填写 | OpenAI Chat / Responses / Anthropic Messages | 取决于目标模型 |
 
-模型供应会变化，所以所有模型名都可以在设置中修改。填写 Key 后可点击“连接”，通过服务商的只读模型 / Key 接口验证地址、凭据和（服务商支持时）当前模型，不会发起模型推理。内置预设使用服务端固定的规范地址，浏览器不能覆盖；自定义地址只接受公开 HTTPS 域名，不允许用户名密码、查询参数、显式端口、IP 或内网主机，也不跟随重定向。填写站点根地址时会补全 `/v1`，填写已有路径时会保留，并在发送前展示最终请求地址。自定义接口仍只会收到固定的识别请求结构，不支持任意请求头或任意代理内容。主机名字符串校验无法彻底消除 DNS 重绑定风险；高安全部署应在平台出口层使用域名白名单，或禁用自定义端点。
+模型供应会变化，所以所有模型名都可以在设置中修改。填写 Key 后可点击“连接”，通过服务商的只读模型 / Key 接口验证地址、凭据和（服务商支持时）当前模型，不会发起模型推理。由于公开站点的 Worker 无法稳定连接硅基流动中国站，而该 API 允许浏览器跨域鉴权请求，中国站的连接测试和截图识别采用浏览器直连；本站只准备固定请求并校验返回结果。内置预设使用服务端固定的规范地址，浏览器不能覆盖；自定义地址只接受公开 HTTPS 域名，不允许用户名密码、查询参数、显式端口、IP 或内网主机，也不跟随重定向。填写站点根地址时会补全 `/v1`，填写已有路径时会保留，并在发送前展示最终请求地址。自定义接口仍只会收到固定的识别请求结构，不支持任意请求头或任意代理内容。主机名字符串校验无法彻底消除 DNS 重绑定风险；高安全部署应在平台出口层使用域名白名单，或禁用自定义端点。
 
-除 OpenAI 的受限网页检索外，其他服务商只有在目标域名已配置受控浏览器快照时才能分析网址；否则界面会要求改用截图。协议和视觉能力依据各服务商文档实现：[OpenAI](https://developers.openai.com/api/docs/guides/images-vision)、[Anthropic](https://platform.claude.com/docs/en/build-with-claude/vision)、[Kimi](https://platform.kimi.com/docs/guide/use-kimi-vision-model)、[SiliconFlow](https://docs.siliconflow.cn/cn/userguide/capabilities/multimodal-vision)、[OpenRouter](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding)、[Gemini](https://ai.google.dev/gemini-api/docs/openai) 与 [xAI](https://docs.x.ai/developers/model-capabilities/images/understanding)。
+除 OpenAI 的受限网页检索外，其他服务商只有在目标域名已配置受控浏览器快照时才能分析网址；否则界面会要求改用截图。协议和视觉能力依据各服务商文档实现：[OpenAI](https://developers.openai.com/api/docs/guides/images-vision)、[Anthropic](https://platform.claude.com/docs/en/build-with-claude/vision)、[Kimi](https://platform.kimi.com/docs/guide/use-kimi-vision-model)、[SiliconFlow 中国站](https://docs.siliconflow.cn/cn/userguide/capabilities/multimodal-vision)、[SiliconFlow 国际站](https://docs.siliconflow.com/en/userguide/capabilities/vision)、[OpenRouter](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding)、[Gemini](https://ai.google.dev/gemini-api/docs/openai) 与 [xAI](https://docs.x.ai/developers/model-capabilities/images/understanding)。
 
 ## 详情页不只是“大号预览”
 

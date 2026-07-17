@@ -19,6 +19,7 @@ import type {
 import {
   AiProviderConfigError,
   normalizeAiApiKey,
+  providerEndpoint,
   resolveAiProvider,
   type ResolvedAiProvider,
 } from "@/lib/ai-provider-config";
@@ -28,7 +29,9 @@ import {
 } from "@/lib/openai-identification";
 import {
   ProviderIdentificationError,
+  createOpenAIChatIdentificationRequest,
   identifyWithProvider,
+  parseOpenAIChatIdentificationResponse,
   verifyProviderConnection,
 } from "@/lib/provider-identification";
 import { captureWebpageSnapshot } from "@/lib/webpage-capture";
@@ -559,6 +562,72 @@ export async function POST(request: Request): Promise<Response> {
       body.customBaseUrl,
       body.customProtocol,
     );
+
+    if (body.action === "prepare-direct") {
+      assertOnlyKeys(body, [
+        "action",
+        "mode",
+        "imageDataUrl",
+        "context",
+        "providerId",
+        "model",
+        "customBaseUrl",
+        "customProtocol",
+      ]);
+      if (provider.id !== "siliconflow" || body.mode !== "screenshot") {
+        throw new ApiRouteError(
+          400,
+          "direct_provider_not_supported",
+          "浏览器直连目前只用于硅基流动中国站的截图识别。",
+        );
+      }
+      const context = readOptionalContext(body.context);
+      const screenshot = validateScreenshotDataUrl(body.imageDataUrl);
+      assertProviderImageLimit(provider, screenshot.dataUrl, screenshot.mediaType);
+      const directRequest = createOpenAIChatIdentificationRequest({
+        apiKey: "browser-direct",
+        provider,
+        allowedSlugs,
+        catalogKnowledge,
+        instructions: identificationInstructions,
+        input: {
+          mode: "screenshot",
+          imageDataUrl: screenshot.dataUrl,
+          description: context,
+        },
+      });
+      return jsonResponse({
+        endpoint: providerEndpoint(provider),
+        request: directRequest,
+      });
+    }
+
+    if (body.action === "finalize-direct") {
+      assertOnlyKeys(body, [
+        "action",
+        "providerId",
+        "model",
+        "upstreamResponse",
+      ]);
+      if (provider.id !== "siliconflow") {
+        throw new ApiRouteError(
+          400,
+          "direct_provider_not_supported",
+          "浏览器直连目前只用于硅基流动中国站。",
+        );
+      }
+      const result = parseOpenAIChatIdentificationResponse(
+        body.upstreamResponse,
+        allowedSlugs,
+        provider.label,
+      );
+      return jsonResponse(buildResponse(result, "screenshot", {
+        notices: [
+          "本次截图由浏览器直接发送给硅基流动中国站；API Key 未经过本站 Worker。",
+          "分析基于当前选取的静态画面；无法从截图确认的交互行为会标为不确定。",
+        ],
+      }));
+    }
 
     if (body.action === "connect") {
       testingConnection = true;

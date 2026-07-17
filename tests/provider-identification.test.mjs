@@ -139,6 +139,15 @@ test("connection checks validate keys without sending an inference request", asy
   );
 });
 
+test("direct chat responses still pass the shared schema validator", () => {
+  const parsed = providerIdentification.parseOpenAIChatIdentificationResponse(
+    { choices: [{ message: { content: JSON.stringify(makeResult()) } }] },
+    allowedSlugs,
+    "硅基流动 · 中国站",
+  );
+  assert.equal(parsed.candidates[0].slug, "dialog");
+});
+
 test("OpenAI-compatible chat requests honor structured and image-shape capabilities", () => {
   const kimi = providerConfig.resolveAiProvider("kimi", "kimi-k2.6");
   const kimiRequest = providerIdentification.createOpenAIChatIdentificationRequest(

@@ -153,3 +153,65 @@ test("connection checks require a user key before contacting a provider", async 
   assert.equal(response.status, 400);
   assert.equal((await response.json()).error.code, "api_key_required");
 });
+
+test("SiliconFlow China direct flow prepares and validates browser-side inference", async () => {
+  const prepare = await requestApi("/api/identify", {
+    body: JSON.stringify({
+      action: "prepare-direct",
+      mode: "screenshot",
+      imageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      context: "测试直连",
+      providerId: "siliconflow",
+      model: "Qwen/Qwen3.6-27B",
+      customBaseUrl: "",
+      customProtocol: "openai-chat",
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  assert.equal(prepare.status, 200);
+  const prepared = await prepare.json();
+  assert.equal(
+    prepared.endpoint,
+    "https://api.siliconflow.cn/v1/chat/completions",
+  );
+  assert.equal(prepared.request.model, "Qwen/Qwen3.6-27B");
+
+  const finalize = await requestApi("/api/identify", {
+    body: JSON.stringify({
+      action: "finalize-direct",
+      providerId: "siliconflow",
+      model: "Qwen/Qwen3.6-27B",
+      upstreamResponse: {
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              status: "identified",
+              summary: "画面中是一个模态对话框。",
+              candidates: [{
+                slug: "dialog",
+                confidence: "high",
+                evidence: ["内容覆盖在页面之上"],
+                distinction: "它会阻塞背景交互。",
+              }],
+              uncertainties: [],
+              implementation: {
+                anatomy: ["标题和内容"],
+                behavior: ["关闭后恢复焦点"],
+                styling: ["使用遮罩"],
+                accessibility: ["使用语义 dialog"],
+              },
+              followUpQuestion: null,
+            }),
+          },
+        }],
+      },
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  assert.equal(finalize.status, 200);
+  const result = await finalize.json();
+  assert.equal(result.candidates[0].slug, "dialog");
+  assert.match(result.notices[0], /API Key 未经过本站 Worker/);
+});
