@@ -44,7 +44,7 @@ function options(provider, fetchImpl) {
 }
 
 test("provider presets use canonical endpoints and custom URLs are normalized safely", () => {
-  assert.equal(providerConfig.aiProviderPresets.length, 8);
+  assert.equal(providerConfig.aiProviderPresets.length, 9);
   assert.equal(
     providerConfig.normalizeCustomApiBaseUrl("https://api.vendor.com"),
     "https://api.vendor.com/v1",
@@ -82,6 +82,61 @@ test("provider presets use canonical endpoints and custom URLs are normalized sa
   }
   const anthropic = providerConfig.resolveAiProvider("anthropic", "claude-sonnet-5");
   assert.equal(providerConfig.providerEndpoint(anthropic), "https://api.anthropic.com/v1/messages");
+
+  const siliconflowChina = providerConfig.resolveAiProvider(
+    "siliconflow",
+    "Qwen/Qwen3.6-27B",
+  );
+  const siliconflowGlobal = providerConfig.resolveAiProvider(
+    "siliconflow-global",
+    "Qwen/Qwen3.6-27B",
+  );
+  assert.equal(siliconflowChina.baseUrl, "https://api.siliconflow.cn/v1");
+  assert.equal(siliconflowGlobal.baseUrl, "https://api.siliconflow.com/v1");
+  assert.equal(
+    providerConfig.providerConnectionEndpoint(siliconflowChina),
+    "https://api.siliconflow.cn/v1/models?type=text&sub_type=chat",
+  );
+});
+
+test("connection checks validate keys without sending an inference request", async () => {
+  const siliconflow = providerConfig.resolveAiProvider(
+    "siliconflow",
+    "Qwen/Qwen3.6-27B",
+  );
+  let request;
+  const connected = await providerIdentification.verifyProviderConnection({
+    apiKey: "provider-test-key",
+    provider: siliconflow,
+    fetchImpl: async (url, init) => {
+      request = { url, init };
+      return Response.json({
+        object: "list",
+        data: [{ id: "Qwen/Qwen3.6-27B", object: "model" }],
+      });
+    },
+  });
+  assert.equal(
+    request.url,
+    "https://api.siliconflow.cn/v1/models?type=text&sub_type=chat",
+  );
+  assert.equal(request.init.method, "GET");
+  assert.equal(request.init.headers.authorization, "Bearer provider-test-key");
+  assert.equal(request.init.redirect, "error");
+  assert.equal(connected.modelAvailable, true);
+
+  await assert.rejects(
+    providerIdentification.verifyProviderConnection({
+      apiKey: "provider-test-key",
+      provider: siliconflow,
+      fetchImpl: async () => Response.json(
+        { message: "invalid api key" },
+        { status: 401 },
+      ),
+    }),
+    (error) => error instanceof providerIdentification.ProviderIdentificationError
+      && error.status === 401,
+  );
 });
 
 test("OpenAI-compatible chat requests honor structured and image-shape capabilities", () => {

@@ -73,6 +73,8 @@ test("provider settings include mainstream presets and bounded custom endpoints"
   assert.match(settings, /provider-picker-option/);
   assert.match(settings, /关闭 API 设置/);
   assert.match(settings, /最终请求地址/);
+  assert.match(settings, /action: "connect"/);
+  assert.match(settings, /connectionStatus === "testing" \? "连接中…" : "连接"/);
   assert.match(settings, /在此浏览器加密保存/);
   assert.match(settings, /apiKey: ""/);
   assert.match(settings, /OpenAI Chat Completions/);
@@ -82,6 +84,7 @@ test("provider settings include mainstream presets and bounded custom endpoints"
     "kimi",
     "kimi-global",
     "siliconflow",
+    "siliconflow-global",
     "openrouter",
     "gemini",
     "xai",

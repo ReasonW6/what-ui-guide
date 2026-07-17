@@ -139,3 +139,17 @@ test("identify endpoint validates generic provider keys without assuming an sk p
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error.code, "invalid_api_key");
 });
+
+test("connection checks require a user key before contacting a provider", async () => {
+  const response = await requestApi("/api/identify", {
+    body: JSON.stringify({
+      action: "connect",
+      providerId: "siliconflow",
+      model: "Qwen/Qwen3.6-27B",
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error.code, "api_key_required");
+});

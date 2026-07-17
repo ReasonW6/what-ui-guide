@@ -29,6 +29,7 @@ import {
 import {
   ProviderIdentificationError,
   identifyWithProvider,
+  verifyProviderConnection,
 } from "@/lib/provider-identification";
 import { captureWebpageSnapshot } from "@/lib/webpage-capture";
 
@@ -494,8 +495,49 @@ function providerApiError(
     502,
     "analysis_failed",
     error.retryable
-      ? "识别服务暂时不可用，请稍后重试。"
+      ? error.status
+        ? `${error.providerLabel} 暂时不可用（HTTP ${error.status}），请稍后重试。`
+        : `${error.providerLabel} 连接失败，请检查网络与服务站点后重试。`
       : "识别服务未返回可验证的结果，请调整输入后重试。",
+  );
+}
+
+function providerConnectionApiError(error: ProviderIdentificationError): ApiRouteError {
+  if (error.status === 401 || error.status === 403) {
+    return new ApiRouteError(
+      401,
+      "provider_connection_unauthorized",
+      `${error.providerLabel} 未通过验证。请检查 API Key、账户权限，并确认国内站或国际站选择正确。`,
+    );
+  }
+  if (error.status === 429) {
+    return new ApiRouteError(
+      429,
+      "provider_connection_rate_limited",
+      `${error.providerLabel} 暂时限制了连接检查，请稍后再试。`,
+      { "retry-after": "15" },
+    );
+  }
+  if (error.status === 404) {
+    return new ApiRouteError(
+      400,
+      "provider_connection_not_supported",
+      `${error.providerLabel} 没有提供可验证的模型接口，请检查 API 地址与兼容协议。`,
+    );
+  }
+  if (error.code === "network") {
+    return new ApiRouteError(
+      502,
+      "provider_connection_failed",
+      `服务器无法连接 ${error.providerLabel}。请确认服务站点选择正确后重试。`,
+    );
+  }
+  return new ApiRouteError(
+    502,
+    "provider_connection_failed",
+    error.status
+      ? `${error.providerLabel} 连接检查失败（HTTP ${error.status}）。`
+      : `${error.providerLabel} 连接检查失败，请稍后重试。`,
   );
 }
 
@@ -505,9 +547,9 @@ export function GET(): Response {
 
 export async function POST(request: Request): Promise<Response> {
   let usingManagedKey = false;
+  let testingConnection = false;
   try {
     const body = await readJsonBody(request);
-    const context = readOptionalContext(body.context);
     const requestedProviderId = body.providerId ?? "openai";
     const requestedModel = body.model
       ?? (requestedProviderId === "openai" ? readConfiguredModel() : "");
@@ -517,6 +559,39 @@ export async function POST(request: Request): Promise<Response> {
       body.customBaseUrl,
       body.customProtocol,
     );
+
+    if (body.action === "connect") {
+      testingConnection = true;
+      assertOnlyKeys(body, [
+        "action",
+        "providerId",
+        "model",
+        "customBaseUrl",
+        "customProtocol",
+      ]);
+      const apiKey = readByokApiKey(request);
+      if (!apiKey) {
+        throw new ApiRouteError(
+          400,
+          "api_key_required",
+          "请先填写 API Key，再测试连接。",
+        );
+      }
+      if (provider.id === "custom") enforceCustomProviderRateLimit(request);
+      const connection = await verifyProviderConnection({
+        apiKey,
+        provider,
+        signal: request.signal,
+      });
+      return jsonResponse({
+        connected: true,
+        providerLabel: provider.label,
+        model: provider.model,
+        modelAvailable: connection.modelAvailable,
+      });
+    }
+
+    const context = readOptionalContext(body.context);
     let input: OpenAIIdentificationInput;
     let basis: AnalysisBasis;
     let notices: string[];
@@ -679,7 +754,9 @@ export async function POST(request: Request): Promise<Response> {
         : error instanceof AiProviderConfigError
           ? new ApiRouteError(400, error.code, error.message)
         : error instanceof ProviderIdentificationError
-          ? providerApiError(error, usingManagedKey)
+          ? testingConnection
+            ? providerConnectionApiError(error)
+            : providerApiError(error, usingManagedKey)
           : new ApiRouteError(
               500,
               "internal_error",

@@ -34,6 +34,8 @@ type AiProviderSettingsPanelProps = {
   statusMessage: string;
 };
 
+type ProviderConnectionStatus = "idle" | "testing" | "connected" | "warning" | "error";
+
 const protocolOptions: ReadonlyArray<{
   value: AiProviderProtocol;
   label: string;
@@ -48,7 +50,8 @@ const providerMarks: Record<AiProviderId, string> = {
   anthropic: "AN",
   kimi: "KM",
   "kimi-global": "KG",
-  siliconflow: "SF",
+  siliconflow: "CN",
+  "siliconflow-global": "GL",
   openrouter: "OR",
   gemini: "GM",
   xai: "X",
@@ -126,6 +129,8 @@ export function AiProviderSettingsPanel({
 }: AiProviderSettingsPanelProps) {
   const [showKey, setShowKey] = useState(false);
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<ProviderConnectionStatus>("idle");
+  const [connectionMessage, setConnectionMessage] = useState("");
   const providerTriggerRef = useRef<HTMLButtonElement>(null);
   const providerOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const preset = selection.providerId === "custom"
@@ -135,7 +140,10 @@ export function AiProviderSettingsPanel({
   const usingManagedOpenAi = managedAi
     && selection.providerId === "openai"
     && !hasApiKey;
-  const settingsBusy = disabled || status === "loading" || status === "saving";
+  const settingsBusy = disabled
+    || status === "loading"
+    || status === "saving"
+    || connectionStatus === "testing";
 
   useEffect(() => {
     providerTriggerRef.current?.focus();
@@ -166,6 +174,8 @@ export function AiProviderSettingsPanel({
     key: Key,
     value: AiProviderSelection[Key],
   ) => {
+    setConnectionStatus("idle");
+    setConnectionMessage("");
     const endpointChanged = (key === "customBaseUrl" || key === "customProtocol")
       && value !== selection[key];
     if (endpointChanged) setShowKey(false);
@@ -178,6 +188,8 @@ export function AiProviderSettingsPanel({
 
   const selectProvider = (providerId: AiProviderId) => {
     setShowKey(false);
+    setConnectionStatus("idle");
+    setConnectionMessage("");
     if (providerId === "custom") {
       onChange({
         ...selection,
@@ -232,6 +244,59 @@ export function AiProviderSettingsPanel({
     } else if (event.key === "Escape") {
       event.preventDefault();
       closeProviderMenu(true);
+    }
+  };
+
+  const testConnection = async () => {
+    if (!hasApiKey || endpointPreview.error) return;
+    setShowKey(false);
+    setConnectionStatus("testing");
+    setConnectionMessage("正在验证服务地址、API Key 与模型…");
+    try {
+      const response = await fetch("/api/identify", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-ai-api-key": selection.apiKey.trim(),
+        },
+        body: JSON.stringify({
+          action: "connect",
+          providerId: selection.providerId,
+          model: selection.model,
+          customBaseUrl: selection.customBaseUrl,
+          customProtocol: selection.customProtocol,
+        }),
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message = payload
+          && typeof payload === "object"
+          && "error" in payload
+          && payload.error
+          && typeof payload.error === "object"
+          && "message" in payload.error
+          && typeof payload.error.message === "string"
+          ? payload.error.message
+          : `连接检查失败（HTTP ${response.status}）。`;
+        throw new Error(message);
+      }
+      const modelAvailable = payload
+        && typeof payload === "object"
+        && "modelAvailable" in payload
+        ? payload.modelAvailable
+        : null;
+      if (modelAvailable === false) {
+        setConnectionStatus("warning");
+        setConnectionMessage("服务与 API Key 已连接，但当前模型不在该站点的可用模型列表中。请检查模型名称。");
+      } else {
+        setConnectionStatus("connected");
+        setConnectionMessage(modelAvailable === true
+          ? "连接成功：服务地址、API Key 与当前模型均已通过验证。"
+          : "连接成功：服务地址与 API Key 已通过验证。该服务未返回可比对的模型列表。");
+      }
+    } catch (error) {
+      setConnectionStatus("error");
+      setConnectionMessage(error instanceof Error ? error.message : "连接检查失败，请稍后重试。");
     }
   };
 
@@ -449,6 +514,15 @@ export function AiProviderSettingsPanel({
               : <strong role="alert">{endpointPreview.error || "填写地址与模型后显示"}</strong>}
           </div>
 
+          {connectionMessage && (
+            <p
+              className={`provider-connection-result provider-connection-${connectionStatus}`}
+              role={connectionStatus === "error" ? "alert" : "status"}
+            >
+              {connectionMessage}
+            </p>
+          )}
+
           <label className="provider-remember-option">
             <input
               checked={remember}
@@ -476,6 +550,14 @@ export function AiProviderSettingsPanel({
           )}
 
           <div className="provider-settings-actions">
+            <button
+              className="analyzer-secondary-action provider-connect-action"
+              disabled={settingsBusy || !hasApiKey || Boolean(endpointPreview.error)}
+              onClick={testConnection}
+              type="button"
+            >
+              {connectionStatus === "testing" ? "连接中…" : "连接"}
+            </button>
             <button
               className="analyzer-primary-action"
               disabled={settingsBusy

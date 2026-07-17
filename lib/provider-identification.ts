@@ -13,6 +13,7 @@ import {
   type OpenAIIdentificationInput,
 } from "./openai-identification";
 import {
+  providerConnectionEndpoint,
   providerEndpoint,
   type ResolvedAiProvider,
 } from "./ai-provider-config";
@@ -31,6 +32,10 @@ export interface ProviderIdentificationOptions {
 export interface ProviderIdentificationResponse {
   readonly result: IdentificationResult;
   readonly sources: readonly IdentificationSource[];
+}
+
+export interface ProviderConnectionResult {
+  readonly modelAvailable: boolean | null;
 }
 
 export type ProviderIdentificationErrorCode =
@@ -476,6 +481,83 @@ async function requestCompatibleProvider(
       ? parseAnthropicResult(body, options.allowedSlugs, options.provider.label)
       : parseOpenAIChatResult(body, options.allowedSlugs, options.provider.label),
     sources: [],
+  };
+}
+
+export async function verifyProviderConnection(options: {
+  readonly apiKey: string;
+  readonly provider: ResolvedAiProvider;
+  readonly fetchImpl?: typeof fetch;
+  readonly signal?: AbortSignal;
+}): Promise<ProviderConnectionResult> {
+  const apiKey = requireNonEmpty(options.apiKey, "apiKey", options.provider.label);
+  const headers: Record<string, string> = {};
+  if (options.provider.protocol === "anthropic-messages") {
+    headers["x-api-key"] = apiKey;
+    headers["anthropic-version"] = "2023-06-01";
+  } else {
+    headers.authorization = `Bearer ${apiKey}`;
+  }
+
+  const timeout = AbortSignal.timeout(15_000);
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, timeout])
+    : timeout;
+  let response: Response;
+  try {
+    response = await (options.fetchImpl ?? fetch)(
+      providerConnectionEndpoint(options.provider),
+      { headers, method: "GET", redirect: "error", signal },
+    );
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "network request failed";
+    throw new ProviderIdentificationError(
+      "network",
+      options.provider.label,
+      `${options.provider.label} connection check failed: ${detail}`,
+      { retryable: true },
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await readBoundedResponseBody(response);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "response read failed";
+    throw new ProviderIdentificationError(
+      "upstream",
+      options.provider.label,
+      `Could not read ${options.provider.label} connection response: ${detail}`,
+      { status: response.status, retryable: response.status >= 500 },
+    );
+  }
+  if (!response.ok) {
+    throw new ProviderIdentificationError(
+      "upstream",
+      options.provider.label,
+      readUpstreamMessage(
+        body,
+        `${options.provider.label} connection check failed with HTTP ${response.status}.`,
+      ),
+      {
+        status: response.status,
+        retryable: response.status === 408
+          || response.status === 409
+          || response.status === 429
+          || response.status >= 500,
+      },
+    );
+  }
+
+  const modelIds = isRecord(body) && Array.isArray(body.data)
+    ? body.data.flatMap((entry) => (
+        isRecord(entry) && typeof entry.id === "string" ? [entry.id] : []
+      ))
+    : null;
+  return {
+    modelAvailable: modelIds === null
+      ? null
+      : modelIds.includes(options.provider.model),
   };
 }
 

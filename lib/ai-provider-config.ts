@@ -4,6 +4,7 @@ export type AiProviderId =
   | "kimi"
   | "kimi-global"
   | "siliconflow"
+  | "siliconflow-global"
   | "openrouter"
   | "gemini"
   | "xai"
@@ -131,15 +132,27 @@ export const aiProviderPresets: readonly AiProviderPreset[] = [
   },
   {
     id: "siliconflow",
-    label: "硅基流动 SiliconFlow",
-    shortLabel: "硅基流动",
+    label: "硅基流动 · 中国站",
+    shortLabel: "硅基流动 中国站",
     baseUrl: "https://api.siliconflow.cn/v1",
-    defaultModel: "zai-org/GLM-4.5V",
+    defaultModel: "Qwen/Qwen3.6-27B",
     protocol: "openai-chat",
     vision: "model-dependent",
     webpageAnalysis: "snapshot-only",
     structuredOutput: "json-object",
-    note: "模型供应会变化，可按控制台中的视觉模型名称修改。",
+    note: "使用 cloud.siliconflow.cn 创建的 Key；国内站与国际站的 Key 不可混用。",
+  },
+  {
+    id: "siliconflow-global",
+    label: "硅基流动 · 国际站",
+    shortLabel: "硅基流动 国际站",
+    baseUrl: "https://api.siliconflow.com/v1",
+    defaultModel: "Qwen/Qwen3.6-27B",
+    protocol: "openai-chat",
+    vision: "model-dependent",
+    webpageAnalysis: "snapshot-only",
+    structuredOutput: "json-object",
+    note: "使用 cloud.siliconflow.com 创建的 Key；请确认账户与 API 站点一致。",
   },
   {
     id: "openrouter",
@@ -402,4 +415,13 @@ export function providerEndpoint(provider: ResolvedAiProvider): string {
       ? "/messages"
       : "/chat/completions";
   return `${provider.baseUrl.replace(/\/$/, "")}${suffix}`;
+}
+
+export function providerConnectionEndpoint(provider: ResolvedAiProvider): string {
+  const baseUrl = provider.baseUrl.replace(/\/$/, "");
+  if (provider.id === "openrouter") return `${baseUrl}/key`;
+  if (provider.id === "siliconflow" || provider.id === "siliconflow-global") {
+    return `${baseUrl}/models?type=text&sub_type=chat`;
+  }
+  return `${baseUrl}/models`;
 }
