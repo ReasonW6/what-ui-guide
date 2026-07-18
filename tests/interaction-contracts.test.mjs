@@ -196,8 +196,9 @@ test("audited demos expose complete content and interaction behavior", async () 
   assert.match(drawerKeyboard, /event\.shiftKey \? last : first/);
 
   const anchor = source.slice(source.indexOf('case "anchor-navigation"'), source.indexOf('case "split-view"'));
-  assert.match(anchor, /href=\{`#\$\{id\}`\}/);
-  assert.match(anchor, /id=\{`demo-anchor-\$\{density\}-\$\{index\}`\}/);
+  assert.match(anchor, /href=\{`#\$\{sectionId\}`\}/);
+  assert.match(source, /const anchorId = \(index: number\) => id\(`anchor-\$\{density\}-\$\{index\}`\)/);
+  assert.match(anchor, /id=\{anchorId\(index\)\}/);
   assert.match(anchor, /anchorContentRef\.current\.scrollTo/);
   assert.match(anchor, /onScroll=/);
 
@@ -243,6 +244,15 @@ test("audited demos expose complete content and interaction behavior", async () 
   assert.match(parallax, /scrollTop \/ maxScroll/);
   assert.doesNotMatch(parallax, /type="range"/);
   assert.match(css, /prefers-reduced-motion:[\s\S]*?\.demo-parallax \.demo-orb,[\s\S]*?transform: none !important;/);
+});
+
+test("each demo stage scopes interactive ids to its React instance", async () => {
+  const source = await readFile(demoUrl, "utf8");
+  assert.match(source, /const instanceId = `demo-\$\{useId\(\)\.replace\(\/:\/g, ""\)\}`/);
+  assert.match(source, /<DemoIdContext\.Provider value=\{instanceId\}>/);
+  assert.match(source, /const id = useDemoId\(\)/);
+  assert.doesNotMatch(source, /aria-(?:controls|describedby|labelledby|activedescendant)="[^"]+"/);
+  assert.doesNotMatch(source, /id="(?:navigation-drawer|command-|url-hint|dialog-title|alert-title|tooltip-content|truncated-copy)/);
 });
 
 test("accordion always shows three single-open semantic headings", async () => {

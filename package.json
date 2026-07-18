@@ -9,15 +9,13 @@
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
-    "start": "node scripts/start-production.mjs",
+    "start": "npm run build && node scripts/start-production.mjs",
     "typecheck": "tsc --noEmit --incremental false",
-    "test": "npm run typecheck && node --test tests/catalog.test.mjs tests/interaction-contracts.test.mjs tests/identification.test.mjs tests/identification-ui.test.mjs tests/provider-identification.test.mjs tests/credential-vault.test.mjs && npm run build && node scripts/run-production-tests.mjs",
+    "test": "npm run typecheck && node scripts/run-unit-tests.mjs && npm run build && node scripts/run-production-tests.mjs && playwright test",
     "test:browser": "npm run build && playwright test",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern work --ignore-pattern outputs",
-    "db:generate": "drizzle-kit generate"
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern work --ignore-pattern outputs"
   },
   "dependencies": {
-    "drizzle-orm": "0.45.2",
     "next": "16.2.6",
     "react": "19.2.6",
     "react-dom": "19.2.6"
@@ -32,7 +30,6 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
-    "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
     "react-server-dom-webpack": "19.2.6",

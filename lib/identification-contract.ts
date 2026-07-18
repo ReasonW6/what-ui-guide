@@ -1,4 +1,6 @@
 export const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
+export const MAX_SCREENSHOT_SIDE = 8_192;
+export const MAX_SCREENSHOT_PIXELS = 16_000_000;
 export const MAX_WEBPAGE_URL_LENGTH = 2048;
 
 export const screenshotMediaTypes = [
@@ -17,6 +19,7 @@ export interface IdentificationCandidate {
   readonly confidence: IdentificationConfidence;
   readonly evidence: readonly string[];
   readonly distinction: string;
+  readonly implementation: IdentificationImplementation;
 }
 
 export interface IdentificationImplementation {
@@ -31,7 +34,6 @@ export interface IdentificationResult {
   readonly summary: string;
   readonly candidates: readonly IdentificationCandidate[];
   readonly uncertainties: readonly string[];
-  readonly implementation: IdentificationImplementation;
   readonly followUpQuestion: string | null;
 }
 
@@ -127,8 +129,7 @@ function uniqueAllowedSlugs(allowedSlugs: readonly string[]): string[] {
   return normalized;
 }
 
-function hasImageSignature(mediaType: ScreenshotMediaType, binary: string): boolean {
-  const bytes = [...binary].map((character) => character.charCodeAt(0));
+function hasImageSignature(mediaType: ScreenshotMediaType, bytes: Uint8Array): boolean {
   switch (mediaType) {
     case "image/png":
       return [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
@@ -136,10 +137,151 @@ function hasImageSignature(mediaType: ScreenshotMediaType, binary: string): bool
     case "image/jpeg":
       return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
     case "image/webp":
-      return binary.startsWith("RIFF") && binary.slice(8, 12) === "WEBP";
+      return readAscii(bytes, 0, 4) === "RIFF" && readAscii(bytes, 8, 4) === "WEBP";
     case "image/gif":
-      return binary.startsWith("GIF87a") || binary.startsWith("GIF89a");
+      return readAscii(bytes, 0, 6) === "GIF87a" || readAscii(bytes, 0, 6) === "GIF89a";
   }
+}
+
+interface ScreenshotDimensions {
+  readonly width: number;
+  readonly height: number;
+}
+
+function readAscii(bytes: Uint8Array, offset: number, length: number): string {
+  return String.fromCharCode(...bytes.slice(offset, offset + length));
+}
+
+function readUint16BigEndian(bytes: Uint8Array, offset: number): number {
+  return bytes[offset] * 0x100 + bytes[offset + 1];
+}
+
+function readUint16LittleEndian(bytes: Uint8Array, offset: number): number {
+  return bytes[offset] + bytes[offset + 1] * 0x100;
+}
+
+function readUint24LittleEndian(bytes: Uint8Array, offset: number): number {
+  return bytes[offset] + bytes[offset + 1] * 0x100 + bytes[offset + 2] * 0x1_0000;
+}
+
+function readUint32BigEndian(bytes: Uint8Array, offset: number): number {
+  return bytes[offset] * 0x1_000000
+    + bytes[offset + 1] * 0x1_0000
+    + bytes[offset + 2] * 0x100
+    + bytes[offset + 3];
+}
+
+function readUint32LittleEndian(bytes: Uint8Array, offset: number): number {
+  return bytes[offset]
+    + bytes[offset + 1] * 0x100
+    + bytes[offset + 2] * 0x1_0000
+    + bytes[offset + 3] * 0x1_000000;
+}
+
+function inspectPngDimensions(bytes: Uint8Array): ScreenshotDimensions | null {
+  if (
+    bytes.length < 24
+    || readUint32BigEndian(bytes, 8) !== 13
+    || readAscii(bytes, 12, 4) !== "IHDR"
+  ) {
+    return null;
+  }
+  const width = readUint32BigEndian(bytes, 16);
+  const height = readUint32BigEndian(bytes, 20);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+const jpegStartOfFrameMarkers = new Set([
+  0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7,
+  0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
+]);
+
+function inspectJpegDimensions(bytes: Uint8Array): ScreenshotDimensions | null {
+  let offset = 2;
+  while (offset < bytes.length) {
+    if (bytes[offset] !== 0xff) return null;
+    while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
+    if (offset >= bytes.length) return null;
+
+    const marker = bytes[offset];
+    offset += 1;
+    if (marker === 0xd9 || marker === 0xda || marker === 0x00) return null;
+    if (marker === 0x01 || marker === 0xd8 || (marker >= 0xd0 && marker <= 0xd7)) {
+      continue;
+    }
+    if (offset + 2 > bytes.length) return null;
+
+    const segmentLength = readUint16BigEndian(bytes, offset);
+    if (segmentLength < 2 || offset + segmentLength > bytes.length) return null;
+    if (jpegStartOfFrameMarkers.has(marker)) {
+      if (segmentLength < 8) return null;
+      const height = readUint16BigEndian(bytes, offset + 3);
+      const width = readUint16BigEndian(bytes, offset + 5);
+      return width > 0 && height > 0 ? { width, height } : null;
+    }
+    offset += segmentLength;
+  }
+  return null;
+}
+
+function inspectWebpDimensions(bytes: Uint8Array): readonly ScreenshotDimensions[] | null {
+  if (bytes.length < 20) return null;
+  const declaredEnd = 8 + readUint32LittleEndian(bytes, 4);
+  if (declaredEnd < 20 || declaredEnd > bytes.length) return null;
+
+  const dimensions: ScreenshotDimensions[] = [];
+  let offset = 12;
+  while (offset + 8 <= declaredEnd) {
+    const format = readAscii(bytes, offset, 4);
+    const chunkLength = readUint32LittleEndian(bytes, offset + 4);
+    const dataOffset = offset + 8;
+    const chunkEnd = dataOffset + chunkLength;
+    if (chunkEnd > declaredEnd) return null;
+
+    if (format === "VP8X") {
+      if (chunkLength < 10) return null;
+      dimensions.push({
+        width: 1 + readUint24LittleEndian(bytes, dataOffset + 4),
+        height: 1 + readUint24LittleEndian(bytes, dataOffset + 7),
+      });
+    } else if (format === "VP8 ") {
+      if (
+        chunkLength < 10
+        || bytes[dataOffset + 3] !== 0x9d
+        || bytes[dataOffset + 4] !== 0x01
+        || bytes[dataOffset + 5] !== 0x2a
+      ) {
+        return null;
+      }
+      dimensions.push({
+        width: readUint16LittleEndian(bytes, dataOffset + 6) & 0x3fff,
+        height: readUint16LittleEndian(bytes, dataOffset + 8) & 0x3fff,
+      });
+    } else if (format === "VP8L") {
+      if (chunkLength < 5 || bytes[dataOffset] !== 0x2f) return null;
+      dimensions.push({
+        width: 1 + bytes[dataOffset + 1] + ((bytes[dataOffset + 2] & 0x3f) << 8),
+        height: 1
+          + ((bytes[dataOffset + 2] & 0xc0) >> 6)
+          + (bytes[dataOffset + 3] << 2)
+          + ((bytes[dataOffset + 4] & 0x0f) << 10),
+      });
+    }
+
+    offset = chunkEnd + (chunkLength % 2);
+  }
+  return dimensions.length > 0 ? dimensions : null;
+}
+
+function inspectStillScreenshotDimensions(
+  mediaType: Exclude<ScreenshotMediaType, "image/gif">,
+  bytes: Uint8Array,
+): readonly ScreenshotDimensions[] | null {
+  if (mediaType === "image/webp") return inspectWebpDimensions(bytes);
+  const dimensions = mediaType === "image/png"
+    ? inspectPngDimensions(bytes)
+    : inspectJpegDimensions(bytes);
+  return dimensions === null ? null : [dimensions];
 }
 
 function skipGifSubBlocks(bytes: Uint8Array, start: number): number | null {
@@ -154,9 +296,30 @@ function skipGifSubBlocks(bytes: Uint8Array, start: number): number | null {
   return null;
 }
 
-function countGifFrames(binary: string): number | null {
-  if (binary.length < 14) return null;
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+export function screenshotDimensionsWithinBudget(width: number, height: number): boolean {
+  return (
+    width >= 1
+    && height >= 1
+    && width <= MAX_SCREENSHOT_SIDE
+    && height <= MAX_SCREENSHOT_SIDE
+    && width * height <= MAX_SCREENSHOT_PIXELS
+  );
+}
+
+export interface GifScreenshotInspection {
+  readonly dimensionsWithinBudget: boolean;
+  readonly frameCount: number;
+}
+
+export function inspectGifScreenshot(bytes: Uint8Array): GifScreenshotInspection | null {
+  if (bytes.length < 14) return null;
+  const signature = String.fromCharCode(...bytes.slice(0, 6));
+  if (signature !== "GIF87a" && signature !== "GIF89a") return null;
+  const readUint16 = (offset: number) => bytes[offset] | (bytes[offset + 1] << 8);
+  const logicalWidth = readUint16(6);
+  const logicalHeight = readUint16(8);
+  if (logicalWidth === 0 || logicalHeight === 0) return null;
+
   let index = 13;
   const globalColorTablePacked = bytes[10];
   if ((globalColorTablePacked & 0x80) !== 0) {
@@ -164,10 +327,16 @@ function countGifFrames(binary: string): number | null {
   }
 
   let frames = 0;
+  let dimensionsWithinBudget = screenshotDimensionsWithinBudget(
+    logicalWidth,
+    logicalHeight,
+  );
   while (index < bytes.length) {
     const marker = bytes[index];
     index += 1;
-    if (marker === 0x3b) return frames;
+    if (marker === 0x3b) {
+      return { dimensionsWithinBudget, frameCount: frames };
+    }
 
     if (marker === 0x21) {
       if (index >= bytes.length) return null;
@@ -180,7 +349,13 @@ function countGifFrames(binary: string): number | null {
 
     if (marker !== 0x2c || index + 9 > bytes.length) return null;
     frames += 1;
-    if (frames > 1) return frames;
+    const frameWidth = readUint16(index + 4);
+    const frameHeight = readUint16(index + 6);
+    if (frameWidth === 0 || frameHeight === 0) return null;
+    dimensionsWithinBudget &&= screenshotDimensionsWithinBudget(
+      frameWidth,
+      frameHeight,
+    );
 
     const localColorTablePacked = bytes[index + 8];
     index += 9;
@@ -234,16 +409,20 @@ export function validateScreenshotDataUrl(
     );
   }
 
-  let signature: string;
+  let binary: string;
   try {
-    signature = atob(base64.slice(0, Math.min(24, base64.length)));
+    binary = atob(base64);
   } catch {
     throw new IdentificationValidationError(
       "invalid_screenshot",
       "Screenshot contains invalid base64 data.",
     );
   }
-  if (!hasImageSignature(mediaType, signature)) {
+  const bytes = Uint8Array.from(
+    binary,
+    (character) => character.charCodeAt(0),
+  );
+  if (!hasImageSignature(mediaType, bytes)) {
     throw new IdentificationValidationError(
       "invalid_screenshot",
       "Screenshot bytes do not match its declared media type.",
@@ -251,26 +430,39 @@ export function validateScreenshotDataUrl(
   }
 
   if (mediaType === "image/gif") {
-    let gifBinary: string;
-    try {
-      gifBinary = atob(base64);
-    } catch {
-      throw new IdentificationValidationError(
-        "invalid_screenshot",
-        "Screenshot contains invalid base64 data.",
-      );
-    }
-    const frames = countGifFrames(gifBinary);
-    if (frames === null || frames === 0) {
+    const inspection = inspectGifScreenshot(bytes);
+    if (inspection === null || inspection.frameCount === 0) {
       throw new IdentificationValidationError(
         "invalid_screenshot",
         "GIF screenshot data is incomplete or malformed.",
       );
     }
-    if (frames > 1) {
+    if (!inspection.dimensionsWithinBudget) {
+      throw new IdentificationValidationError(
+        "screenshot_too_large",
+        `GIF screenshot dimensions must not exceed ${MAX_SCREENSHOT_SIDE} px per side or ${MAX_SCREENSHOT_PIXELS} total pixels.`,
+      );
+    }
+    if (inspection.frameCount > 1) {
       throw new IdentificationValidationError(
         "invalid_screenshot",
         "Animated GIF screenshots are not supported.",
+      );
+    }
+  } else {
+    const dimensions = inspectStillScreenshotDimensions(mediaType, bytes);
+    if (dimensions === null) {
+      throw new IdentificationValidationError(
+        "invalid_screenshot",
+        "Screenshot dimensions are incomplete or malformed.",
+      );
+    }
+    if (dimensions.some(
+      (item) => !screenshotDimensionsWithinBudget(item.width, item.height),
+    )) {
+      throw new IdentificationValidationError(
+        "screenshot_too_large",
+        `Screenshot dimensions must not exceed ${MAX_SCREENSHOT_SIDE} px per side or ${MAX_SCREENSHOT_PIXELS} total pixels.`,
       );
     }
   }
@@ -378,6 +570,11 @@ export function validateIdentificationResult(
 ): IdentificationResult {
   const allowed = new Set(uniqueAllowedSlugs(allowedSlugs));
   if (!isRecord(value)) validationError("Identification result must be an object.");
+  if ("implementation" in value) {
+    validationError(
+      "Top-level implementation is not supported; each candidate must define its own implementation.",
+    );
+  }
 
   if (!(["identified", "ambiguous", "unknown"] as const).includes(
     value.status as IdentificationStatus,
@@ -410,6 +607,11 @@ export function validateIdentificationResult(
     )) {
       validationError(`candidates[${index}].confidence is invalid.`);
     }
+    if (!isRecord(candidate.implementation)) {
+      validationError(`candidates[${index}].implementation must be an object.`);
+    }
+    const implementationPath = `candidates[${index}].implementation`;
+
     return {
       slug,
       confidence: candidate.confidence as IdentificationConfidence,
@@ -422,22 +624,28 @@ export function validateIdentificationResult(
         candidate.distinction,
         `candidates[${index}].distinction`,
       ),
+      implementation: {
+        anatomy: readBoundedStringArray(
+          candidate.implementation.anatomy,
+          `${implementationPath}.anatomy`,
+        ),
+        behavior: readBoundedStringArray(
+          candidate.implementation.behavior,
+          `${implementationPath}.behavior`,
+        ),
+        styling: readBoundedStringArray(
+          candidate.implementation.styling,
+          `${implementationPath}.styling`,
+        ),
+        accessibility: readBoundedStringArray(
+          candidate.implementation.accessibility,
+          `${implementationPath}.accessibility`,
+        ),
+      },
     };
   });
 
   const uncertainties = readBoundedStringArray(value.uncertainties, "uncertainties");
-  if (!isRecord(value.implementation)) {
-    validationError("implementation must be an object.");
-  }
-  const implementation = {
-    anatomy: readBoundedStringArray(value.implementation.anatomy, "implementation.anatomy"),
-    behavior: readBoundedStringArray(value.implementation.behavior, "implementation.behavior"),
-    styling: readBoundedStringArray(value.implementation.styling, "implementation.styling"),
-    accessibility: readBoundedStringArray(
-      value.implementation.accessibility,
-      "implementation.accessibility",
-    ),
-  };
 
   let followUpQuestion: string | null;
   if (value.followUpQuestion === null) {
@@ -451,7 +659,6 @@ export function validateIdentificationResult(
     summary,
     candidates,
     uncertainties,
-    implementation,
     followUpQuestion,
   };
 }
@@ -492,22 +699,28 @@ export function createIdentificationResultJsonSchema(
               minLength: 1,
               maxLength: MAX_GUIDANCE_STRING_LENGTH,
             },
+            implementation: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                anatomy: boundedGuidanceArraySchema,
+                behavior: boundedGuidanceArraySchema,
+                styling: boundedGuidanceArraySchema,
+                accessibility: boundedGuidanceArraySchema,
+              },
+              required: ["anatomy", "behavior", "styling", "accessibility"],
+            },
           },
-          required: ["slug", "confidence", "evidence", "distinction"],
+          required: [
+            "slug",
+            "confidence",
+            "evidence",
+            "distinction",
+            "implementation",
+          ],
         },
       },
       uncertainties: boundedGuidanceArraySchema,
-      implementation: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          anatomy: boundedGuidanceArraySchema,
-          behavior: boundedGuidanceArraySchema,
-          styling: boundedGuidanceArraySchema,
-          accessibility: boundedGuidanceArraySchema,
-        },
-        required: ["anatomy", "behavior", "styling", "accessibility"],
-      },
       followUpQuestion: {
         anyOf: [
           { type: "string", minLength: 1, maxLength: MAX_GUIDANCE_STRING_LENGTH },
@@ -520,7 +733,6 @@ export function createIdentificationResultJsonSchema(
       "summary",
       "candidates",
       "uncertainties",
-      "implementation",
       "followUpQuestion",
     ],
   };

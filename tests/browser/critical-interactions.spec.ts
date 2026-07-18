@@ -1,6 +1,63 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const browserErrors = new WeakMap<Page, string[]>();
+const expectedIdentificationAbort = new WeakSet<Page>();
+
+const identificationResult = {
+  status: "identified",
+  summary: "这个界面最接近选项卡。",
+  basis: "public_web",
+  candidates: [{
+    slug: "tabs",
+    confidence: "high",
+    evidence: ["存在并列标签和单一活动面板"],
+    distinction: "它用于切换同层内容。",
+    implementation: {
+      anatomy: ["标签列表", "标签", "内容面板"],
+      behavior: ["选择标签后显示对应面板"],
+      styling: ["活动标签具有清晰状态"],
+      accessibility: ["使用 tablist、tab 与 tabpanel 语义"],
+    },
+    name: { zh: "选项卡", en: "Tabs" },
+    summary: { zh: "在同一页面区域切换同层内容。", en: "Switch peer content in place." },
+    aliases: [],
+    platforms: ["web"],
+    anatomy: ["标签列表", "内容面板"],
+    useWhen: ["同层内容需要切换"],
+    avoidWhen: [],
+    accessibility: ["支持方向键导航"],
+    aiPrompt: "实现一组可访问的选项卡。",
+    confusionGuide: null,
+    code: {
+      vanilla: [{ name: "index.html", language: "html", code: "<div role=\"tablist\"></div>" }],
+      react: [{ name: "Tabs.jsx", language: "jsx", code: "export function Tabs() { return null; }" }],
+    },
+  }],
+  uncertainties: [],
+  followUpQuestion: null,
+  notices: [],
+  sourceUrl: "https://example.com/",
+  sourcePreview: null,
+  sources: [],
+};
+
+const identificationCapabilities = {
+  acceptedImageTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+  managedAi: true,
+  maxImageBytes: 8 * 1024 * 1024,
+  visualWebpageCapture: false,
+};
+
+async function mockIdentificationApi(page: Page) {
+  await page.route("**/api/identify", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(
+        route.request().method() === "GET" ? identificationCapabilities : identificationResult,
+      ),
+    });
+  });
+}
 
 async function gotoReady(page: Page, path: string) {
   await page.goto(path);
@@ -42,6 +99,11 @@ test.beforeEach(async ({ page }) => {
   });
   page.on("pageerror", (error) => errors.push(`page: ${error.message}`));
   page.on("requestfailed", (request) => {
+    if (
+      expectedIdentificationAbort.has(page)
+      && new URL(request.url()).pathname === "/api/identify"
+      && request.failure()?.errorText.includes("ABORTED")
+    ) return;
     errors.push(`request: ${request.url()} (${request.failure()?.errorText})`);
   });
 });
@@ -53,6 +115,7 @@ test.afterEach(async ({ page }) => {
 test("production start serves every linked build asset", async ({ page, request }) => {
   const response = await page.goto("/");
   expect(response?.status()).toBe(200);
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/favicon.svg");
 
   const assetUrls = await page.locator('link[href], script[src]').evaluateAll((elements) => (
     [...new Set(elements.map((element) => (
@@ -89,7 +152,7 @@ test("dialog and drawer constrain focus and restore it on close", async ({ page 
   const drawerTrigger = drawerDemo.getByRole("button", { name: "打开导航抽屉" });
 
   await drawerTrigger.click();
-  const drawer = drawerDemo.locator("#demo-navigation-drawer");
+  const drawer = drawerDemo.getByRole("dialog", { name: "浏览" });
   await expect(drawer.getByRole("button", { name: "关闭导航抽屉" })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(drawer.getByRole("button", { name: "资源" })).toBeFocused();
@@ -122,7 +185,7 @@ test("edge overlays use the full demo viewport", async ({ page }) => {
     await gotoReady(page, "/components/navigation-drawer");
     const drawerStage = page.locator(".demo-stage--detail");
     await drawerStage.getByRole("button", { name: "打开导航抽屉" }).click();
-    const drawer = drawerStage.locator("#demo-navigation-drawer");
+    const drawer = drawerStage.getByRole("dialog", { name: "浏览" });
     await expect.poll(async () => {
       const drawerBox = await rect(drawer);
       const stageBox = await rect(drawerStage);
@@ -181,9 +244,15 @@ test("command palette shortcut opens, navigates, executes, and restores focus", 
   const dialog = demo.getByRole("dialog", { name: "快速操作" });
   const input = dialog.getByRole("combobox", { name: "搜索命令" });
   await expect(input).toBeFocused();
+  const listbox = dialog.getByRole("listbox");
+  const listboxId = await listbox.getAttribute("id");
+  expect(listboxId).toBeTruthy();
+  await expect(input).toHaveAttribute("aria-controls", listboxId!);
 
   await page.keyboard.press("ArrowDown");
-  await expect(input).toHaveAttribute("aria-activedescendant", "demo-command-1");
+  const activeOptionId = await dialog.getByRole("option", { name: "搜索组件" }).getAttribute("id");
+  expect(activeOptionId).toBeTruthy();
+  await expect(input).toHaveAttribute("aria-activedescendant", activeOptionId!);
   await page.keyboard.press("Enter");
   await expect(dialog).toBeHidden();
   await expect(demo.getByText("已执行：搜索组件")).toBeVisible();
@@ -229,9 +298,173 @@ test("tabs, tree, and data grid perform keyboard navigation", async ({ page }) =
   await expect(dialogCell).toBeFocused();
 });
 
+test("home defers card demos and loads the identification dialog on demand", async ({ page }) => {
+  await mockIdentificationApi(page);
+  await gotoReady(page, "/");
+
+  const identifyTrigger = page.getByRole("button", { name: "AI 识别", exact: true });
+  await expect(page.getByRole("dialog", { name: "AI 视觉识别" })).toHaveCount(0);
+  await expect(identifyTrigger).not.toHaveAttribute("aria-controls");
+  const placeholders = page.locator("[data-demo-placeholder]");
+  await expect.poll(() => placeholders.count()).toBeGreaterThan(0);
+  const placeholder = placeholders.last();
+  const slug = await placeholder.getAttribute("data-demo-placeholder");
+  expect(slug).toBeTruthy();
+  await expect(placeholder.getByRole("link")).toHaveAttribute("href", `/components/${slug}`);
+
+  await placeholder.scrollIntoViewIfNeeded();
+  await expect(
+    page.locator(`[data-deferred-demo="${slug}"] [data-demo-slug="${slug}"]`),
+  ).toBeVisible();
+
+  await identifyTrigger.click();
+  const identificationDialog = page.getByRole("dialog", { name: "AI 视觉识别" });
+  await expect(identificationDialog).toBeVisible();
+  await expect(identifyTrigger).toHaveAttribute("aria-controls", "identification-dialog");
+});
+
+test("results cannot hide provider settings and repeated demos keep unique ids", async ({ page }) => {
+  await mockIdentificationApi(page);
+  await gotoReady(page, "/");
+  await page.getByRole("button", { name: "AI 识别" }).click();
+  const dialog = page.getByRole("dialog", { name: "AI 视觉识别" });
+  await dialog.getByRole("tab", { name: "网页识别" }).click();
+  await dialog.getByRole("textbox", { name: "公开网页地址" }).fill("https://example.com/");
+  await dialog.getByRole("button", { name: "分析这个网页" }).click();
+  await expect(dialog.getByRole("heading", { name: "识别结果" })).toBeVisible();
+
+  await dialog.getByRole("button", { name: "API 设置" }).click();
+  await expect(dialog.getByRole("heading", { name: "配置 AI 服务" })).toBeVisible();
+
+  const duplicateIds = await page.locator("[id]").evaluateAll((elements) => {
+    const counts = new Map<string, number>();
+    for (const element of elements) counts.set(element.id, (counts.get(element.id) ?? 0) + 1);
+    return [...counts.entries()].filter(([, count]) => count > 1);
+  });
+  expect(duplicateIds).toEqual([]);
+});
+
+test("switching source mode prevents a delayed analysis from landing", async ({ page }) => {
+  let releaseResponse = () => {};
+  const responseGate = new Promise<void>((resolve) => {
+    releaseResponse = resolve;
+  });
+  await page.route("**/api/identify", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(identificationCapabilities),
+      });
+      return;
+    }
+    await responseGate;
+    try {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(identificationResult),
+      });
+    } catch {
+      // The request is expected to be gone after the mode change aborts it.
+    }
+  });
+
+  await gotoReady(page, "/");
+  await page.getByRole("button", { name: "AI 识别" }).click();
+  const dialog = page.getByRole("dialog", { name: "AI 视觉识别" });
+  await dialog.getByRole("tab", { name: "网页识别" }).click();
+  await dialog.getByRole("textbox", { name: "公开网页地址" }).fill("https://example.com/");
+  await dialog.getByRole("button", { name: "分析这个网页" }).click();
+  await expect(dialog.getByRole("status").filter({ hasText: "正在比对" })).toBeVisible();
+
+  expectedIdentificationAbort.add(page);
+  await dialog.getByRole("tab", { name: "截图识别" }).click();
+  releaseResponse();
+  await expect(dialog.getByRole("heading", { name: "识别结果" })).toHaveCount(0);
+  await page.waitForTimeout(100);
+  await expect(dialog.getByRole("heading", { name: "识别结果" })).toHaveCount(0);
+});
+
+test("oversized and malformed image headers are rejected before preview", async ({ page }) => {
+  await mockIdentificationApi(page);
+  await gotoReady(page, "/");
+  await page.getByRole("button", { name: "AI 识别" }).click();
+  const dialog = page.getByRole("dialog", { name: "AI 视觉识别" });
+  await expect(dialog.getByRole("button", { name: "识别这个界面" })).toBeEnabled();
+
+  const png = Buffer.alloc(24);
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(png);
+  png.writeUInt32BE(13, 8);
+  png.write("IHDR", 12, "ascii");
+  png.writeUInt32BE(8_193, 16);
+  png.writeUInt32BE(1, 20);
+
+  const jpeg = Buffer.alloc(21);
+  jpeg.set([0xff, 0xd8, 0xff, 0xc0]);
+  jpeg.writeUInt16BE(17, 4);
+  jpeg[6] = 8;
+  jpeg.writeUInt16BE(1, 7);
+  jpeg.writeUInt16BE(8_193, 9);
+
+  const webp = Buffer.alloc(30);
+  webp.write("RIFF", 0, "ascii");
+  webp.write("WEBP", 8, "ascii");
+  webp.write("VP8X", 12, "ascii");
+  webp[25] = 0x20;
+
+  const gif = Buffer.alloc(10);
+  gif.write("GIF89a", 0, "ascii");
+  gif.writeUInt16LE(8_193, 6);
+  gif.writeUInt16LE(1, 8);
+
+  const files = [
+    { buffer: png, mimeType: "image/png", name: "oversized.png" },
+    { buffer: jpeg, mimeType: "image/jpeg", name: "oversized.jpg" },
+    { buffer: webp, mimeType: "image/webp", name: "oversized.webp" },
+    { buffer: gif, mimeType: "image/gif", name: "oversized.gif" },
+  ];
+  for (const [index, file] of files.entries()) {
+    if (index > 0) {
+      await dialog.getByRole("tab", { name: "网页识别" }).click();
+      await dialog.getByRole("tab", { name: "截图识别" }).click();
+    }
+    await dialog.locator('input[type="file"]').setInputFiles(file);
+    await expect(dialog.getByRole("alert")).toContainText("单边不能超过 8,192 像素");
+    await expect(dialog.locator(".analyzer-image-stage img")).toHaveCount(0);
+  }
+
+  const oversizedFrameGif = Buffer.from(
+    "R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+    "base64",
+  );
+  const imageDescriptor = oversizedFrameGif.indexOf(0x2c);
+  oversizedFrameGif.writeUInt16LE(1, 6);
+  oversizedFrameGif.writeUInt16LE(1, 8);
+  oversizedFrameGif.writeUInt16LE(8_193, imageDescriptor + 5);
+  oversizedFrameGif.writeUInt16LE(1, imageDescriptor + 7);
+  await dialog.getByRole("tab", { name: "网页识别" }).click();
+  await dialog.getByRole("tab", { name: "截图识别" }).click();
+  await dialog.locator('input[type="file"]').setInputFiles({
+    buffer: oversizedFrameGif,
+    mimeType: "image/gif",
+    name: "oversized-frame.gif",
+  });
+  await expect(dialog.getByRole("alert")).toContainText("单边不能超过 8,192 像素");
+  await expect(dialog.locator(".analyzer-image-stage img")).toHaveCount(0);
+
+  await dialog.getByRole("tab", { name: "网页识别" }).click();
+  await dialog.getByRole("tab", { name: "截图识别" }).click();
+  await dialog.locator('input[type="file"]').setInputFiles({
+    buffer: Buffer.from([137, 80, 78, 71]),
+    mimeType: "image/png",
+    name: "broken.png",
+  });
+  await expect(dialog.getByRole("alert")).toContainText("无法读取截图尺寸");
+  await expect(dialog.locator(".analyzer-image-stage img")).toHaveCount(0);
+});
+
 test("home filters survive URL synchronization and reload", async ({ page }) => {
   await gotoReady(page, "/#catalog");
-  const shareImage = await page.request.get("/og-image.png");
+  const shareImage = await page.request.get("/og.png");
   expect(shareImage.ok()).toBeTruthy();
   expect(shareImage.headers()["content-type"]).toBe("image/png");
   const search = page.getByRole("searchbox", { name: "描述你看到的东西" });

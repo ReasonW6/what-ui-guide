@@ -14,9 +14,6 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
-  icons: {
-    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
-  },
   openGraph: {
     type: "website",
     locale: "zh_CN",
@@ -48,6 +45,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
+      <head>
+        <link href="/favicon.svg" rel="icon" type="image/svg+xml" />
+      </head>
       <body>{children}</body>
     </html>
   );

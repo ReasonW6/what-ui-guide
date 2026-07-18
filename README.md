@@ -139,6 +139,7 @@ AI 识别可以直接使用界面中的 BYOK 设置。部署方也可以复制 `
 | `OPENAI_API_KEY` | 部署方托管的 OpenAI Key；未设置时使用 BYOK |
 | `OPENAI_MODEL` | 托管识别模型 |
 | `BROWSER_ALLOWED_HOSTS` | 允许生成网页快照的精确主机名，不支持通配符 |
+| `CUSTOM_PROVIDER_ALLOWED_HOSTS` | 允许 Worker 代理的自定义 API 精确主机名；留空时关闭代理 |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Browser Rendering 账户 ID |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare Browser Rendering API Token |
 | `BROWSER` | Cloudflare Worker Browser Rendering binding |
@@ -151,10 +152,10 @@ AI 识别可以直接使用界面中的 BYOK 设置。部署方也可以复制 `
 | --- | --- |
 | `npm run dev` | 启动开发服务器 |
 | `npm run build` | 构建生产版本 |
-| `npm start` | 启动生产 Worker 预览 |
+| `npm start` | 重新构建并启动生产 Worker 预览 |
 | `npm run lint` | 运行 ESLint |
-| `npm test` | 类型检查、契约测试、构建和生产 HTTP 测试 |
-| `npm run test:browser` | 运行 Playwright 浏览器测试 |
+| `npm test` | 类型检查、契约测试、构建、生产 HTTP 与 Playwright 浏览器测试 |
+| `npm run test:browser` | 单独构建并运行 Playwright 浏览器测试 |
 
 首次运行浏览器测试前需要执行 `npx playwright install chromium`。
 
@@ -163,9 +164,10 @@ AI 识别可以直接使用界面中的 BYOK 设置。部署方也可以复制 `
 - 单张截图最大 8 MiB；上传后先校验文件签名，再在浏览器端裁剪。
 - URL 仅接受公开 `https://` 页面；拒绝 localhost、私网 IP、凭据 URL 和非 Web 协议。
 - 浏览器快照只允许 `BROWSER_ALLOWED_HOSTS` 中的精确主机名，避免 SSRF 和开放代理风险。
+- 自定义 API 的 Worker 代理默认关闭；部署方只有在 `CUSTOM_PROVIDER_ALLOWED_HOSTS` 中显式信任精确 HTTPS 主机名后才能启用。
 - 未配置快照时，网页分析无法看到登录态、悬停态、弹层或滚动后才出现的界面，建议改用截图。
 - 自定义上游请求限时 45 秒，响应正文上限 1 MiB。
-- Worker 的基础频率限制不是跨实例账单硬上限；公开提供托管额度时，应同时配置供应商预算、用量告警和持久化限流。
+- 生产环境使用 Cloudflare Rate Limiting binding：它可跨 isolate 生效，但按 Cloudflare 位置计数且最终一致，因此不是精确的账单硬上限；本地缺少 binding 时才退回有界的单实例限制。公开提供托管额度时，仍应配置供应商预算和用量告警。
 - 产品不提供账户、云端历史或持久化收藏；只有用户主动启用的加密凭据会保留在本机浏览器。
 
 ## 技术栈

@@ -1,11 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { filterCatalogSearchEntries } from "@/lib/catalog-search";
-import { DemoStage } from "./DemoStage";
 import { GitHubLink } from "./GitHubLink";
-import { IdentificationDialog } from "./IdentificationDialog";
+
+const DemoStage = lazy(async () => {
+  const loaded = await import("./DemoStage");
+  return { default: loaded.DemoStage };
+});
+
+const IdentificationDialog = lazy(async () => {
+  const loaded = await import("./IdentificationDialog");
+  return { default: loaded.IdentificationDialog };
+});
 
 type Bilingual = { zh: string; en: string };
 
@@ -34,6 +42,54 @@ type CatalogBrowserProps = {
 };
 
 const PAGE_SIZE = 24;
+
+function CardDemoPlaceholder({ item }: { item: CardItem }) {
+  return (
+    <section
+      aria-label={`${item.name.zh}演示尚未加载`}
+      className="demo-stage demo-stage--card"
+      data-demo-placeholder={item.slug}
+    >
+      <div className="demo-canvas">
+        <Link className="demo-unavailable" href={`/components/${item.slug}`}>
+          查看{item.name.zh}详情
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function DeferredCardDemo({ item }: { item: CardItem }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [shouldMount, setShouldMount] = useState(false);
+
+  useEffect(() => {
+    if (shouldMount || !hostRef.current) return;
+    if (!("IntersectionObserver" in window)) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      setShouldMount(true);
+      observer.disconnect();
+    }, { rootMargin: "280px 0px", threshold: 0.01 });
+    observer.observe(hostRef.current);
+    return () => observer.disconnect();
+  }, [shouldMount]);
+
+  return (
+    <div
+      data-deferred-demo={item.slug}
+      onPointerEnter={() => setShouldMount(true)}
+      onTouchStart={() => setShouldMount(true)}
+      ref={hostRef}
+    >
+      {shouldMount ? (
+        <Suspense fallback={<CardDemoPlaceholder item={item} />}>
+          <DemoStage density="card" slug={item.slug} />
+        </Suspense>
+      ) : <CardDemoPlaceholder item={item} />}
+    </div>
+  );
+}
 
 export function CatalogBrowser({
   items,
@@ -125,7 +181,7 @@ export function CatalogBrowser({
         </div>
         <nav aria-label="站点导航">
           <button
-            aria-controls="identification-dialog"
+            aria-controls={isIdentificationOpen ? "identification-dialog" : undefined}
             aria-expanded={isIdentificationOpen}
             aria-haspopup="dialog"
             onClick={() => setIdentificationOpen(true)}
@@ -246,7 +302,7 @@ export function CatalogBrowser({
             {visible.map((item) => (
               <article className="component-card" key={item.slug}>
                 <div className="preview-shell">
-                  <DemoStage slug={item.slug} density="card" />
+                  <DeferredCardDemo item={item} />
                 </div>
                 <div className="card-body">
                   <div className="card-title-row">
@@ -300,11 +356,15 @@ export function CatalogBrowser({
         <a href="#top">回到顶部 ↑</a>
       </footer>
 
-      <IdentificationDialog
-        onOpenChange={setIdentificationOpen}
-        open={isIdentificationOpen}
-        triggerRef={identifyTriggerRef}
-      />
+      {isIdentificationOpen && (
+        <Suspense fallback={null}>
+          <IdentificationDialog
+            onOpenChange={setIdentificationOpen}
+            open
+            triggerRef={identifyTriggerRef}
+          />
+        </Suspense>
+      )}
     </>
   );
 }

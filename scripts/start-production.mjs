@@ -39,15 +39,69 @@ function canConnect(host, port) {
   });
 }
 
+function previewUrl(host, port) {
+  const urlHost = host.includes(":") ? `[${host}]` : host;
+  return `http://${urlHost}:${port}`;
+}
+
+async function isHealthy(url) {
+  try {
+    const response = await fetch(url, {
+      headers: { accept: "text/html" },
+      redirect: "manual",
+      signal: AbortSignal.timeout(2_000),
+    });
+    const contentType = response.headers.get("content-type") ?? "";
+    await response.body?.cancel();
+    if (response.status !== 200 || !/^text\/html\b/i.test(contentType)) return false;
+
+    const asset = await fetch(new URL("/favicon.svg", url), {
+      headers: { accept: "image/svg+xml" },
+      redirect: "manual",
+      signal: AbortSignal.timeout(2_000),
+    });
+    const assetContentType = asset.headers.get("content-type") ?? "";
+    await asset.body?.cancel();
+    return asset.status === 200 && /^image\/svg\+xml\b/i.test(assetContentType);
+  } catch {
+    return false;
+  }
+}
+
+function waitForExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolveExit) => {
+    const finish = (exited) => {
+      clearTimeout(timeout);
+      child.off("exit", onExit);
+      child.off("error", onError);
+      resolveExit(exited);
+    };
+    const onExit = () => finish(true);
+    const onError = () => finish(false);
+    const timeout = setTimeout(() => finish(false), timeoutMs);
+    child.once("exit", onExit);
+    child.once("error", onError);
+  });
+}
+
 async function stopProcessTree(child, signal = "SIGTERM") {
-  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
+  if (!child.pid) return;
 
   if (process.platform === "win32") {
-    const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
-      stdio: "ignore",
-      windowsHide: true,
-    });
-    await once(killer, "exit");
+    if (child.exitCode === null && child.signalCode === null) {
+      const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      if (!(await waitForExit(killer, 10_000))) killer.kill();
+      if (!(await waitForExit(child, 5_000))) {
+        child.kill("SIGKILL");
+        await waitForExit(child, 2_000);
+      }
+    }
+    child.stdout?.destroy();
+    child.stderr?.destroy();
     return;
   }
 
@@ -81,6 +135,7 @@ async function main() {
     throw new Error(`Invalid port: ${port}`);
   }
   const probeHost = host === "0.0.0.0" ? "127.0.0.1" : host === "::" ? "::1" : host;
+  const healthUrl = previewUrl(probeHost, port);
   if (await canConnect(probeHost, port)) {
     throw new Error(`Port ${port} on ${host} is already in use`);
   }
@@ -140,16 +195,19 @@ async function main() {
 
   try {
     const deadline = Date.now() + 120_000;
-    while (!childError && !exitResult && Date.now() < deadline && !(await canConnect(probeHost, port))) {
+    let healthy = false;
+    while (!childError && !exitResult && Date.now() < deadline && !healthy) {
+      healthy = await isHealthy(healthUrl);
+      if (healthy) break;
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
     }
     if (childError) throw childError;
     if (exitResult) {
       throw new Error(`Wrangler exited before startup (${exitResult.code ?? exitResult.signal})`);
     }
-    if (Date.now() >= deadline) throw new Error("Timed out waiting for Wrangler");
+    if (!healthy) throw new Error(`Timed out waiting for a healthy production preview at ${healthUrl}`);
 
-    console.log(`[what-ui] Production preview ready at http://${host}:${port}`);
+    console.log(`[what-ui] Production preview ready at ${healthUrl}`);
     const { code, signal } = await exitPromise;
     if (!requestedSignal && code) process.exitCode = code;
     else if (!requestedSignal && signal && !["SIGINT", "SIGTERM"].includes(signal)) process.exitCode = 1;

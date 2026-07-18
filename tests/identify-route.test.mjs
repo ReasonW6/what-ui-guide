@@ -3,6 +3,7 @@ import test from "node:test";
 
 const baseUrl = process.env.WHAT_UI_TEST_BASE_URL;
 if (!baseUrl) throw new Error("WHAT_UI_TEST_BASE_URL is required for production HTTP tests.");
+const validPngScreenshot = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB";
 
 async function requestApi(path, init = {}) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -21,6 +22,7 @@ test("identify capability probe is private-by-default and cache-safe", async () 
   });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.match(response.headers.get("x-request-id") ?? "", /^[0-9a-f-]{36}$/i);
   const payload = await response.json();
   assert.equal(payload.managedAi, false);
   assert.equal(payload.visualWebpageCapture, false);
@@ -40,7 +42,9 @@ test("identify endpoint rejects unsupported bodies before any upstream call", as
     method: "POST",
   });
   assert.equal(response.status, 415);
-  assert.equal((await response.json()).error.code, "unsupported_media_type");
+  const payload = await response.json();
+  assert.equal(payload.error.code, "unsupported_media_type");
+  assert.equal(payload.requestId, response.headers.get("x-request-id"));
 });
 
 test("identify endpoint validates screenshot bytes and public URLs", async () => {
@@ -75,7 +79,7 @@ test("valid input without a managed or user key returns a bounded setup error", 
   const response = await requestApi("/api/identify", {
     body: JSON.stringify({
       mode: "screenshot",
-      imageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      imageDataUrl: validPngScreenshot,
     }),
     headers: { "content-type": "application/json" },
     method: "POST",
@@ -90,7 +94,7 @@ test("identify endpoint rejects unsafe custom APIs and removed providers locally
   const unsafeCustom = await requestApi("/api/identify", {
     body: JSON.stringify({
       mode: "screenshot",
-      imageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      imageDataUrl: validPngScreenshot,
       providerId: "custom",
       model: "vision-model",
       customBaseUrl: "https://127.0.0.1/v1",
@@ -105,10 +109,31 @@ test("identify endpoint rejects unsafe custom APIs and removed providers locally
   assert.equal(unsafeCustom.status, 400);
   assert.equal((await unsafeCustom.json()).error.code, "unsafe_base_url");
 
+  const untrustedCustom = await requestApi("/api/identify", {
+    body: JSON.stringify({
+      mode: "screenshot",
+      imageDataUrl: validPngScreenshot,
+      providerId: "custom",
+      model: "vision-model",
+      customBaseUrl: "https://api.vendor.com/v1",
+      customProtocol: "openai-chat",
+    }),
+    headers: {
+      "content-type": "application/json",
+      "x-ai-api-key": "test-provider-key",
+    },
+    method: "POST",
+  });
+  assert.equal(untrustedCustom.status, 403);
+  assert.equal(
+    (await untrustedCustom.json()).error.code,
+    "custom_provider_not_allowed",
+  );
+
   const removedProvider = await requestApi("/api/identify", {
     body: JSON.stringify({
       mode: "screenshot",
-      imageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      imageDataUrl: validPngScreenshot,
       providerId: "deepseek",
       model: "deepseek-v4-flash",
     }),
@@ -126,7 +151,7 @@ test("identify endpoint validates generic provider keys without assuming an sk p
   const response = await requestApi("/api/identify", {
     body: JSON.stringify({
       mode: "screenshot",
-      imageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      imageDataUrl: validPngScreenshot,
       providerId: "openai",
       model: "gpt-5.6-sol",
     }),
@@ -159,7 +184,7 @@ test("SiliconFlow China direct flow prepares and validates browser-side inferenc
     body: JSON.stringify({
       action: "prepare-direct",
       mode: "screenshot",
-      imageDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+      imageDataUrl: validPngScreenshot,
       context: "测试直连",
       providerId: "siliconflow",
       model: "Qwen/Qwen3.6-27B",
@@ -176,6 +201,7 @@ test("SiliconFlow China direct flow prepares and validates browser-side inferenc
     "https://api.siliconflow.cn/v1/chat/completions",
   );
   assert.equal(prepared.request.model, "Qwen/Qwen3.6-27B");
+  assert.equal(prepared.request.max_tokens, 4096);
 
   const finalize = await requestApi("/api/identify", {
     body: JSON.stringify({
@@ -193,14 +219,14 @@ test("SiliconFlow China direct flow prepares and validates browser-side inferenc
                 confidence: "high",
                 evidence: ["内容覆盖在页面之上"],
                 distinction: "它会阻塞背景交互。",
+                implementation: {
+                  anatomy: ["标题和内容"],
+                  behavior: ["关闭后恢复焦点"],
+                  styling: ["使用遮罩"],
+                  accessibility: ["使用语义 dialog"],
+                },
               }],
               uncertainties: [],
-              implementation: {
-                anatomy: ["标题和内容"],
-                behavior: ["关闭后恢复焦点"],
-                styling: ["使用遮罩"],
-                accessibility: ["使用语义 dialog"],
-              },
               followUpQuestion: null,
             }),
           },
@@ -213,5 +239,7 @@ test("SiliconFlow China direct flow prepares and validates browser-side inferenc
   assert.equal(finalize.status, 200);
   const result = await finalize.json();
   assert.equal(result.candidates[0].slug, "dialog");
+  assert.deepEqual(result.candidates[0].implementation.anatomy, ["标题和内容"]);
+  assert.equal(result.implementation, undefined);
   assert.match(result.notices[0], /API Key 未经过本站 Worker/);
 });

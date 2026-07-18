@@ -13,6 +13,7 @@ export const SNAPSHOT_FORMATS = [
 export interface BrowserSnapshotPayload {
   readonly url: string;
   readonly formats: typeof SNAPSHOT_FORMATS;
+  readonly allowRequestPattern: string[];
   readonly viewport: {
     readonly width: number;
     readonly height: number;
@@ -22,6 +23,7 @@ export interface BrowserSnapshotPayload {
     readonly waitUntil: "networkidle2";
   };
   readonly actionTimeout: number;
+  readonly cacheTTL: 0;
   readonly screenshotOptions: {
     readonly type: "jpeg";
     readonly quality: number;
@@ -54,6 +56,15 @@ export interface WebpageCaptureOptions {
     readonly height?: number;
   };
   readonly timeoutMs?: number;
+  readonly signal?: AbortSignal;
+}
+
+export interface WebpageCaptureDiagnostics {
+  readonly requestedHostname: string;
+  readonly requestPolicy: "same-origin-only";
+  readonly pageStatus: number | null;
+  readonly pageTitle: string | null;
+  readonly browserMsUsed: number | null;
 }
 
 export interface CapturedWebpageSnapshot {
@@ -62,6 +73,7 @@ export interface CapturedWebpageSnapshot {
   readonly markdown: string;
   readonly accessibilityTree: string;
   readonly source: "binding" | "rest";
+  readonly diagnostics: WebpageCaptureDiagnostics;
 }
 
 export type WebpageCaptureWarningCode =
@@ -83,6 +95,7 @@ export type WebpageCaptureResult =
 
 const CLOUDFLARE_API_ORIGIN = "https://api.cloudflare.com";
 const MAX_CAPTURE_TEXT_CHARS = 50_000;
+const MAX_CAPTURE_RESPONSE_BYTES = 12 * 1024 * 1024;
 const DEFAULT_WIDTH = 1_440;
 const DEFAULT_HEIGHT = 900;
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -114,6 +127,11 @@ function parseAllowedHosts(value: string | undefined): Set<string> {
   return new Set(hosts);
 }
 
+function sameOriginRequestPattern(url: string): string {
+  const origin = new URL(url).origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return `^${origin}(?:/|$)`;
+}
+
 function warning(
   code: WebpageCaptureWarningCode,
   message: string,
@@ -137,9 +155,11 @@ function makePayload(
   return {
     url,
     formats: SNAPSHOT_FORMATS,
+    allowRequestPattern: [sameOriginRequestPattern(url)],
     viewport: { width, height },
     gotoOptions: { timeout, waitUntil: "networkidle2" },
     actionTimeout: timeout,
+    cacheTTL: 0,
     screenshotOptions: {
       type: "jpeg",
       quality: 82,
@@ -149,7 +169,30 @@ function makePayload(
 }
 
 async function readBody(response: Response): Promise<unknown> {
-  const text = await response.text();
+  const declaredLength = response.headers.get("content-length");
+  if (
+    declaredLength !== null
+    && Number(declaredLength) > MAX_CAPTURE_RESPONSE_BYTES
+  ) {
+    throw new Error("Snapshot response exceeded the allowed size.");
+  }
+  if (!response.body) return null;
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let received = 0;
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > MAX_CAPTURE_RESPONSE_BYTES) {
+      await reader.cancel();
+      throw new Error("Snapshot response exceeded the allowed size.");
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  text += decoder.decode();
   if (!text) return null;
   try {
     return JSON.parse(text);
@@ -191,12 +234,14 @@ function extractSnapshot(
   value: unknown,
   url: string,
   source: CapturedWebpageSnapshot["source"],
+  browserMsUsed: number | null,
 ): CapturedWebpageSnapshot {
   if (!isRecord(value)) throw new Error("Snapshot response was not an object.");
   if (value.success === false) {
     throw new Error(errorMessage(value, "Snapshot request was unsuccessful."));
   }
   const result = isRecord(value.result) ? value.result : value;
+  const meta = isRecord(value.meta) ? value.meta : null;
   if (typeof result.screenshot !== "string" || !result.screenshot.trim()) {
     throw new Error("Snapshot response did not include a screenshot.");
   }
@@ -222,7 +267,23 @@ function extractSnapshot(
     markdown: clipText(result.markdown),
     accessibilityTree: clipText(accessibilityTree),
     source,
+    diagnostics: {
+      requestedHostname: new URL(url).hostname,
+      requestPolicy: "same-origin-only",
+      pageStatus: meta && typeof meta.status === "number" ? meta.status : null,
+      pageTitle: meta && typeof meta.title === "string"
+        ? meta.title.trim().slice(0, 300) || null
+        : null,
+      browserMsUsed,
+    },
   };
+}
+
+function readBrowserMsUsed(response: Response): number | null {
+  const header = response.headers.get("x-browser-ms-used");
+  if (header === null || !header.trim()) return null;
+  const value = Number(header);
+  return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 async function captureWithBinding(
@@ -237,9 +298,14 @@ async function captureWithBinding(
         errorMessage(body, `Browser binding failed with HTTP ${response.status}.`),
       );
     }
-    return extractSnapshot(body, payload.url, "binding");
+    return extractSnapshot(
+      body,
+      payload.url,
+      "binding",
+      readBrowserMsUsed(response),
+    );
   }
-  return extractSnapshot(response, payload.url, "binding");
+  return extractSnapshot(response, payload.url, "binding", null);
 }
 
 async function captureWithRest(
@@ -259,6 +325,8 @@ async function captureWithRest(
     () => controller.abort(),
     payload.actionTimeout + 2_000,
   );
+  const { cacheTTL, ...restPayload } = payload;
+  void cacheTTL;
   let response: Response;
   try {
     response = await (options.fetchImpl ?? fetch)(endpoint, {
@@ -267,8 +335,10 @@ async function captureWithRest(
         authorization: `Bearer ${apiToken}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
+      body: JSON.stringify(restPayload),
+      signal: options.signal
+        ? AbortSignal.any([options.signal, controller.signal])
+        : controller.signal,
     });
   } finally {
     clearTimeout(timeout);
@@ -280,7 +350,12 @@ async function captureWithRest(
       errorMessage(body, `Browser REST API failed with HTTP ${response.status}.`),
     );
   }
-  return extractSnapshot(body, payload.url, "rest");
+  return extractSnapshot(
+    body,
+    payload.url,
+    "rest",
+    readBrowserMsUsed(response),
+  );
 }
 
 export async function captureWebpageSnapshot(

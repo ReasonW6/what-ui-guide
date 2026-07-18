@@ -9,6 +9,7 @@ export interface AnalysisCandidate {
   readonly confidence: AnalysisConfidence;
   readonly evidence: readonly string[];
   readonly distinction: string;
+  readonly implementation: ContextualImplementation;
   readonly name: BilingualText;
   readonly summary: BilingualText;
   readonly aliases: readonly string[];
@@ -41,7 +42,6 @@ export interface IdentificationResponse {
   readonly candidates: readonly AnalysisCandidate[];
   readonly uncertainties: readonly string[];
   readonly followUpQuestion: string | null;
-  readonly implementation: ContextualImplementation;
   readonly notices: readonly string[];
   readonly sourceUrl: string | null;
   readonly sourcePreview: string | null;

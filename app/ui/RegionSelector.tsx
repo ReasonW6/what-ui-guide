@@ -18,6 +18,9 @@ interface RegionSelectorProps {
 
 type Point = { x: number; y: number };
 
+export const MAX_SCREENSHOT_SIDE = 8_192;
+export const MAX_SCREENSHOT_PIXELS = 16_000_000;
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
@@ -45,6 +48,188 @@ function normalizedSelection(selection: RegionSelection): RegionSelection | null
   const height = clamp(selection.height, 1, 100 - y);
   if (x === 0 && y === 0 && width === 100 && height === 100) return null;
   return { x, y, width, height };
+}
+
+function dimensionsWithinBudget(width: number, height: number): boolean {
+  return (
+    width >= 1
+    && height >= 1
+    && width <= MAX_SCREENSHOT_SIDE
+    && height <= MAX_SCREENSHOT_SIDE
+    && width * height <= MAX_SCREENSHOT_PIXELS
+  );
+}
+
+function skipGifSubBlocks(bytes: Uint8Array, start: number): number | null {
+  let index = start;
+  while (index < bytes.length) {
+    const size = bytes[index];
+    index += 1;
+    if (size === 0) return index;
+    if (index + size > bytes.length) return null;
+    index += size;
+  }
+  return null;
+}
+
+function gifFrameDimensionsWithinBudget(bytes: Uint8Array): boolean | null {
+  if (bytes.length < 14) return null;
+  const signature = String.fromCharCode(...bytes.slice(0, 6));
+  if (signature !== "GIF87a" && signature !== "GIF89a") return null;
+  const readUint16 = (offset: number) => bytes[offset] | (bytes[offset + 1] << 8);
+  let index = 13;
+  if ((bytes[10] & 0x80) !== 0) {
+    index += 3 * (2 ** ((bytes[10] & 0x07) + 1));
+  }
+
+  let frameCount = 0;
+  let withinBudget = true;
+  while (index < bytes.length) {
+    const marker = bytes[index];
+    index += 1;
+    if (marker === 0x3b) return frameCount > 0 ? withinBudget : null;
+    if (marker === 0x21) {
+      if (index >= bytes.length) return null;
+      index += 1;
+      const next = skipGifSubBlocks(bytes, index);
+      if (next === null) return null;
+      index = next;
+      continue;
+    }
+    if (marker !== 0x2c || index + 9 > bytes.length) return null;
+
+    const frameWidth = readUint16(index + 4);
+    const frameHeight = readUint16(index + 6);
+    if (frameWidth === 0 || frameHeight === 0) return null;
+    withinBudget &&= dimensionsWithinBudget(frameWidth, frameHeight);
+    frameCount += 1;
+
+    const localColorTablePacked = bytes[index + 8];
+    index += 9;
+    if ((localColorTablePacked & 0x80) !== 0) {
+      index += 3 * (2 ** ((localColorTablePacked & 0x07) + 1));
+    }
+    if (index >= bytes.length) return null;
+    index += 1;
+    const next = skipGifSubBlocks(bytes, index);
+    if (next === null) return null;
+    index = next;
+  }
+  return null;
+}
+
+function imageDimensions(bytes: Uint8Array, mediaType: string): Point | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (mediaType === "image/png" && bytes.length >= 24) {
+    const isPng = [137, 80, 78, 71, 13, 10, 26, 10]
+      .every((value, index) => bytes[index] === value);
+    if (
+      isPng
+      && view.getUint32(8) === 13
+      && String.fromCharCode(...bytes.slice(12, 16)) === "IHDR"
+    ) {
+      return { x: view.getUint32(16), y: view.getUint32(20) };
+    }
+  }
+
+  if (mediaType === "image/gif" && bytes.length >= 10) {
+    const signature = String.fromCharCode(...bytes.slice(0, 6));
+    if (signature === "GIF87a" || signature === "GIF89a") {
+      return { x: view.getUint16(6, true), y: view.getUint16(8, true) };
+    }
+  }
+
+  if (mediaType === "image/jpeg" && bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    const startOfFrameMarkers = new Set([
+      0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7,
+      0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
+    ]);
+    let offset = 2;
+    while (offset + 8 < bytes.length) {
+      if (bytes[offset] !== 0xff) {
+        offset += 1;
+        continue;
+      }
+      while (bytes[offset] === 0xff) offset += 1;
+      const marker = bytes[offset];
+      offset += 1;
+      if (marker === 0xd9 || marker === 0xda) break;
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+      if (offset + 1 >= bytes.length) break;
+      const segmentLength = view.getUint16(offset);
+      if (segmentLength < 2 || offset + segmentLength > bytes.length) break;
+      if (startOfFrameMarkers.has(marker) && segmentLength >= 7) {
+        return { x: view.getUint16(offset + 5), y: view.getUint16(offset + 3) };
+      }
+      offset += segmentLength;
+    }
+  }
+
+  if (
+    mediaType === "image/webp"
+    && bytes.length >= 21
+    && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF"
+    && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP"
+  ) {
+    const format = String.fromCharCode(...bytes.slice(12, 16));
+    if (format === "VP8X" && bytes.length >= 30) {
+      const width = 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16);
+      const height = 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16);
+      return { x: width, y: height };
+    }
+    if (
+      format === "VP8 "
+      && bytes.length >= 30
+      && bytes[23] === 0x9d
+      && bytes[24] === 0x01
+      && bytes[25] === 0x2a
+    ) {
+      return {
+        x: view.getUint16(26, true) & 0x3fff,
+        y: view.getUint16(28, true) & 0x3fff,
+      };
+    }
+    if (format === "VP8L" && bytes[20] === 0x2f && bytes.length >= 25) {
+      return {
+        x: 1 + bytes[21] + ((bytes[22] & 0x3f) << 8),
+        y: 1 + ((bytes[22] & 0xc0) >> 6) + (bytes[23] << 2) + ((bytes[24] & 0x0f) << 10),
+      };
+    }
+  }
+
+  return null;
+}
+
+export async function validateScreenshotDimensions(file: File): Promise<void> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const dimensions = imageDimensions(bytes, file.type);
+  if (!dimensions || dimensions.x < 1 || dimensions.y < 1) {
+    throw new Error("无法读取截图尺寸，请换一张完整的图片。");
+  }
+  if (!dimensionsWithinBudget(dimensions.x, dimensions.y)) {
+    throw new Error("截图尺寸过大；单边不能超过 8,192 像素，且总像素不能超过 1,600 万。");
+  }
+  if (file.type === "image/gif") {
+    const frameDimensionsWithinBudget = gifFrameDimensionsWithinBudget(bytes);
+    if (frameDimensionsWithinBudget === null) {
+      throw new Error("无法读取截图尺寸，请换一张完整的图片。");
+    }
+    if (!frameDimensionsWithinBudget) {
+      throw new Error("截图尺寸过大；单边不能超过 8,192 像素，且总像素不能超过 1,600 万。");
+    }
+  }
+}
+
+function blobDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("浏览器无法编码这张截图。"));
+    };
+    reader.onerror = () => reject(new Error("浏览器无法编码这张截图。"));
+    reader.readAsDataURL(blob);
+  });
 }
 
 export function RegionSelector({
@@ -211,5 +396,19 @@ export async function cropScreenshot(
     canvas.width,
     canvas.height,
   );
-  return canvas.toDataURL(outputMediaType, outputMediaType === "image/jpeg" ? 0.92 : 0.9);
+  try {
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (value) => value
+          ? resolve(value)
+          : reject(new Error("浏览器无法编码这张截图。")),
+        outputMediaType,
+        outputMediaType === "image/jpeg" ? 0.92 : 0.9,
+      );
+    });
+    return await blobDataUrl(blob);
+  } finally {
+    canvas.width = 1;
+    canvas.height = 1;
+  }
 }

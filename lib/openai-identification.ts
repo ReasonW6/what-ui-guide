@@ -84,9 +84,11 @@ export class OpenAIIdentificationError extends Error {
 }
 
 const MAX_CONTEXT_CHARS = 30_000;
+const MAX_CATALOG_KNOWLEDGE_CHARS = 64_000;
 const MAX_ERROR_MESSAGE_CHARS = 500;
 const MAX_UPSTREAM_RESPONSE_BYTES = 1024 * 1024;
 const UPSTREAM_TIMEOUT_MS = 45_000;
+const MAX_OUTPUT_TOKENS = 4_096;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -108,6 +110,33 @@ function clipText(value: string, maximum = MAX_CONTEXT_CHARS): string {
   return `${value.slice(0, maximum)}\n[content truncated]`;
 }
 
+function readCatalogKnowledge(value: string): string {
+  const normalized = requireNonEmpty(value, "catalogKnowledge");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(normalized);
+  } catch {
+    throw new OpenAIIdentificationError(
+      "configuration",
+      "catalogKnowledge must be a complete JSON array.",
+    );
+  }
+  if (!Array.isArray(parsed)) {
+    throw new OpenAIIdentificationError(
+      "configuration",
+      "catalogKnowledge must be a JSON array.",
+    );
+  }
+  const serialized = JSON.stringify(parsed);
+  if (serialized.length > MAX_CATALOG_KNOWLEDGE_CHARS) {
+    throw new OpenAIIdentificationError(
+      "configuration",
+      `catalogKnowledge exceeds the ${MAX_CATALOG_KNOWLEDGE_CHARS}-character budget.`,
+    );
+  }
+  return serialized;
+}
+
 function serializeContext(value: unknown): string {
   if (typeof value === "string") return clipText(value);
   try {
@@ -119,19 +148,16 @@ function serializeContext(value: unknown): string {
 
 function buildSystemInstructions(options: OpenAIIdentificationOptions): string {
   const callerInstructions = requireNonEmpty(options.instructions, "instructions");
-  const catalogKnowledge = requireNonEmpty(
-    options.catalogKnowledge,
-    "catalogKnowledge",
-  );
+  const catalogKnowledge = readCatalogKnowledge(options.catalogKnowledge);
   return [
     callerInstructions,
     "Identify the visible UI/UX pattern using only catalog slugs supplied below.",
     "Use status unknown with no candidates when evidence is insufficient or unrelated.",
     "For identified or ambiguous results, include at least one and at most three unique candidates.",
     "Explain visual evidence and how each candidate differs from close alternatives.",
-    "Return uncertainties explicitly. Give concise implementation anatomy, behavior, styling, and accessibility guidance.",
+    "Return uncertainties explicitly. Bind concise anatomy, behavior, styling, and accessibility guidance to each candidate.",
     "Do not claim interaction behavior that cannot be established from the supplied evidence; use followUpQuestion when one answer would resolve ambiguity.",
-    `Catalog knowledge:\n${clipText(catalogKnowledge, 120_000)}`,
+    `Catalog knowledge:\n${catalogKnowledge}`,
   ].join("\n\n");
 }
 
@@ -211,6 +237,7 @@ export function createOpenAIIdentificationRequest(
       ? { reasoning: { effort: "low" } }
       : {}),
     store: false,
+    max_output_tokens: MAX_OUTPUT_TOKENS,
     instructions: buildSystemInstructions(options),
     input: [{ role: "user", content }],
     text: {

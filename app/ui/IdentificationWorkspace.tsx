@@ -37,6 +37,7 @@ import {
   cropScreenshot,
   RegionSelector,
   type RegionSelection,
+  validateScreenshotDimensions,
 } from "./RegionSelector";
 import "./identification-workspace.css";
 
@@ -58,15 +59,23 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function responseError(payload: unknown, fallback: string): string {
   if (!payload || typeof payload !== "object") return fallback;
+  let resolvedMessage = fallback;
   const error = (payload as { error?: unknown }).error;
-  if (typeof error === "string" && error.trim()) return error;
-  if (error && typeof error === "object") {
+  if (typeof error === "string" && error.trim()) {
+    resolvedMessage = error;
+  } else if (error && typeof error === "object") {
     const message = (error as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim()) return message;
+    if (typeof message === "string" && message.trim()) resolvedMessage = message;
+  } else {
+    const message = (payload as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) resolvedMessage = message;
   }
-  const message = (payload as { message?: unknown }).message;
-  if (typeof message === "string" && message.trim()) return message;
-  return fallback;
+  const requestId = (payload as { requestId?: unknown }).requestId;
+  if (
+    typeof requestId !== "string"
+    || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(requestId)
+  ) return resolvedMessage;
+  return `${resolvedMessage}（请求编号：${requestId}）`;
 }
 
 function isIdentificationResponse(value: unknown): value is IdentificationResponse {
@@ -75,10 +84,17 @@ function isIdentificationResponse(value: unknown): value is IdentificationRespon
   return (
     typeof candidate.summary === "string" &&
     Array.isArray(candidate.candidates) &&
+    candidate.candidates.every((item) => {
+      if (!item || typeof item !== "object") return false;
+      const implementation = (item as { implementation?: unknown }).implementation;
+      if (!implementation || typeof implementation !== "object") return false;
+      const fields = implementation as Record<string, unknown>;
+      return ["anatomy", "behavior", "styling", "accessibility"]
+        .every((field) => Array.isArray(fields[field]));
+    }) &&
     Array.isArray(candidate.uncertainties) &&
     Array.isArray(candidate.notices) &&
-    Array.isArray(candidate.sources) &&
-    Boolean(candidate.implementation)
+    Array.isArray(candidate.sources)
   );
 }
 
@@ -161,6 +177,8 @@ export function IdentificationWorkspace() {
   const id = useId().replace(/:/g, "");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const abortRef = useRef<AbortController | null>(null);
+  const sourceRevisionRef = useRef(0);
+  const fileAcceptanceRevisionRef = useRef(0);
   const screenshotUrlRef = useRef<string | null>(null);
   const [mode, setMode] = useState<InputMode>("screenshot");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -182,6 +200,7 @@ export function IdentificationWorkspace() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<IdentificationResponse | null>(null);
   const [resultRevision, setResultRevision] = useState(0);
+  const [isAcceptingScreenshot, setIsAcceptingScreenshot] = useState(false);
 
   const isAnalyzing = phase === "analyzing";
   const isCapabilityLoading = capabilities === null;
@@ -259,15 +278,36 @@ export function IdentificationWorkspace() {
 
   useEffect(
     () => () => {
+      fileAcceptanceRevisionRef.current += 1;
       abortRef.current?.abort();
       if (screenshotUrlRef.current) URL.revokeObjectURL(screenshotUrlRef.current);
     },
     [],
   );
 
-  const selectMode = (next: InputMode) => {
-    setMode(next);
+  const readyPhase = (inputMode: InputMode): Phase => (
+    inputMode === "screenshot"
+      ? screenshotUrl ? "source-ready" : "idle"
+      : webpageUrl.trim() ? "source-ready" : "idle"
+  );
+
+  const markSourceChanged = (nextPhase: Phase) => {
+    sourceRevisionRef.current += 1;
+    abortRef.current?.abort();
+    setResult(null);
     setError("");
+    setPhase(nextPhase);
+  };
+
+  const selectMode = (next: InputMode) => {
+    if (next === mode) {
+      setError("");
+      return;
+    }
+    fileAcceptanceRevisionRef.current += 1;
+    setIsAcceptingScreenshot(false);
+    markSourceChanged(readyPhase(next));
+    setMode(next);
   };
 
   const moveTab = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
@@ -284,33 +324,52 @@ export function IdentificationWorkspace() {
   };
 
   const acceptScreenshot = async (file: File) => {
+    const acceptanceRevision = ++fileAcceptanceRevisionRef.current;
     const allowedTypes = capabilities?.acceptedImageTypes ?? ACCEPTED_IMAGE_TYPES;
     const maxBytes = capabilities?.maxImageBytes ?? MAX_IMAGE_BYTES;
     if (!allowedTypes.includes(file.type)) {
+      setIsAcceptingScreenshot(false);
       setError("请选择 PNG、JPEG、WebP 或非动画 GIF 截图。");
       setPhase("error");
       return;
     }
     if (file.size > maxBytes) {
+      setIsAcceptingScreenshot(false);
       setError(`截图不能超过 ${Math.round(maxBytes / 1024 / 1024)} MB。`);
       setPhase("error");
       return;
     }
+    markSourceChanged(screenshotUrl ? "source-ready" : "idle");
+    setIsAcceptingScreenshot(true);
+    try {
+      await validateScreenshotDimensions(file);
+    } catch (caught) {
+      if (acceptanceRevision !== fileAcceptanceRevisionRef.current) return;
+      setIsAcceptingScreenshot(false);
+      setError(caught instanceof Error ? caught.message : "无法读取截图尺寸。");
+      setPhase("error");
+      return;
+    }
+    if (acceptanceRevision !== fileAcceptanceRevisionRef.current) return;
     if (file.type === "image/gif") {
       try {
         validateScreenshotDataUrl(await readFileDataUrl(file));
       } catch {
+        if (acceptanceRevision !== fileAcceptanceRevisionRef.current) return;
+        setIsAcceptingScreenshot(false);
         setError("GIF 必须是完整的单帧图片；动画 GIF 请先导出为 PNG 或 WebP。");
         setPhase("error");
         return;
       }
     }
+    if (acceptanceRevision !== fileAcceptanceRevisionRef.current) return;
     if (screenshotUrlRef.current) URL.revokeObjectURL(screenshotUrlRef.current);
     const nextUrl = URL.createObjectURL(file);
     screenshotUrlRef.current = nextUrl;
     setScreenshotUrl(nextUrl);
     setScreenshotName(file.name || "粘贴的截图");
     setSelection(null);
+    setIsAcceptingScreenshot(false);
     setError("");
     setPhase("source-ready");
   };
@@ -323,7 +382,7 @@ export function IdentificationWorkspace() {
       );
       if (!file) return;
       event.preventDefault();
-      setMode("screenshot");
+      selectMode("screenshot");
       void acceptScreenshot(file);
     };
     window.addEventListener("paste", onPaste);
@@ -348,8 +407,28 @@ export function IdentificationWorkspace() {
     }
   };
 
+  const updateSelection = (next: RegionSelection | null) => {
+    markSourceChanged(screenshotUrl ? "source-ready" : "idle");
+    setSelection(next);
+  };
+
+  const updateWebpageUrl = (next: string) => {
+    markSourceChanged(next.trim() ? "source-ready" : "idle");
+    setWebpageUrl(next);
+  };
+
+  const updateContext = (next: string) => {
+    markSourceChanged(readyPhase(mode));
+    setContext(next);
+  };
+
   const submit = async () => {
     setError("");
+    if (isAcceptingScreenshot) {
+      setError("正在检查截图尺寸，请稍候再试。");
+      setPhase("error");
+      return;
+    }
     if (!capabilities) {
       setError("识别服务仍在初始化，请稍候再试。");
       setPhase("error");
@@ -372,8 +451,14 @@ export function IdentificationWorkspace() {
       return;
     }
 
-    let body: Record<string, string>;
+    const requestRevision = sourceRevisionRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setProviderSettingsOpen(false);
+    setPhase("analyzing");
     try {
+      let body: Record<string, string>;
       if (mode === "screenshot") {
         if (!screenshotUrl) throw new Error("请先上传、粘贴或拖入一张截图。");
         const imageDataUrl = await cropScreenshot(
@@ -381,6 +466,8 @@ export function IdentificationWorkspace() {
           selection,
           resolvedProvider.id === "xai" ? "image/jpeg" : "image/webp",
         );
+        if (sourceRevisionRef.current !== requestRevision) return;
+        if (controller.signal.aborted) throw new Error("分析已取消。");
         if (
           resolvedProvider.maxImageDataUrlChars !== undefined
           && imageDataUrl.length > resolvedProvider.maxImageDataUrlChars
@@ -408,17 +495,6 @@ export function IdentificationWorkspace() {
           customProtocol: providerSelection.customProtocol,
         };
       }
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "无法读取输入内容。");
-      setPhase("error");
-      return;
-    }
-
-    setProviderSettingsOpen(false);
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setPhase("analyzing");
-    try {
       let payload: unknown;
       if (resolvedProvider.id === "siliconflow" && body.mode === "screenshot") {
         payload = await identifyDirectlyWithSiliconFlow(
@@ -446,6 +522,11 @@ export function IdentificationWorkspace() {
           throw new Error(responseError(payload, `分析失败（${response.status}），请稍后重试。`));
         }
       }
+      if (
+        sourceRevisionRef.current !== requestRevision
+        || controller.signal.aborted
+        || abortRef.current !== controller
+      ) return;
       if (!isIdentificationResponse(payload)) {
         throw new Error("服务返回了无法识别的结果格式，请重试。");
       }
@@ -453,10 +534,14 @@ export function IdentificationWorkspace() {
       setResultRevision((revision) => revision + 1);
       setPhase("success");
     } catch (caught) {
+      if (
+        sourceRevisionRef.current !== requestRevision
+        || abortRef.current !== controller
+      ) return;
       if (controller.signal.aborted) {
-        setPhase(result ? "success" : screenshotUrl ? "source-ready" : "idle");
+        setPhase(result ? "success" : readyPhase(mode));
       } else {
-        setError(caught instanceof Error ? caught.message : "分析失败，请稍后重试。");
+        setError(caught instanceof Error ? caught.message : "无法读取输入内容。");
         setPhase("error");
       }
     } finally {
@@ -590,7 +675,7 @@ export function IdentificationWorkspace() {
                     <RegionSelector
                       disabled={isAnalyzing}
                       imageUrl={screenshotUrl}
-                      onChange={setSelection}
+                      onChange={updateSelection}
                       selection={selection}
                     />
                   </>
@@ -609,7 +694,7 @@ export function IdentificationWorkspace() {
                     />
                     <span aria-hidden="true">⌗</span>
                     <strong>上传、粘贴或拖入截图</strong>
-                    <small>PNG / JPEG / WebP / GIF，最大 8 MB</small>
+                    <small>PNG / JPEG / WebP / GIF，最大 8 MB、8,192 px、1,600 万像素</small>
                   </label>
                 )}
               </div>
@@ -625,7 +710,7 @@ export function IdentificationWorkspace() {
                     autoComplete="url"
                     disabled={isAnalyzing}
                     inputMode="url"
-                    onChange={(event) => setWebpageUrl(event.target.value)}
+                    onChange={(event) => updateWebpageUrl(event.target.value)}
                     placeholder="https://example.com/product"
                     type="url"
                     value={webpageUrl}
@@ -651,7 +736,7 @@ export function IdentificationWorkspace() {
               <textarea
                 disabled={isAnalyzing}
                 maxLength={500}
-                onChange={(event) => setContext(event.target.value)}
+                onChange={(event) => updateContext(event.target.value)}
                 placeholder="例如：点击后会从右侧滑出；这个区域可以输入并筛选选项……"
                 rows={3}
                 value={context}
@@ -672,6 +757,8 @@ export function IdentificationWorkspace() {
             <p className="analyzer-progress" role="status">
               {isAnalyzing
                 ? "正在比对视觉特征、目录术语与实现模式……"
+                : isAcceptingScreenshot
+                  ? "正在检查截图格式与像素尺寸……"
                 : isCapabilityLoading
                   ? "正在检查识别服务能力……"
                   : " "}
@@ -683,13 +770,15 @@ export function IdentificationWorkspace() {
                 </button>
               ) : (
                 <button
-                  aria-busy={isCapabilityLoading}
+                  aria-busy={isCapabilityLoading || isAcceptingScreenshot}
                   className="analyzer-primary-action"
-                  disabled={isCapabilityLoading || resolvedProvider?.vision === "unsupported"}
+                  disabled={isCapabilityLoading || isAcceptingScreenshot || resolvedProvider?.vision === "unsupported"}
                   onClick={submit}
                   type="button"
                 >
-                  {isCapabilityLoading
+                  {isAcceptingScreenshot
+                    ? "正在检查截图"
+                    : isCapabilityLoading
                     ? "正在连接识别服务"
                     : resolvedProvider?.vision === "unsupported"
                       ? "该服务商当前不可用于视觉识别"
@@ -703,7 +792,7 @@ export function IdentificationWorkspace() {
             </div>
           </div>
 
-          {!result && (providerSettingsOpen && capabilities ? (
+          {providerSettingsOpen && capabilities ? (
             <AiProviderSettingsPanel
               disabled={isAnalyzing}
               managedAi={managedAi}
@@ -717,7 +806,7 @@ export function IdentificationWorkspace() {
               status={providerStatus}
               statusMessage={providerStatusMessage}
             />
-          ) : (
+          ) : !result ? (
             <aside className="analyzer-empty-state" aria-label="识别结果说明">
               <span className="analyzer-empty-mark" aria-hidden="true">?</span>
               <h3>结果会告诉你“为什么”</h3>
@@ -727,7 +816,7 @@ export function IdentificationWorkspace() {
                 <li><span>03</span><p><strong>直接实现</strong>提供结构、交互、无障碍与可复制代码。</p></li>
               </ol>
             </aside>
-          ))}
+          ) : null}
         </div>
       </div>
 

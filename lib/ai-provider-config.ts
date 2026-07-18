@@ -210,6 +210,7 @@ const blockedHostnameSuffixes = [
   "invalid",
   "example",
   "onion",
+  "arpa",
   "nip.io",
   "sslip.io",
   "localtest.me",

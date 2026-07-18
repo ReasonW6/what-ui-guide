@@ -4,6 +4,24 @@ import { createServer } from "node:net";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
+const probeOnly = process.argv.includes("--probe-only");
+
+function waitForExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise((resolveExit) => {
+    const finish = (exited) => {
+      clearTimeout(timeout);
+      child.off("exit", onExit);
+      child.off("error", onError);
+      resolveExit(exited);
+    };
+    const onExit = () => finish(true);
+    const onError = () => finish(false);
+    const timeout = setTimeout(() => finish(false), timeoutMs);
+    child.once("exit", onExit);
+    child.once("error", onError);
+  });
+}
 
 async function reservePort() {
   const server = createServer();
@@ -21,13 +39,21 @@ async function reservePort() {
 }
 
 async function stopProcessTree(child) {
-  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
+  if (!child.pid) return;
   if (process.platform === "win32") {
-    const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
-      stdio: "ignore",
-      windowsHide: true,
-    });
-    await once(killer, "exit");
+    if (child.exitCode === null && child.signalCode === null) {
+      const killer = spawn("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      if (!(await waitForExit(killer, 10_000))) killer.kill();
+      if (!(await waitForExit(child, 5_000))) {
+        child.kill("SIGKILL");
+        await waitForExit(child, 2_000);
+      }
+    }
+    child.stdout?.destroy();
+    child.stderr?.destroy();
     return;
   }
 
@@ -82,6 +108,39 @@ function waitForServer(child) {
   });
 }
 
+async function verifyProductionSurface(baseUrl) {
+  const home = await fetch(new URL("/", baseUrl), {
+    headers: { accept: "text/html" },
+  });
+  const homeContentType = home.headers.get("content-type") ?? "";
+  if (home.status !== 200 || !/^text\/html\b/i.test(homeContentType)) {
+    throw new Error(`Production health check failed (${home.status}, ${homeContentType || "no content type"}).`);
+  }
+  for (const [name, expected] of [
+    ["content-security-policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.siliconflow.cn; worker-src 'self' blob:; frame-src 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"],
+    ["permissions-policy", "camera=(), geolocation=(), microphone=()"],
+    ["referrer-policy", "strict-origin-when-cross-origin"],
+    ["x-content-type-options", "nosniff"],
+    ["x-frame-options", "DENY"],
+  ]) {
+    if (home.headers.get(name) !== expected) {
+      throw new Error(`Production response is missing the expected ${name} header.`);
+    }
+  }
+  await home.body?.cancel();
+
+  const imageUrl = new URL("/_vinext/image", baseUrl);
+  imageUrl.searchParams.set("url", "/og.png");
+  imageUrl.searchParams.set("w", "640");
+  imageUrl.searchParams.set("q", "75");
+  const image = await fetch(imageUrl, { headers: { accept: "image/webp,image/*" } });
+  const imageContentType = image.headers.get("content-type") ?? "";
+  const imageBytes = await image.arrayBuffer();
+  if (image.status !== 200 || !/^image\//i.test(imageContentType) || imageBytes.byteLength === 0) {
+    throw new Error(`Image endpoint failed (${image.status}, ${imageContentType || "no content type"}, ${imageBytes.byteLength} bytes).`);
+  }
+}
+
 async function main() {
   const port = await reservePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -104,7 +163,11 @@ async function main() {
 
   try {
     await waitForServer(server);
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 1_000));
+    await verifyProductionSurface(baseUrl);
+    if (probeOnly) {
+      console.log("[what-ui] Production security and image probes passed.");
+      return;
+    }
     console.log("[what-ui] Production Worker is ready; running HTTP contracts.");
     const tests = spawn(
       process.execPath,

@@ -8,7 +8,7 @@ const {
 } = await loadIdentificationModules();
 
 const allowedSlugs = ["dialog", "popover"];
-const screenshot = "data:image/png;base64,iVBORw0KGgo=";
+const screenshot = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB";
 
 function makeResult() {
   return {
@@ -19,14 +19,14 @@ function makeResult() {
       confidence: "high",
       evidence: ["内容覆盖在页面之上"],
       distinction: "它会阻塞背景交互。",
+      implementation: {
+        anatomy: ["标题和内容"],
+        behavior: ["关闭后恢复焦点"],
+        styling: ["使用遮罩"],
+        accessibility: ["使用语义 dialog"],
+      },
     }],
     uncertainties: [],
-    implementation: {
-      anatomy: ["标题和内容"],
-      behavior: ["关闭后恢复焦点"],
-      styling: ["使用遮罩"],
-      accessibility: ["使用语义 dialog"],
-    },
     followUpQuestion: null,
   };
 }
@@ -63,6 +63,7 @@ test("provider presets use canonical endpoints and custom URLs are normalized sa
     "https://127.0.0.1/v1",
     "https://127.0.0.1.nip.io/v1",
     "https://169.254.169.254.sslip.io/v1",
+    "https://metadata.example.arpa/v1",
     "https://api.vendor.com:8443/v1",
     "https://user:pass@api.vendor.com/v1",
     "https://api.vendor.com/v1?token=secret",
@@ -154,6 +155,7 @@ test("OpenAI-compatible chat requests honor structured and image-shape capabilit
     options(kimi, fetch),
   );
   assert.equal(kimiRequest.response_format.type, "json_schema");
+  assert.equal(kimiRequest.max_tokens, 4096);
   assert.equal(kimiRequest.messages[1].content[1].image_url.url, screenshot);
   assert.equal(kimiRequest.temperature, 1);
 
@@ -178,9 +180,20 @@ test("OpenAI-compatible chat requests honor structured and image-shape capabilit
     ...options(xai, fetch),
     input: {
       mode: "screenshot",
-      imageDataUrl: "data:image/webp;base64,UklGRjAwMDBXRUJQ",
+      imageDataUrl: "data:image/webp;base64,UklGRhYAAABXRUJQVlA4WAoAAAAAAAAAAAAAAAAA",
     },
   }), /does not support image\/webp/);
+
+  assert.throws(
+    () => providerIdentification.createOpenAIChatIdentificationRequest({
+      ...options(kimi, fetch),
+      catalogKnowledge: JSON.stringify([{
+        slug: "dialog",
+        summary: "x".repeat(64_000),
+      }]),
+    }),
+    /catalogKnowledge exceeds/i,
+  );
 });
 
 test("compatible Chat and native Anthropic adapters validate structured results", async () => {
@@ -271,6 +284,7 @@ test("custom Responses endpoints are bounded and do not inherit OpenAI-only tool
   assert.equal(upstreamRequest.url, "https://api.vendor.com/v1/responses");
   assert.equal(upstreamRequest.init.redirect, "error");
   assert.equal(upstreamRequest.body.store, false);
+  assert.equal(upstreamRequest.body.max_output_tokens, 4096);
   assert.equal(upstreamRequest.body.reasoning, undefined);
   assert.equal(upstreamRequest.body.tools, undefined);
   assert.equal(response.result.summary, makeResult().summary);

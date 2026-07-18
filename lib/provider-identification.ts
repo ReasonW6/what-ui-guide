@@ -68,7 +68,9 @@ export class ProviderIdentificationError extends Error {
 }
 
 const MAX_CONTEXT_CHARS = 30_000;
+const MAX_CATALOG_KNOWLEDGE_CHARS = 64_000;
 const MAX_ERROR_MESSAGE_CHARS = 500;
+const MAX_OUTPUT_TOKENS = 4_096;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -92,6 +94,39 @@ function clipText(value: string, maximum = MAX_CONTEXT_CHARS): string {
     : `${value.slice(0, maximum)}\n[content truncated]`;
 }
 
+function readCatalogKnowledge(
+  value: string,
+  providerLabel: string,
+): string {
+  const normalized = requireNonEmpty(value, "catalogKnowledge", providerLabel);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(normalized);
+  } catch {
+    throw new ProviderIdentificationError(
+      "configuration",
+      providerLabel,
+      "catalogKnowledge must be a complete JSON array.",
+    );
+  }
+  if (!Array.isArray(parsed)) {
+    throw new ProviderIdentificationError(
+      "configuration",
+      providerLabel,
+      "catalogKnowledge must be a JSON array.",
+    );
+  }
+  const serialized = JSON.stringify(parsed);
+  if (serialized.length > MAX_CATALOG_KNOWLEDGE_CHARS) {
+    throw new ProviderIdentificationError(
+      "configuration",
+      providerLabel,
+      `catalogKnowledge exceeds the ${MAX_CATALOG_KNOWLEDGE_CHARS}-character budget.`,
+    );
+  }
+  return serialized;
+}
+
 function serializeContext(value: unknown): string {
   if (typeof value === "string") return clipText(value);
   try {
@@ -103,19 +138,19 @@ function serializeContext(value: unknown): string {
 
 function buildSystemInstructions(options: ProviderIdentificationOptions): string {
   const schema = createIdentificationResultJsonSchema(options.allowedSlugs);
+  const catalogKnowledge = readCatalogKnowledge(
+    options.catalogKnowledge,
+    options.provider.label,
+  );
   return [
     requireNonEmpty(options.instructions, "instructions", options.provider.label),
     "Identify the visible UI/UX pattern using only catalog slugs supplied below.",
     "Use status unknown with no candidates when evidence is insufficient or unrelated.",
     "For identified or ambiguous results, include one to three unique candidates.",
-    "Explain visible evidence and differences from close alternatives. Mark unsupported interaction claims as uncertainties.",
+    "Explain visible evidence and differences from close alternatives. Bind implementation guidance to each candidate and mark unsupported interaction claims as uncertainties.",
     "Return only one JSON object that matches the supplied JSON Schema. Do not wrap it in Markdown.",
     `JSON Schema:\n${JSON.stringify(schema)}`,
-    `Catalog knowledge:\n${clipText(requireNonEmpty(
-      options.catalogKnowledge,
-      "catalogKnowledge",
-      options.provider.label,
-    ), 120_000)}`,
+    `Catalog knowledge:\n${catalogKnowledge}`,
   ].join("\n\n");
 }
 
@@ -206,6 +241,7 @@ export function createOpenAIChatIdentificationRequest(
     : { type: "json_object" };
   return {
     model: options.provider.model,
+    max_tokens: MAX_OUTPUT_TOKENS,
     messages: [
       { role: "system", content: buildSystemInstructions(options) },
       {

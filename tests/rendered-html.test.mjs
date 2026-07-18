@@ -23,10 +23,11 @@ test("home page renders the finished bilingual catalog", async () => {
   assert.match(html, /class="catalog-grid"/);
   assert.match(html, /href="\/components\/navigation-bar"/);
   assert.match(html, /href="#main-content"/);
-  assert.match(html, /aria-controls="identification-dialog"/);
+  assert.doesNotMatch(html, /aria-controls="identification-dialog"/);
   assert.match(html, />AI 识别</);
-  assert.match(html, /id="identification-dialog"/);
-  assert.doesNotMatch(html, /class="analyzer-shell"|class="analyzer-tabs"/);
+  assert.doesNotMatch(html, /id="identification-dialog"|class="analyzer-shell"|class="analyzer-tabs"/);
+  assert.match(html, /data-demo-placeholder="navigation-bar"/);
+  assert.match(html, /href="\/components\/navigation-bar"/);
   assert.match(html, /看见组件却不知道名称/);
   assert.ok(html.indexOf('id="component-search"') < html.indexOf('id="terms"'));
   assert.ok(html.indexOf('id="terms"') < html.indexOf('id="catalog"'));
@@ -34,6 +35,8 @@ test("home page renders the finished bilingual catalog", async () => {
   assert.match(html, /aria-label="在 GitHub 查看项目（新窗口）"/);
   assert.match(html, /<header[^>]*class="site-header"[^>]*>[\s\S]*<main[^>]*id="main-content"[\s\S]*<footer[^>]*class="site-footer"/);
   assert.match(html, /<meta[^>]+name="twitter:card"[^>]+content="summary_large_image"/);
+  assert.match(html, /<link[^>]+href="\/favicon\.svg"[^>]+rel="icon"[^>]*>/);
+  assert.doesNotMatch(html, /<link[^>]+rel="icon"[^>]+href="https?:\/\//);
   assert.match(html, /https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/og\.png/);
   assert.match(html, /<link[^>]+rel="canonical"[^>]+href="https:\/\/what-ui-guide\.reasonw6\.chatgpt\.site\/"/);
   assert.match(html, /<title>AI UI\/UX 视觉词典｜这叫啥 UI？<\/title>/);

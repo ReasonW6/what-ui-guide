@@ -9,6 +9,7 @@ const settingsUrl = new URL("../app/ui/AiProviderSettings.tsx", import.meta.url)
 const vaultUrl = new URL("../lib/client/credential-vault.ts", import.meta.url);
 const providerConfigUrl = new URL("../lib/ai-provider-config.ts", import.meta.url);
 const resultUrl = new URL("../app/ui/AnalysisResults.tsx", import.meta.url);
+const regionUrl = new URL("../app/ui/RegionSelector.tsx", import.meta.url);
 const workspaceCssUrl = new URL("../app/ui/identification-workspace.css", import.meta.url);
 
 test("identification workspace exposes both input modes and accessible progress", async () => {
@@ -50,13 +51,20 @@ test("homepage preserves its original layout and opens identification in a dialo
     readFile(dialogUrl, "utf8"),
   ]);
   assert.match(source, /<IdentificationDialog/);
+  assert.match(source, /import\("\.\/IdentificationDialog"\)/);
+  assert.match(source, /isIdentificationOpen && \(/);
   assert.doesNotMatch(source, /<IdentificationWorkspace|id="identify"/);
   assert.match(source, /aria-haspopup="dialog"/);
+  assert.match(source, /aria-controls=\{isIdentificationOpen \? "identification-dialog" : undefined\}/);
   assert.match(source, /id="component-search"/);
   assert.ok(source.indexOf("id=\"component-search\"") < source.indexOf("id=\"terms\""));
   assert.ok(source.indexOf("id=\"terms\"") < source.indexOf("id=\"catalog\""));
   assert.match(source, /看见组件却不知道名称/);
   assert.match(source, /<GitHubLink/);
+  assert.match(source, /import\("\.\/DemoStage"\)/);
+  assert.match(source, /IntersectionObserver/);
+  assert.match(source, /data-demo-placeholder=/);
+  assert.match(source, /<DeferredCardDemo item=\{item\}/);
   assert.match(dialog, /<dialog/);
   assert.match(dialog, /showModal\(\)/);
   assert.match(dialog, /closeRef\.current\?\.focus\(\)/);
@@ -102,13 +110,15 @@ test("provider settings include mainstream presets and bounded custom endpoints"
   assert.match(providerConfig, /provider\.protocol === "anthropic-messages"/);
 });
 
-test("API settings replace the empty result column without expanding the input column", async () => {
+test("API settings remain available after results without expanding the input column", async () => {
   const [workspace, settings] = await Promise.all([
     readFile(workspaceUrl, "utf8"),
     readFile(settingsUrl, "utf8"),
   ]);
   assert.doesNotMatch(workspace, /analyzer-intro/);
   assert.match(workspace, /providerSettingsOpen && capabilities/);
+  assert.match(workspace, /: !result \? \(/);
+  assert.doesNotMatch(workspace, /!result && \(providerSettingsOpen/);
   assert.match(workspace, /<AiProviderSettingsPanel/);
   assert.match(workspace, /<AiProviderSettingsSummary/);
   assert.match(settings, /onOpenChange\(!open\)/);
@@ -116,11 +126,43 @@ test("API settings replace the empty result column without expanding the input c
   assert.match(settings, /providerTriggerRef\.current\?\.focus\(\)/);
 });
 
+test("source revisions prevent stale analyses and candidate implementations are guarded", async () => {
+  const source = await readFile(workspaceUrl, "utf8");
+  assert.match(source, /sourceRevisionRef = useRef\(0\)/);
+  assert.match(source, /fileAcceptanceRevisionRef = useRef\(0\)/);
+  assert.match(source, /fileAcceptanceRevisionRef\.current \+= 1/);
+  assert.match(source, /markSourceChanged\(screenshotUrl \? "source-ready" : "idle"\)/);
+  assert.match(source, /sourceRevisionRef\.current !== requestRevision/);
+  assert.match(source, /abortRef\.current !== controller/);
+  assert.match(source, /candidate\.candidates\.every/);
+  assert.match(source, /请求编号：\$\{requestId\}/);
+  assert.match(source, /\[A-Za-z0-9\]\[A-Za-z0-9\._:-\]\{0,127\}/);
+  for (const field of ["anatomy", "behavior", "styling", "accessibility"]) {
+    assert.match(source, new RegExp(`"${field}"`));
+  }
+});
+
+test("screenshot headers are budgeted before preview and crops encode asynchronously", async () => {
+  const source = await readFile(regionUrl, "utf8");
+  assert.match(source, /MAX_SCREENSHOT_SIDE = 8_192/);
+  assert.match(source, /MAX_SCREENSHOT_PIXELS = 16_000_000/);
+  for (const mediaType of ["image/png", "image/jpeg", "image/webp", "image/gif"]) {
+    assert.match(source, new RegExp(mediaType.replace("/", "\\/")));
+  }
+  assert.match(source, /await file\.arrayBuffer\(\)/);
+  assert.match(source, /gifFrameDimensionsWithinBudget\(bytes\)/);
+  assert.match(source, /readUint16\(index \+ 4\)/);
+  assert.match(source, /readUint16\(index \+ 6\)/);
+  assert.match(source, /canvas\.toBlob\(/);
+  assert.doesNotMatch(source, /canvas\.toDataURL\(/);
+});
+
 test("results contain evidence, uncertainty, implementation, code, and feedback", async () => {
   const source = await readFile(resultUrl, "utf8");
   assert.match(source, /candidate\.evidence/);
   assert.match(source, /result\.uncertainties/);
-  assert.match(source, /result\.implementation/);
+  assert.match(source, /candidate\.implementation/);
+  assert.match(source, /selected\.implementation/);
   assert.match(source, /<CodeExplorer/);
   assert.match(source, /判断准确/);
   assert.match(source, /都不是/);

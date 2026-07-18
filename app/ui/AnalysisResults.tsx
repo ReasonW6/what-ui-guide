@@ -31,17 +31,17 @@ function implementationBrief(
     `识别依据：${candidate.evidence.join("；")}`,
     candidate.distinction ? `易混区别：${candidate.distinction}` : "",
     result.followUpQuestion ? `仍需确认：${result.followUpQuestion}` : "",
-    result.implementation.anatomy.length
-      ? `建议结构：${result.implementation.anatomy.join("；")}`
+    candidate.implementation.anatomy.length
+      ? `建议结构：${candidate.implementation.anatomy.join("；")}`
       : `建议结构：${candidate.anatomy.join("；")}`,
-    result.implementation.behavior.length
-      ? `交互行为：${result.implementation.behavior.join("；")}`
+    candidate.implementation.behavior.length
+      ? `交互行为：${candidate.implementation.behavior.join("；")}`
       : "",
-    result.implementation.styling.length
-      ? `视觉实现：${result.implementation.styling.join("；")}`
+    candidate.implementation.styling.length
+      ? `视觉实现：${candidate.implementation.styling.join("；")}`
       : "",
-    result.implementation.accessibility.length
-      ? `无障碍：${result.implementation.accessibility.join("；")}`
+    candidate.implementation.accessibility.length
+      ? `无障碍：${candidate.implementation.accessibility.join("；")}`
       : `无障碍：${candidate.accessibility.join("；")}`,
     `给编程助手：${candidate.aiPrompt}`,
   ];
@@ -173,8 +173,8 @@ export function AnalysisResults({ result }: { readonly result: IdentificationRes
                   <section>
                     <h4>建议结构</h4>
                     <ul>
-                      {(result.implementation.anatomy.length
-                        ? result.implementation.anatomy
+                      {(selected.implementation.anatomy.length
+                        ? selected.implementation.anatomy
                         : selected.anatomy
                       ).map((line) => <li key={line}>{line}</li>)}
                     </ul>
@@ -182,8 +182,8 @@ export function AnalysisResults({ result }: { readonly result: IdentificationRes
                   <section>
                     <h4>交互与状态</h4>
                     <ul>
-                      {(result.implementation.behavior.length
-                        ? result.implementation.behavior
+                      {(selected.implementation.behavior.length
+                        ? selected.implementation.behavior
                         : selected.useWhen
                       ).map((line) => <li key={line}>{line}</li>)}
                     </ul>
@@ -191,8 +191,8 @@ export function AnalysisResults({ result }: { readonly result: IdentificationRes
                   <section>
                     <h4>视觉实现</h4>
                     <ul>
-                      {(result.implementation.styling.length
-                        ? result.implementation.styling
+                      {(selected.implementation.styling.length
+                        ? selected.implementation.styling
                         : [selected.summary.zh]
                       ).map((line) => <li key={line}>{line}</li>)}
                     </ul>
@@ -200,8 +200,8 @@ export function AnalysisResults({ result }: { readonly result: IdentificationRes
                   <section>
                     <h4>键盘与无障碍</h4>
                     <ul>
-                      {(result.implementation.accessibility.length
-                        ? result.implementation.accessibility
+                      {(selected.implementation.accessibility.length
+                        ? selected.implementation.accessibility
                         : selected.accessibility
                       ).map((line) => <li key={line}>{line}</li>)}
                     </ul>
