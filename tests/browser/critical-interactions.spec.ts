@@ -308,7 +308,15 @@ test("detail lab links annotations and keeps customization bidirectional", async
   const gridMarker = preview.getByRole("button", { name: "部件 3：日期网格" });
   const gridGuide = page.locator(".demo-anatomy-list").getByRole("button", { name: /日期网格/ });
 
-  await gridMarker.hover();
+  await gridMarker.scrollIntoViewIfNeeded();
+  const markerBeforeHover = await rect(gridMarker);
+  await page.mouse.move(
+    (markerBeforeHover.left + markerBeforeHover.right) / 2,
+    (markerBeforeHover.top + markerBeforeHover.bottom) / 2,
+  );
+  await page.waitForTimeout(250);
+  const markerAfterHover = await rect(gridMarker);
+  expectEdgesToMatch(markerAfterHover, markerBeforeHover, ["top", "right", "bottom", "left"]);
   await expect(gridMarker).toHaveAttribute("data-active", "true");
   await expect(gridGuide).toHaveAttribute("data-active", "true");
   await expect(preview.locator('.demo-annotation-highlight[data-active="true"]')).toHaveCount(1);
