@@ -266,7 +266,7 @@ test("accordion always shows three single-open semantic headings", async () => {
   assert.match(accordion, /className="demo-accordion-panel"/);
   assert.match(source, /setOpenAccordionIndex\(\(current\) => current === index \? null : index\)/);
   assert.doesNotMatch(accordion, /\.slice\(/);
-  assert.match(css, /\.demo-accordion-panel \{ animation: demo-accordion-reveal 170ms ease-out; \}/);
+  assert.match(css, /\.demo-accordion-panel \{ animation: demo-accordion-reveal var\(--demo-motion-fast\) ease-out; \}/);
 });
 
 test("tree expansion and ARIA grids follow their keyboard structures", async () => {
@@ -351,9 +351,45 @@ test("detail copy actions use the shared top-right icon treatment", async () => 
   assert.match(codeCss, /\.copy-code\s*\{[\s\S]*?position:\s*absolute;/);
 });
 
-test("desktop detail preview has a full-height sticky containing block", async () => {
+test("detail preview only sticks when the viewport can contain the full lab", async () => {
   const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(css, /\.detail-visual\s*\{\s*align-self:\s*stretch;/);
-  assert.match(css, /\.detail-visual-sticky\s*\{[\s\S]*?position:\s*sticky;/);
+  assert.match(css, /\.detail-visual-sticky\s*\{\s*position:\s*static;/);
+  assert.match(css, /@media \(min-width:\s*981px\) and \(min-height:\s*980px\)[\s\S]*?\.detail-visual-sticky\s*\{[\s\S]*?position:\s*sticky;/);
   assert.match(css, /@media \(max-width:\s*980px\)[\s\S]*?\.detail-visual-sticky\s*\{\s*position:\s*static;/);
+});
+
+test("detail lab links anatomy markers, explanations, and live controls", async () => {
+  const [source, config, css] = await Promise.all([
+    readFile(new URL("../app/ui/InteractiveDetail.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/ui/demo-config.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/ui/interactive-detail.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(source, /getAnnotationGuides\(slug, anatomy\)/);
+  assert.match(source, /data-demo-part="\$\{guide\.id\}"/);
+  assert.match(source, /target\.addEventListener\("pointerenter", enter\)/);
+  assert.match(source, /target\.addEventListener\("focusin", enter\)/);
+  assert.match(source, /new ResizeObserver\(scheduleMeasure\)/);
+  assert.match(source, /new MutationObserver\(scheduleMeasure\)/);
+  assert.match(source, /onSettingChange=\{updateSettingFromDemo\}/);
+  assert.match(source, /delete next\[key\]/);
+  assert.doesNotMatch(source, /fallbackTargets/);
+  assert.match(config, /function semanticSelector\(label: string\)/);
+  assert.match(config, /"date-picker": \[[\s\S]*?key: "weekStartsOn"[\s\S]*?key: "cellSize"[\s\S]*?key: "showWeekNumbers"/);
+  assert.match(config, /"before-after-slider": \[[\s\S]*?key: "compare"/);
+  assert.match(css, /\.demo-annotation-marker\[data-active="true"\]/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
+test("date picker exposes editable input, trigger, and keyboard calendar grid", async () => {
+  const source = await readFile(new URL("../app/ui/DatePickerDemo.tsx", import.meta.url), "utf8");
+  assert.equal((source.match(/data-demo-part="[123]"/g) ?? []).length, 3);
+  assert.match(source, /type="date"/);
+  assert.match(source, /aria-haspopup="dialog"/);
+  assert.match(source, /role="grid"/);
+  assert.match(source, /case "ArrowLeft"/);
+  assert.match(source, /case "PageDown"/);
+  assert.match(source, /case "Escape"/);
+  assert.match(source, /requestAnimationFrame\(\(\) => triggerRef\.current\?\.focus\(\)\)/);
 });

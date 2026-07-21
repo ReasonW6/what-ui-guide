@@ -720,8 +720,20 @@ a:focus-visible,
 }
 
 .detail-visual-sticky {
-  position: sticky;
-  top: 82px;
+  position: static;
+}
+
+@media (min-width: 981px) and (min-height: 980px) {
+.detail-visual-sticky {
+  position: static;
+}
+
+@media (min-width: 981px) and (min-height: 980px) {
+  .detail-visual-sticky {
+    position: sticky;
+    top: 82px;
+  }
+}
 }
 
 .detail-visual-heading {

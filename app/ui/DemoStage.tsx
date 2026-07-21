@@ -11,12 +11,21 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { DatePickerDemo } from "./DatePickerDemo";
+import type { DemoSettings } from "./demo-config";
 import "./demo-stage.css";
 
 export type DemoDensity = "card" | "detail";
 
+export type DemoSettingChange = <Key extends keyof DemoSettings>(
+  key: Key,
+  value: DemoSettings[Key],
+) => void;
+
 export type DemoProps = {
   density: DemoDensity;
+  onSettingChange?: DemoSettingChange;
+  settings?: DemoSettings;
 };
 
 export type DemoStageProps = DemoProps & {
@@ -128,7 +137,7 @@ function MiniIcon({ children }: { children: ReactNode }) {
   return <span className="demo-icon" aria-hidden="true">{children}</span>;
 }
 
-function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
+function NavigationDemo({ slug, density, onSettingChange, settings }: DemoProps & { slug: DemoSlug }) {
   const id = useDemoId();
   const drawerId = id("navigation-drawer");
   const drawerTitleId = id("navigation-drawer-title");
@@ -143,7 +152,8 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [page, setPage] = useState(2);
   const [step, setStep] = useState(1);
-  const [splitPosition, setSplitPosition] = useState(38);
+  const [internalSplitPosition, setSplitPosition] = useState(38);
+  const splitPosition = settings?.splitPosition ?? internalSplitPosition;
   const drawerTriggerRef = useRef<HTMLButtonElement>(null);
   const drawerCloseRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
@@ -180,10 +190,16 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     </div>
   );
 
+  const changeSplitPosition = (next: number) => {
+    const clamped = Math.round(Math.max(28, Math.min(65, next)));
+    setSplitPosition(clamped);
+    onSettingChange?.("splitPosition", clamped);
+  };
+
   const updateSplitFromPointer = (handle: HTMLElement, clientX: number) => {
     const rect = handle.parentElement?.getBoundingClientRect();
     if (!rect?.width) return;
-    setSplitPosition(Math.round(Math.max(28, Math.min(65, ((clientX - rect.left) / rect.width) * 100))));
+    changeSplitPosition(((clientX - rect.left) / rect.width) * 100);
   };
 
   const handleDrawerKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -359,7 +375,7 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
             aria-valuenow={splitPosition}
             aria-valuetext={`左侧面板 ${splitPosition}%`}
             className="demo-split-divider"
-            onDoubleClick={() => setSplitPosition(38)}
+            onDoubleClick={() => changeSplitPosition(38)}
             onKeyDown={(event) => {
               const next = event.key === "ArrowLeft" ? splitPosition - 4
                 : event.key === "ArrowRight" ? splitPosition + 4
@@ -368,7 +384,7 @@ function NavigationDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
                       : null;
               if (next === null) return;
               event.preventDefault();
-              setSplitPosition(Math.max(28, Math.min(65, next)));
+              changeSplitPosition(next);
             }}
             onPointerCancel={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}
             onPointerDown={(event) => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); updateSplitFromPointer(event.currentTarget, event.clientX); }}
@@ -714,7 +730,7 @@ function InputDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   }
 }
 
-function SelectionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
+function SelectionDemo({ slug, density, onSettingChange, settings }: DemoProps & { slug: DemoSlug }) {
   const id = useDemoId();
   const switchLabelId = id("switch-label");
   const comboListId = id("combo-list");
@@ -724,11 +740,41 @@ function SelectionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const [value, setValue] = useState(62);
   const [secondValue, setSecondValue] = useState(84);
   const [color, setColor] = useState("#0a6cff");
+  const configuredSliderValue = settings?.sliderValue;
+  const configuredRangeLow = settings?.rangeLow;
+  const configuredRangeHigh = settings?.rangeHigh;
+  const configuredPickerColor = settings?.pickerColor;
+  const sliderValue = configuredSliderValue ?? value;
+  const rangeLow = configuredRangeLow ?? value;
+  const rangeHigh = configuredRangeHigh ?? secondValue;
+  const displayedColor = configuredPickerColor ?? color;
   const [query, setQuery] = useState(density === "card" && slug === "combobox" ? "sl" : "");
   const [comboOpen, setComboOpen] = useState(density === "card" && slug === "combobox");
   const [comboIndex, setComboIndex] = useState(0);
   const options = ["自动", "Web", "Mobile"];
   const matches = ["Slider · 滑块", "Range slider · 范围滑块", "Switch · 开关"].filter((item) => item.toLowerCase().includes(query.toLowerCase()));
+
+  const changeSliderValue = (next: number) => {
+    setValue(next);
+    onSettingChange?.("sliderValue", next);
+  };
+
+  const changeRangeLow = (next: number) => {
+    const clamped = Math.min(next, rangeHigh);
+    setValue(clamped);
+    onSettingChange?.("rangeLow", clamped);
+  };
+
+  const changeRangeHigh = (next: number) => {
+    const clamped = Math.max(next, rangeLow);
+    setSecondValue(clamped);
+    onSettingChange?.("rangeHigh", clamped);
+  };
+
+  const changeColor = (next: string) => {
+    setColor(next);
+    onSettingChange?.("pickerColor", next);
+  };
 
   const chooseComboOption = (item: string) => {
     setQuery(item);
@@ -766,27 +812,28 @@ function SelectionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     case "segmented-control":
       return <div className="demo-centered"><div className="demo-segments" role="group" aria-label="视图模式">{["卡片", "列表", "紧凑"].map((item) => <button aria-pressed={choice === item} className={choice === item ? "is-active" : ""} key={item} onClick={() => setChoice(item)} type="button">{item}</button>)}</div><Status>{choice}视图</Status></div>;
     case "slider":
-      return <label className="demo-range"><span><strong>音量</strong><output>{value}%</output></span><input max="100" min="0" onChange={(event) => setValue(Number(event.target.value))} type="range" value={value} />{density === "detail" && <div className="demo-range-scale"><span>静音</span><span>最大</span></div>}</label>;
+      return <label className="demo-range"><span><strong>音量</strong><output>{sliderValue}%</output></span><input max="100" min="0" onChange={(event) => changeSliderValue(Number(event.target.value))} type="range" value={sliderValue} />{density === "detail" && <div className="demo-range-scale"><span>静音</span><span>最大</span></div>}</label>;
     case "range-slider": {
-      const low = Math.min(value, secondValue);
-      const high = Math.max(value, secondValue);
-      return <div className="demo-range"><span><strong>价格范围</strong><output>¥{low} – ¥{high}</output></span><div className="demo-dual-range" onPointerDown={(event) => { if (event.target !== event.currentTarget) return; const rect = event.currentTarget.getBoundingClientRect(); const next = Math.round(((event.clientX - rect.left) / rect.width) * 100); if (Math.abs(next - low) <= Math.abs(next - high)) setValue(Math.min(next, high)); else setSecondValue(Math.max(next, low)); }}><input aria-label="最低价格" max="100" min="0" onChange={(event) => setValue(Math.min(Number(event.target.value), secondValue))} type="range" value={low} /><input aria-label="最高价格" max="100" min="0" onChange={(event) => setSecondValue(Math.max(Number(event.target.value), value))} type="range" value={high} /></div></div>;
+      const low = Math.min(rangeLow, rangeHigh);
+      const high = Math.max(rangeLow, rangeHigh);
+      return <div className="demo-range"><span><strong>价格范围</strong><output>¥{low} – ¥{high}</output></span><div className="demo-dual-range" onPointerDown={(event) => { if (event.target !== event.currentTarget) return; const rect = event.currentTarget.getBoundingClientRect(); const next = Math.round(((event.clientX - rect.left) / rect.width) * 100); if (Math.abs(next - low) <= Math.abs(next - high)) changeRangeLow(Math.min(next, high)); else changeRangeHigh(Math.max(next, low)); }}><input aria-label="最低价格" max="100" min="0" onChange={(event) => changeRangeLow(Number(event.target.value))} type="range" value={low} /><input aria-label="最高价格" max="100" min="0" onChange={(event) => changeRangeHigh(Number(event.target.value))} type="range" value={high} /></div></div>;
     }
     case "date-picker":
-      return <label className="demo-field"><span>选择日期</span><input onChange={(event) => setChoice(event.target.value)} type="date" value={choice.match(/^\d/) ? choice : "2026-07-14"} /><small>{choice.match(/^\d/) ? choice : "2026-07-14"}</small></label>;
+      return <DatePickerDemo density={density} settings={settings} />;
     case "color-picker":
-      return <div className="demo-color-picker"><label><span className="sr-only">选择颜色</span><input onChange={(event) => setColor(event.target.value)} type="color" value={color} /></label><div><strong>{color.toUpperCase()}</strong><span className="demo-color-swatch" style={{ backgroundColor: color }} /></div>{density === "detail" && <div className="demo-color-presets">{["#0a6cff", "#af52de", "#28cd41", "#ff9500"].map((item) => <button aria-label={`使用颜色 ${item}`} key={item} onClick={() => setColor(item)} style={{ backgroundColor: item }} type="button" />)}</div>}</div>;
+      return <div className="demo-color-picker"><label><span className="sr-only">选择颜色</span><input onChange={(event) => changeColor(event.target.value)} type="color" value={displayedColor} /></label><div><strong>{displayedColor.toUpperCase()}</strong><span className="demo-color-swatch" style={{ backgroundColor: displayedColor }} /></div>{density === "detail" && <div className="demo-color-presets">{["#0a6cff", "#af52de", "#28cd41", "#ff9500"].map((item) => <button aria-label={`使用颜色 ${item}`} key={item} onClick={() => changeColor(item)} style={{ backgroundColor: item }} type="button" />)}</div>}</div>;
     default:
       return null;
   }
 }
 
-function FeedbackDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
+function FeedbackDemo({ slug, density, onSettingChange, settings }: DemoProps & { slug: DemoSlug }) {
   const id = useDemoId();
   const [visible, setVisible] = useState(
     density === "card" || !["toast", "snackbar"].includes(slug),
   );
-  const [progress, setProgress] = useState(42);
+  const [internalProgress, setProgress] = useState(42);
+  const progress = settings?.progress ?? internalProgress;
   const [text, setText] = useState("ui.example");
   const [count, setCount] = useState(3);
   const [focusTarget, setFocusTarget] = useState(0);
@@ -829,6 +876,12 @@ function FeedbackDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     setCount(nextCount);
   };
 
+  const changeProgress = (next: number) => {
+    const clamped = Math.round(Math.max(0, Math.min(100, next)));
+    setProgress(clamped);
+    onSettingChange?.("progress", clamped);
+  };
+
   const showButton = <button className="demo-primary" onClick={() => { setToastHovered(false); setToastFocusWithin(false); setVisible(true); }} ref={feedbackTriggerRef} type="button">显示提示</button>;
 
   switch (slug) {
@@ -844,7 +897,7 @@ function FeedbackDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
       return <label className={`demo-field ${invalid ? "has-error" : ""}`}><span>个人网址</span><input aria-describedby={hintId} aria-invalid={invalid} onChange={(event) => setText(event.target.value)} value={text} /><small id={hintId}>{invalid ? "请输入包含点号的域名" : "网址格式正确"}</small></label>;
     }
     case "progress-bar":
-      return <div className="demo-progress-demo"><div><strong>正在导入组件</strong><output>{progress}%</output></div><progress max="100" value={progress}>{progress}%</progress><button className="demo-secondary" onClick={() => setProgress((value) => value >= 100 ? 0 : Math.min(100, value + 14))} type="button">推进进度</button></div>;
+      return <div className="demo-progress-demo"><div><strong>正在导入组件</strong><output>{progress}%</output></div><progress max="100" value={progress}>{progress}%</progress><button className="demo-secondary" onClick={() => changeProgress(progress >= 100 ? 0 : progress + 14)} type="button">推进进度</button></div>;
     case "spinner":
       return <div className="demo-centered"><button className="demo-primary" onClick={() => setVisible((value) => !value)} type="button">{visible ? "停止加载" : "开始加载"}</button>{visible && <span className="demo-spinner" role="status"><span className="sr-only">加载中</span></span>}</div>;
     case "skeleton-screen":
@@ -858,7 +911,7 @@ function FeedbackDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
       return <div className="demo-focus-ring"><small>按 Tab 移动焦点，或点击预览</small><div aria-label="焦点环示例" role="group">{targets.map((target, index) => <button aria-pressed={focusTarget === index} className={focusTarget === index ? "is-focus-preview" : ""} key={target} onClick={() => setFocusTarget(index)} onFocus={() => setFocusTarget(index)} type="button">{target}</button>)}</div><Status>焦点：{targets[focusTarget] ?? targets[0]}</Status></div>;
     }
     case "progress-ring":
-      return <div className="demo-progress-ring-wrap"><div aria-label="导入进度" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress} aria-valuetext={`已完成 ${progress}%`} className="demo-progress-ring" role="progressbar"><svg aria-hidden="true" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" /><circle cx="22" cy="22" pathLength="100" r="18" style={{ strokeDashoffset: 100 - progress }} /></svg><output>{progress}%</output></div><button className="demo-secondary" onClick={() => setProgress((value) => value >= 100 ? 0 : Math.min(100, value + 17))} type="button">推进进度</button></div>;
+      return <div className="demo-progress-ring-wrap"><div aria-label="导入进度" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress} aria-valuetext={`已完成 ${progress}%`} className="demo-progress-ring" role="progressbar"><svg aria-hidden="true" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" /><circle cx="22" cy="22" pathLength="100" r="18" style={{ strokeDashoffset: 100 - progress }} /></svg><output>{progress}%</output></div><button className="demo-secondary" onClick={() => changeProgress(progress >= 100 ? 0 : progress + 17)} type="button">推进进度</button></div>;
     default:
       return null;
   }
@@ -1114,15 +1167,29 @@ function DataDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   }
 }
 
-function MotionDemo({ slug }: DemoProps & { slug: DemoSlug }) {
+function MotionDemo({ slug, onSettingChange, settings }: DemoProps & { slug: DemoSlug }) {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const [items, setItems] = useState(["Slider", "Dialog", "Toast"]);
   const [sortAnnouncement, setSortAnnouncement] = useState("");
   const [loaded, setLoaded] = useState(() => slug === "infinite-scroll" ? 3 : 2);
-  const [zoom, setZoom] = useState(1);
-  const [compare, setCompare] = useState(48);
+  const [internalZoom, setZoom] = useState(1);
+  const [internalCompare, setCompare] = useState(48);
+  const zoom = settings?.zoom ?? internalZoom;
+  const compare = settings?.compare ?? internalCompare;
   const snapRef = useRef<HTMLDivElement>(null);
+
+  const changeZoom = (next: number) => {
+    const clamped = Math.round(Math.max(0.7, Math.min(1.6, next)) * 100) / 100;
+    setZoom(clamped);
+    onSettingChange?.("zoom", clamped);
+  };
+
+  const changeCompare = (next: number) => {
+    const clamped = Math.round(Math.max(0, Math.min(100, next)));
+    setCompare(clamped);
+    onSettingChange?.("compare", clamped);
+  };
 
   const move = (index: number, direction: -1 | 1) => {
     const nextIndex = Math.max(0, Math.min(items.length - 1, index + direction));
@@ -1170,9 +1237,9 @@ function MotionDemo({ slug }: DemoProps & { slug: DemoSlug }) {
     case "scroll-snap":
       return <div className="demo-snap"><div aria-label="可吸附滚动的组件卡片" onKeyDown={(event) => { if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); snapTo(active + (event.key === "ArrowRight" ? 1 : -1)); } }} onScroll={(event) => { const container = event.currentTarget; const center = container.scrollLeft + container.clientWidth / 2; const cards = Array.from(container.querySelectorAll<HTMLElement>("[data-snap-index]")); const closest = cards.reduce((best, card, index) => Math.abs(card.offsetLeft + card.offsetWidth / 2 - center) < best.distance ? { index, distance: Math.abs(card.offsetLeft + card.offsetWidth / 2 - center) } : best, { index: active, distance: Number.POSITIVE_INFINITY }); setActive(closest.index); }} ref={snapRef} tabIndex={0}>{["Slider", "Dialog", "Toast"].map((item, index) => <button className={`tone-${index} ${active === index ? "is-active" : ""}`} data-snap-index={index} key={item} onClick={() => snapTo(index)} type="button"><span>0{index + 1}</span><strong>{item}</strong></button>)}</div><div className="demo-dots">{[0, 1, 2].map((item) => <button aria-label={`跳到第 ${item + 1} 项`} className={active === item ? "is-active" : ""} key={item} onClick={() => snapTo(item)} type="button" />)}</div></div>;
     case "pan-and-zoom":
-      return <div className="demo-panzoom"><div><span style={{ transform: `scale(${zoom}) translate(${active * 4}px, ${active * -2}px)` }}>UI</span></div><div role="group" aria-label="画布控制"><button aria-label="向左平移" disabled={active <= -5} onClick={() => setActive((value) => Math.max(-5, value - 1))} type="button">←</button><button aria-label="缩小" disabled={zoom <= 0.7} onClick={() => setZoom((value) => Math.max(0.7, value - 0.15))} type="button">−</button><output>{Math.round(zoom * 100)}%</output><button aria-label="放大" disabled={zoom >= 1.6} onClick={() => setZoom((value) => Math.min(1.6, value + 0.15))} type="button">＋</button><button aria-label="向右平移" disabled={active >= 5} onClick={() => setActive((value) => Math.min(5, value + 1))} type="button">→</button></div></div>;
+      return <div className="demo-panzoom"><div><span style={{ transform: `scale(${zoom}) translate(${active * 4}px, ${active * -2}px)` }}>UI</span></div><div role="group" aria-label="画布控制"><button aria-label="向左平移" disabled={active <= -5} onClick={() => setActive((value) => Math.max(-5, value - 1))} type="button">←</button><button aria-label="缩小" disabled={zoom <= 0.7} onClick={() => changeZoom(zoom - 0.15)} type="button">−</button><output>{Math.round(zoom * 100)}%</output><button aria-label="放大" disabled={zoom >= 1.6} onClick={() => changeZoom(zoom + 0.15)} type="button">＋</button><button aria-label="向右平移" disabled={active >= 5} onClick={() => setActive((value) => Math.min(5, value + 1))} type="button">→</button></div></div>;
     case "before-after-slider":
-      return <div className="demo-before-after"><div className="demo-after"><span>AFTER</span></div><div className="demo-before" style={{ width: `${compare}%` }}><span>BEFORE</span></div><label className="demo-compare-control"><span className="sr-only">调整前后对比</span><input aria-valuetext={`前景显示 ${compare}%`} max="100" min="0" onChange={(event) => setCompare(Number(event.target.value))} type="range" value={compare} /></label><span aria-hidden="true" className="demo-compare-line" style={{ left: `${compare}%` }} /><span aria-hidden="true" className="demo-compare-handle" style={{ left: `${compare}%` }}>↔</span><output>{compare}%</output></div>;
+      return <div className="demo-before-after"><div className="demo-after"><span>AFTER</span></div><div className="demo-before" style={{ width: `${compare}%` }}><span>BEFORE</span></div><label className="demo-compare-control"><span className="sr-only">调整前后对比</span><input aria-valuetext={`前景显示 ${compare}%`} max="100" min="0" onChange={(event) => changeCompare(Number(event.target.value))} type="range" value={compare} /></label><span aria-hidden="true" className="demo-compare-line" style={{ left: `${compare}%` }} /><span aria-hidden="true" className="demo-compare-handle" style={{ left: `${compare}%` }}>↔</span><output>{compare}%</output></div>;
     default:
       return null;
   }
@@ -1213,17 +1280,17 @@ const motionSlugs = new Set<DemoSlug>([
   "scroll-snap", "pan-and-zoom", "before-after-slider",
 ]);
 
-function DemoBySlug({ slug, density }: DemoStageProps) {
+function DemoBySlug({ slug, ...props }: DemoStageProps) {
   const typedSlug = slug as DemoSlug;
-  if (navigationSlugs.has(typedSlug)) return <NavigationDemo density={density} slug={typedSlug} />;
-  if (actionSlugs.has(typedSlug)) return <ActionDemo density={density} slug={typedSlug} />;
-  if (inputSlugs.has(typedSlug)) return <InputDemo density={density} slug={typedSlug} />;
-  if (selectionSlugs.has(typedSlug)) return <SelectionDemo density={density} slug={typedSlug} />;
-  if (feedbackSlugs.has(typedSlug)) return <FeedbackDemo density={density} slug={typedSlug} />;
-  if (overlaySlugs.has(typedSlug)) return <OverlayDemo density={density} slug={typedSlug} />;
-  if (contentSlugs.has(typedSlug)) return <ContentDemo density={density} slug={typedSlug} />;
-  if (dataSlugs.has(typedSlug)) return <DataDemo density={density} slug={typedSlug} />;
-  if (motionSlugs.has(typedSlug)) return <MotionDemo density={density} slug={typedSlug} />;
+  if (navigationSlugs.has(typedSlug)) return <NavigationDemo {...props} slug={typedSlug} />;
+  if (actionSlugs.has(typedSlug)) return <ActionDemo {...props} slug={typedSlug} />;
+  if (inputSlugs.has(typedSlug)) return <InputDemo {...props} slug={typedSlug} />;
+  if (selectionSlugs.has(typedSlug)) return <SelectionDemo {...props} slug={typedSlug} />;
+  if (feedbackSlugs.has(typedSlug)) return <FeedbackDemo {...props} slug={typedSlug} />;
+  if (overlaySlugs.has(typedSlug)) return <OverlayDemo {...props} slug={typedSlug} />;
+  if (contentSlugs.has(typedSlug)) return <ContentDemo {...props} slug={typedSlug} />;
+  if (dataSlugs.has(typedSlug)) return <DataDemo {...props} slug={typedSlug} />;
+  if (motionSlugs.has(typedSlug)) return <MotionDemo {...props} slug={typedSlug} />;
   return <p className="demo-unavailable">暂无演示</p>;
 }
 
@@ -1315,7 +1382,7 @@ export const demoRegistry = {
   "before-after-slider": entry("before-after-slider"),
 } satisfies Record<DemoSlug, ComponentType<DemoProps>>;
 
-export function DemoStage({ slug, density }: DemoStageProps) {
+export function DemoStage({ slug, density, onSettingChange, settings }: DemoStageProps) {
   const instanceId = `demo-${useId().replace(/:/g, "")}`;
   const Demo = demoRegistry[slug as DemoSlug];
   return (
@@ -1326,7 +1393,13 @@ export function DemoStage({ slug, density }: DemoStageProps) {
         data-demo-slug={slug}
       >
         <div className="demo-canvas">
-          {Demo ? <Demo density={density} /> : <p className="demo-unavailable">暂无演示</p>}
+          {Demo ? (
+            <Demo
+              density={density}
+              onSettingChange={onSettingChange}
+              settings={settings}
+            />
+          ) : <p className="demo-unavailable">暂无演示</p>}
         </div>
       </section>
     </DemoIdContext.Provider>

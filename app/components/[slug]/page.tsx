@@ -84,7 +84,11 @@ export default async function ComponentPage({ params }: ComponentPageProps) {
                 <p>Interactive Demo · 交互式演示</p>
                 <span>亲手试一试，所有状态只保留在当前页面。</span>
               </div>
-              <InteractiveDetail slug={item.slug} />
+              <InteractiveDetail
+                anatomy={item.anatomy}
+                name={item.name.zh}
+                slug={item.slug}
+              />
               <nav className="detail-jump-nav" aria-label="本页目录">
                 <a href="#guide">结构与使用</a>
                 <a href="#prompt">AI 提示词</a>

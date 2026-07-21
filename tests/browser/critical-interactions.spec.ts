@@ -298,6 +298,68 @@ test("tabs, tree, and data grid perform keyboard navigation", async ({ page }) =
   await expect(dialogCell).toBeFocused();
 });
 
+test("detail lab links annotations and keeps customization bidirectional", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await gotoReady(page, "/components/date-picker");
+
+  const preview = page.locator(".detail-demo-preview");
+  const markers = preview.locator(".demo-annotation-marker");
+  await expect(markers).toHaveCount(3);
+  const gridMarker = preview.getByRole("button", { name: "部件 3：日期网格" });
+  const gridGuide = page.locator(".demo-anatomy-list").getByRole("button", { name: /日期网格/ });
+
+  await gridMarker.hover();
+  await expect(gridMarker).toHaveAttribute("data-active", "true");
+  await expect(gridGuide).toHaveAttribute("data-active", "true");
+  await expect(preview.locator('.demo-annotation-highlight[data-active="true"]')).toHaveCount(1);
+
+  await gridMarker.click();
+  await page.mouse.move(2, 2);
+  await expect(gridMarker).toHaveAttribute("aria-pressed", "true");
+  await expect(gridGuide).toHaveAttribute("data-active", "true");
+
+  const customizeTab = page.locator(".detail-demo-tabs").getByRole("tab", { name: /自由定制/ });
+  await customizeTab.click();
+  const cellSize = page.getByRole("slider", { name: "日期格尺寸" });
+  await cellSize.fill("56");
+  await expect(cellSize).toHaveValue("56");
+  await expect.poll(async () => (
+    preview.locator(".date-picker-day").first().evaluate((element) => element.getBoundingClientRect().width)
+  )).toBeGreaterThanOrEqual(55);
+
+  await page.getByRole("combobox", { name: "每周起始日" }).selectOption("0");
+  await page.getByRole("switch", { name: "显示周数" }).check();
+  await expect(preview.locator(".date-picker-grid thead th").first()).toHaveText("周");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const previewBox = await rect(preview);
+  for (const marker of await markers.all()) expectContained(await rect(marker), previewBox);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await gotoReady(page, "/components/slider");
+  await page.locator(".detail-demo-tabs").getByRole("tab", { name: /自由定制/ }).click();
+  const panelValue = page.getByRole("slider", { name: "当前值" });
+  const demoValue = page.locator('.demo-stage--detail input[type="range"]');
+  await panelValue.fill("37");
+  await expect(demoValue).toHaveValue("37");
+  await demoValue.fill("73");
+  await expect(panelValue).toHaveValue("73");
+
+  await gotoReady(page, "/components/color-picker");
+  await page.locator(".detail-demo-tabs").getByRole("tab", { name: /自由定制/ }).click();
+  const colorValue = page.getByRole("textbox", { name: "当前颜色十六进制值" });
+  await colorValue.fill("#123456");
+  await page.getByRole("button", { name: "使用颜色 #af52de" }).click();
+  await expect(colorValue).toHaveValue("#af52de");
+
+  await gotoReady(page, "/components/button");
+  await expect(page.getByRole("button", { name: "部件 1：容器" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "部件 2：文字标签" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "部件 3：可选图标" })).toHaveCount(0);
+  await expect(page.locator(".demo-anatomy-list").getByRole("button", { name: /3 可选图标/ })).toBeDisabled();
+});
+
 test("home defers card demos and loads the identification dialog on demand", async ({ page }) => {
   await mockIdentificationApi(page);
   await gotoReady(page, "/");

@@ -11,6 +11,12 @@
   --demo-green: #39c793;
   --demo-red: #f06b78;
   --demo-amber: #e9ad58;
+  --demo-radius: 8px;
+  --demo-control-size: 44px;
+  --demo-motion-fast: 160ms;
+  --demo-motion-normal: 220ms;
+  --demo-motion-slow: 340ms;
+  --demo-marquee-duration: 12000ms;
   position: relative;
   isolation: isolate;
   container-type: inline-size;
@@ -79,14 +85,14 @@
 
 .demo-stage button {
   min-width: 44px;
-  min-height: 44px;
+  min-height: var(--demo-control-size);
   padding: 0 13px;
   color: inherit;
   cursor: pointer;
   border: 1px solid var(--demo-line);
-  border-radius: 8px;
+  border-radius: var(--demo-radius);
   background: var(--demo-panel);
-  transition: color 160ms ease, border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  transition: color var(--demo-motion-fast) ease, border-color var(--demo-motion-fast) ease, background var(--demo-motion-fast) ease, transform var(--demo-motion-fast) ease;
 }
 
 .demo-stage button:hover:not(:disabled) {
@@ -167,7 +173,7 @@
 }
 
 .demo-stage .demo-primary:hover:not(:disabled) {
-  background: #247cff;
+  background: color-mix(in srgb, var(--demo-blue) 82%, white);
 }
 
 .demo-stage .demo-secondary {
@@ -374,7 +380,7 @@
   background: var(--demo-panel);
   box-shadow: 4px 0 12px rgba(0, 0, 0, 0.32);
   transform: translateX(-100%);
-  transition: transform 220ms ease;
+  transition: transform var(--demo-motion-normal) ease;
 }
 
 .demo-stage .demo-drawer-scrim {
@@ -393,7 +399,7 @@
 .demo-stage .demo-drawer-scrim:active:not(:disabled) { transform: none; }
 
 .demo-stage .demo-drawer.is-open {
-  animation: demo-drawer-enter 220ms ease-out;
+  animation: demo-drawer-enter var(--demo-motion-normal) ease-out;
   transform: translateX(0);
 }
 
@@ -1072,7 +1078,7 @@
 
 .demo-stage .demo-suggestions button {
   justify-content: flex-start;
-  min-height: 44px;
+  min-height: var(--demo-control-size);
   text-align: left;
   border: 0;
   background: transparent;
@@ -1118,7 +1124,7 @@
   flex-wrap: wrap;
   gap: 5px;
   border: 1px solid var(--demo-line);
-  border-radius: 8px;
+  border-radius: var(--demo-radius);
   background: #202023;
 }
 
@@ -1239,7 +1245,7 @@
   height: 22px;
   border-radius: 50%;
   background: #b8c8dc;
-  transition: transform 180ms ease, background 180ms ease;
+  transition: transform var(--demo-motion-normal) ease, background var(--demo-motion-normal) ease;
 }
 
 .demo-stage .demo-switch.is-on {
@@ -1546,7 +1552,7 @@
   stroke: var(--demo-blue);
   stroke-dasharray: 100;
   stroke-linecap: round;
-  transition: stroke-dashoffset 220ms ease;
+  transition: stroke-dashoffset var(--demo-motion-normal) ease;
 }
 
 .demo-stage .demo-progress-ring output { color: #fff; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -1715,7 +1721,7 @@
   border-left: 1px solid var(--demo-line-strong);
   background: var(--demo-panel);
   box-shadow: -4px 0 14px rgba(0, 0, 0, 0.32);
-  animation: demo-side-sheet-enter 220ms ease-out;
+  animation: demo-side-sheet-enter var(--demo-motion-normal) ease-out;
 }
 
 .demo-stage .demo-side-sheet > div { display: flex; align-items: center; justify-content: space-between; }
@@ -1752,13 +1758,13 @@
   border-top: 1px solid var(--demo-line);
 }
 
-.demo-stage .demo-accordion-panel { animation: demo-accordion-reveal 170ms ease-out; }
+.demo-stage .demo-accordion-panel { animation: demo-accordion-reveal var(--demo-motion-fast) ease-out; }
 .demo-stage--card .demo-accordion-panel { padding-block: 6px; }
 
 .demo-stage .demo-disclosure .demo-chevron {
   display: inline-block;
   margin-right: 9px;
-  transition: transform 160ms ease;
+  transition: transform var(--demo-motion-fast) ease;
 }
 
 .demo-stage .demo-disclosure .demo-chevron.is-open { transform: rotate(90deg); }
@@ -2299,7 +2305,7 @@
 .demo-stage .demo-marquee > div {
   display: flex;
   width: max-content;
-  animation: demo-marquee 12s linear infinite;
+  animation: demo-marquee var(--demo-marquee-duration) linear infinite;
 }
 
 .demo-stage .demo-marquee.is-paused > div { animation-play-state: paused; }
@@ -2414,7 +2420,7 @@
   background: #303136;
   font-size: 22px;
   font-weight: 900;
-  transition: transform 180ms ease;
+  transition: transform var(--demo-motion-normal) ease;
 }
 
 .demo-stage .demo-panzoom > div:last-child { display: flex; align-items: center; justify-content: center; gap: 3px; }
