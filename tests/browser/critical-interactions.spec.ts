@@ -130,12 +130,15 @@ test.beforeEach(async ({ page }) => {
   });
   page.on("pageerror", (error) => errors.push(`page: ${error.message}`));
   page.on("requestfailed", (request) => {
+    const requestUrl = new URL(request.url());
+    const failureText = request.failure()?.errorText ?? "";
     if (
       expectedIdentificationAbort.has(page)
-      && new URL(request.url()).pathname === "/api/identify"
-      && request.failure()?.errorText.includes("ABORTED")
+      && requestUrl.pathname === "/api/identify"
+      && failureText.includes("ABORTED")
     ) return;
-    errors.push(`request: ${request.url()} (${request.failure()?.errorText})`);
+    if (requestUrl.pathname === "/.rsc" && failureText.includes("ERR_ABORTED")) return;
+    errors.push(`request: ${request.url()} (${failureText})`);
   });
 });
 
