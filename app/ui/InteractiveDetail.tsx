@@ -23,12 +23,51 @@ type MarkerRect = {
   height: number;
   markerX: number;
   markerY: number;
+  rail: "left" | "right" | "top";
   width: number;
   x: number;
   y: number;
 };
 
+const MARKER_SIZE = 26;
+const MARKER_GAP = 12;
+const MARKER_HIT_PADDING = 9;
+const MARKER_EDGE_INSET = MARKER_HIT_PADDING + 3;
+const MARKER_COLLISION_STEP = MARKER_SIZE + MARKER_HIT_PADDING * 2 + 4;
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+function resolveMarkerCollisions(
+  markers: readonly MarkerRect[],
+  previewWidth: number,
+  previewHeight: number,
+): MarkerRect[] {
+  const resolved = markers.map((marker) => ({ ...marker }));
+  (["left", "right", "top"] as const).forEach((rail) => {
+    const axis: "markerX" | "markerY" = rail === "top" ? "markerX" : "markerY";
+    const extent = rail === "top" ? previewWidth : previewHeight;
+    const min = MARKER_EDGE_INSET;
+    const max = Math.max(min, extent - MARKER_SIZE - MARKER_EDGE_INSET);
+    const group = resolved
+      .filter((marker) => marker.rail === rail)
+      .sort((first, second) => first[axis] - second[axis]);
+    if (!group.length) return;
+
+    let cursor = min;
+    group.forEach((marker) => {
+      marker[axis] = Math.max(clamp(marker[axis], min, max), cursor);
+      cursor = marker[axis] + MARKER_COLLISION_STEP;
+    });
+
+    const overflow = group[group.length - 1][axis] - max;
+    if (overflow > 0) group.forEach((marker) => { marker[axis] -= overflow; });
+    for (let index = group.length - 2; index >= 0; index -= 1) {
+      group[index][axis] = Math.min(group[index][axis], group[index + 1][axis] - MARKER_COLLISION_STEP);
+    }
+    const underflow = min - group[0][axis];
+    if (underflow > 0) group.forEach((marker) => { marker[axis] += underflow; });
+  });
+  return resolved;
+}
 
 function unionBounds(elements: readonly HTMLElement[]): DOMRect | null {
   const rects = elements.map((element) => element.getBoundingClientRect()).filter((rect) => rect.width && rect.height);
@@ -61,15 +100,16 @@ export function InteractiveDetail({
   const [status, setStatus] = useState("");
   const [panel, setPanel] = useState<"anatomy" | "customize">("anatomy");
   const [hoveredPart, setHoveredPart] = useState<number | null>(null);
-  const [lockedPart, setLockedPart] = useState<number | null>(null);
+  const [focusedPart, setFocusedPart] = useState<number | null>(null);
   const [markers, setMarkers] = useState<MarkerRect[]>([]);
   const [settings, setSettings] = useState<DemoSettings>(() => ({ ...DEFAULT_DEMO_SETTINGS }));
   const [colorDrafts, setColorDrafts] = useState<Partial<Record<keyof DemoSettings, string>>>({});
   const shellRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const keyboardInputRef = useRef(false);
   const guides = useMemo(() => getAnnotationGuides(slug, anatomy), [anatomy, slug]);
   const controls = useMemo(() => getDemoControls(slug), [slug]);
-  const activePart = hoveredPart ?? lockedPart;
+  const activePart = hoveredPart ?? focusedPart;
 
   const applySetting = <Key extends keyof DemoSettings>(key: Key, value: DemoSettings[Key]) => {
     setSettings((current) => {
@@ -92,6 +132,17 @@ export function InteractiveDetail({
 
   useEffect(() => {
     shellRef.current?.setAttribute("data-hydrated", "true");
+
+    const noteKeyboardInput = (event: KeyboardEvent) => {
+      if (!event.altKey && !event.ctrlKey && !event.metaKey) keyboardInputRef.current = true;
+    };
+    const notePointerInput = () => { keyboardInputRef.current = false; };
+    window.addEventListener("keydown", noteKeyboardInput, true);
+    window.addEventListener("pointerdown", notePointerInput, true);
+    return () => {
+      window.removeEventListener("keydown", noteKeyboardInput, true);
+      window.removeEventListener("pointerdown", notePointerInput, true);
+    };
   }, []);
 
   useLayoutEffect(() => {
@@ -100,13 +151,18 @@ export function InteractiveDetail({
     if (!preview || !stage) return;
 
     let animationFrame = 0;
-    let detachTargetListeners = () => {};
 
     const measure = () => {
-      detachTargetListeners();
       const previewBounds = preview.getBoundingClientRect();
-      const listenerCleanups: Array<() => void> = [];
+      const stageBounds = stage.getBoundingClientRect();
+      const stageLeft = stageBounds.left - previewBounds.left;
+      const stageRight = stageBounds.right - previewBounds.left;
+      const stageTop = stageBounds.top - previewBounds.top;
+      const railClearance = MARKER_SIZE + MARKER_GAP + MARKER_HIT_PADDING;
+      const hasSideRails = stageLeft >= railClearance;
+      const hasTopRail = stageTop >= railClearance;
       const nextMarkers: MarkerRect[] = [];
+      const usedTargets = new Set<HTMLElement>();
 
       guides.forEach((guide) => {
         const partTarget = stage.querySelector<HTMLElement>(`[data-demo-part="${guide.id}"]`);
@@ -114,8 +170,17 @@ export function InteractiveDetail({
         if (!targets.length && guide.selector) {
           targets = Array.from(stage.querySelectorAll<HTMLElement>(guide.selector));
         }
+        targets = targets.filter((target) => {
+          const bounds = target.getBoundingClientRect();
+          return bounds.width > 0 && bounds.height > 0;
+        });
         if (!targets.length) return;
-        if (guide.targetMode !== "all" && guide.targetMode !== "union") targets = targets.slice(0, 1);
+        if (guide.targetMode !== "all" && guide.targetMode !== "union") {
+          const target = partTarget ?? targets.find((candidate) => !usedTargets.has(candidate));
+          if (!target) return;
+          targets = [target];
+        }
+        targets.forEach((target) => usedTargets.add(target));
 
         const bounds = unionBounds(targets);
         if (!bounds) return;
@@ -125,52 +190,38 @@ export function InteractiveDetail({
         const y = clamp(rawY, 0, previewBounds.height);
         const width = Math.max(0, Math.min(previewBounds.width, rawX + bounds.width) - x);
         const height = Math.max(0, Math.min(previewBounds.height, rawY + bounds.height) - y);
-        const markerSize = 26;
-        const rightCandidate = x + width + 9;
-        const leftCandidate = x - markerSize - 9;
-        const markerX = guide.placement === "left"
-          ? leftCandidate
-          : guide.placement === "top"
-            ? x + width / 2 - markerSize / 2
-            : rightCandidate + markerSize <= previewBounds.width - 6
-              ? rightCandidate
-              : leftCandidate;
-        const markerY = guide.placement === "top"
-          ? y - markerSize - 9
-          : y + Math.min(height / 2, 34) - markerSize / 2;
+        const rail = (!hasSideRails && hasTopRail) || (guide.placement === "top" && hasTopRail)
+          ? "top"
+          : guide.placement === "left" ? "left" : "right";
+        const markerX = rail === "top"
+          ? x + width / 2 - MARKER_SIZE / 2
+          : rail === "left"
+            ? stageLeft - MARKER_SIZE - MARKER_GAP
+            : stageRight + MARKER_GAP;
+        const markerY = rail === "top"
+          ? stageTop - MARKER_SIZE - MARKER_GAP
+          : y + height / 2 - MARKER_SIZE / 2;
 
         nextMarkers.push({
           id: guide.id,
           height,
-          markerX: clamp(markerX, 7, Math.max(7, previewBounds.width - markerSize - 7)),
-          markerY: clamp(markerY, 7, Math.max(7, previewBounds.height - markerSize - 7)),
+          markerX: clamp(markerX, MARKER_EDGE_INSET, Math.max(MARKER_EDGE_INSET, previewBounds.width - MARKER_SIZE - MARKER_EDGE_INSET)),
+          markerY: clamp(markerY, MARKER_EDGE_INSET, Math.max(MARKER_EDGE_INSET, previewBounds.height - MARKER_SIZE - MARKER_EDGE_INSET)),
+          rail,
           width,
           x,
           y,
         });
 
-        targets.forEach((target) => {
-          const enter = () => setHoveredPart(guide.id);
-          const leave = () => setHoveredPart((current) => current === guide.id ? null : current);
-          target.addEventListener("pointerenter", enter);
-          target.addEventListener("pointerleave", leave);
-          target.addEventListener("focusin", enter);
-          target.addEventListener("focusout", leave);
-          listenerCleanups.push(() => {
-            target.removeEventListener("pointerenter", enter);
-            target.removeEventListener("pointerleave", leave);
-            target.removeEventListener("focusin", enter);
-            target.removeEventListener("focusout", leave);
-          });
-        });
       });
 
-      detachTargetListeners = () => listenerCleanups.forEach((cleanup) => cleanup());
-      setMarkers(nextMarkers);
+      setMarkers(resolveMarkerCollisions(nextMarkers, previewBounds.width, previewBounds.height));
+      preview.dataset.annotationLayoutReady = "true";
     };
 
     const scheduleMeasure = () => {
       window.cancelAnimationFrame(animationFrame);
+      preview.dataset.annotationLayoutReady = "false";
       animationFrame = window.requestAnimationFrame(measure);
     };
     const resizeObserver = new ResizeObserver(scheduleMeasure);
@@ -183,30 +234,24 @@ export function InteractiveDetail({
       childList: true,
       subtree: true,
     });
+    stage.addEventListener("animationend", scheduleMeasure);
     preview.addEventListener("scroll", scheduleMeasure, true);
     window.addEventListener("resize", scheduleMeasure);
     scheduleMeasure();
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
-      detachTargetListeners();
       resizeObserver.disconnect();
       mutationObserver.disconnect();
+      stage.removeEventListener("animationend", scheduleMeasure);
       preview.removeEventListener("scroll", scheduleMeasure, true);
       window.removeEventListener("resize", scheduleMeasure);
+      delete preview.dataset.annotationLayoutReady;
     };
   }, [guides, revision, settings]);
 
   const previewStyle = {
-    "--demo-blue": settings.accent,
-    "--demo-blue-bright": `color-mix(in srgb, ${settings.accent} 58%, white)`,
     "--demo-calendar-cell-size": `${settings.cellSize}px`,
-    "--demo-control-size": `${settings.controlSize}px`,
-    "--demo-marquee-duration": `${settings.marqueeDuration}ms`,
-    "--demo-motion-fast": `${Math.max(80, Math.round(settings.motionMs * 0.72))}ms`,
-    "--demo-motion-normal": `${settings.motionMs}ms`,
-    "--demo-motion-slow": `${Math.round(settings.motionMs * 1.55)}ms`,
-    "--demo-radius": `${settings.radius}px`,
   } as CSSProperties;
 
   const reset = () => {
@@ -214,7 +259,7 @@ export function InteractiveDetail({
     setSettings({ ...DEFAULT_DEMO_SETTINGS });
     setColorDrafts({});
     setHoveredPart(null);
-    setLockedPart(null);
+    setFocusedPart(null);
     setStatus("演示与定制参数已重置");
   };
 
@@ -227,13 +272,6 @@ export function InteractiveDetail({
 
       <div
         className="detail-demo-canvas detail-demo-preview"
-        data-backdrop={settings.backdrop}
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && lockedPart !== null) {
-            setLockedPart(null);
-            setStatus("已取消部件高亮");
-          }
-        }}
         ref={previewRef}
         style={previewStyle}
       >
@@ -249,6 +287,7 @@ export function InteractiveDetail({
             <span
               className="demo-annotation-highlight"
               data-active={activePart === marker.id || undefined}
+              data-annotation-part={marker.id}
               key={`highlight-${marker.id}`}
               style={{
                 height: marker.height,
@@ -265,24 +304,24 @@ export function InteractiveDetail({
             return (
               <button
                 aria-label={`部件 ${guide.id}：${guide.label}`}
-                aria-pressed={lockedPart === guide.id}
                 className="demo-annotation-marker"
                 data-active={activePart === guide.id || undefined}
+                data-annotation-part={guide.id}
+                data-annotation-rail={marker.rail}
                 key={`marker-${guide.id}`}
-                onBlur={() => setHoveredPart((current) => current === guide.id ? null : current)}
-                onClick={() => {
-                  const next = lockedPart === guide.id ? null : guide.id;
-                  setLockedPart(next);
-                  setStatus(next ? `已锁定部件 ${guide.id}：${guide.label}` : "已取消部件高亮");
+                onBlur={() => setFocusedPart((current) => current === guide.id ? null : current)}
+                onFocus={() => {
+                  if (keyboardInputRef.current) setFocusedPart(guide.id);
                 }}
-                onFocus={() => setHoveredPart(guide.id)}
-                onMouseEnter={() => setHoveredPart(guide.id)}
-                onMouseLeave={() => setHoveredPart((current) => current === guide.id ? null : current)}
+                onPointerDown={() => setFocusedPart(null)}
+                onPointerEnter={(event) => {
+                  if (event.pointerType !== "touch") setHoveredPart(guide.id);
+                }}
+                onPointerLeave={() => setHoveredPart((current) => current === guide.id ? null : current)}
                 style={{ transform: `translate(${marker.markerX}px, ${marker.markerY}px)` }}
                 type="button"
               >
                 <span>{guide.id}</span>
-                <em>{guide.label}</em>
               </button>
             );
           })}
@@ -331,15 +370,18 @@ export function InteractiveDetail({
           <div aria-label={`${name}组成部分`} className="demo-anatomy-list" id="demo-anatomy-panel" role="tabpanel">
             {guides.map((guide) => (
               <button
-                aria-pressed={lockedPart === guide.id}
                 data-active={activePart === guide.id || undefined}
                 disabled={!markers.some((marker) => marker.id === guide.id)}
                 key={guide.id}
-                onBlur={() => setHoveredPart((current) => current === guide.id ? null : current)}
-                onClick={() => setLockedPart((current) => current === guide.id ? null : guide.id)}
-                onFocus={() => setHoveredPart(guide.id)}
-                onMouseEnter={() => setHoveredPart(guide.id)}
-                onMouseLeave={() => setHoveredPart((current) => current === guide.id ? null : current)}
+                onBlur={() => setFocusedPart((current) => current === guide.id ? null : current)}
+                onFocus={() => {
+                  if (keyboardInputRef.current) setFocusedPart(guide.id);
+                }}
+                onPointerDown={() => setFocusedPart(null)}
+                onPointerEnter={(event) => {
+                  if (event.pointerType !== "touch") setHoveredPart(guide.id);
+                }}
+                onPointerLeave={() => setHoveredPart((current) => current === guide.id ? null : current)}
                 type="button"
               >
                 <span>{guide.id}</span>
@@ -353,7 +395,12 @@ export function InteractiveDetail({
           </div>
         ) : (
           <div aria-label={`${name}定制参数`} className="demo-customize-grid" id="demo-customize-panel" role="tabpanel">
-            {controls.map((control) => {
+            {controls.length === 0 ? (
+              <div className="demo-customize-empty">
+                <strong>当前示例暂无组件专属参数</strong>
+                <p>这里不会提供页面背景、编号标注或其他外围样式调整。</p>
+              </div>
+            ) : controls.map((control) => {
               const value = settings[control.key];
               return (
                 <label className={`demo-control demo-control--${control.type}`} key={control.key}>

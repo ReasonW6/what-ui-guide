@@ -569,17 +569,16 @@
   flex: 1;
 }
 
-.demo-stage .demo-stepper li:not(:last-child)::after {
+.demo-stage .demo-stepper-connector {
   position: absolute;
   top: 21px;
   left: 62%;
   width: 76%;
   height: 2px;
-  content: "";
   background: var(--demo-line);
 }
 
-.demo-stage .demo-stepper li.is-active:not(:last-child)::after { background: var(--demo-blue); }
+.demo-stage .demo-stepper li.is-active .demo-stepper-connector { background: var(--demo-blue); }
 
 .demo-stage .demo-stepper li button {
   position: relative;
@@ -605,6 +604,8 @@
   border-radius: 50%;
   background: var(--demo-bg);
 }
+
+.demo-stage .demo-stepper li button > strong { font: inherit; }
 
 .demo-stage .demo-stepper li.is-active button > span {
   color: #fff;
@@ -1518,17 +1519,33 @@
   gap: 13px;
 }
 
-.demo-stage .demo-focus-ring > div {
+.demo-stage .demo-focus-surface {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
+  padding: 9px;
+  border-radius: 10px;
+  background: var(--demo-bg);
 }
 
-.demo-stage .demo-focus-ring button.is-focus-preview {
+.demo-stage .demo-focus-target {
+  position: relative;
+  display: inline-flex;
+}
+
+.demo-stage .demo-focus-target.is-focus-preview button {
   color: #fff;
   border-color: var(--demo-blue-bright);
-  box-shadow: 0 0 0 2px #171719, 0 0 0 4px var(--demo-blue);
+}
+
+.demo-stage .demo-focus-outline {
+  position: absolute;
+  inset: -4px;
+  pointer-events: none;
+  border: 2px solid var(--demo-blue);
+  border-radius: 9px;
+  box-shadow: 0 0 0 2px #171719;
 }
 
 .demo-stage .demo-progress-ring-wrap {

@@ -360,25 +360,50 @@ test("detail preview only sticks when the viewport can contain the full lab", as
 });
 
 test("detail lab links anatomy markers, explanations, and live controls", async () => {
-  const [source, config, css] = await Promise.all([
+  const [source, config, css, demoStage] = await Promise.all([
     readFile(new URL("../app/ui/InteractiveDetail.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ui/demo-config.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/ui/interactive-detail.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/ui/DemoStage.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(source, /getAnnotationGuides\(slug, anatomy\)/);
   assert.match(source, /data-demo-part="\$\{guide\.id\}"/);
-  assert.match(source, /target\.addEventListener\("pointerenter", enter\)/);
-  assert.match(source, /target\.addEventListener\("focusin", enter\)/);
+  assert.doesNotMatch(source, /target\.addEventListener\("pointerenter", enter\)/);
+  assert.doesNotMatch(source, /target\.addEventListener\("focusin", enter\)/);
+  assert.match(source, /const activePart = hoveredPart \?\? focusedPart/);
+  assert.match(source, /event\.pointerType !== "touch"/);
+  assert.match(source, /window\.addEventListener\("keydown", noteKeyboardInput, true\)/);
+  assert.match(source, /window\.addEventListener\("pointerdown", notePointerInput, true\)/);
+  assert.match(source, /if \(keyboardInputRef\.current\) setFocusedPart\(guide\.id\)/);
+  assert.match(source, /onPointerDown=\{\(\) => setFocusedPart\(null\)\}/);
+  assert.doesNotMatch(source, /lockedPart/);
+  assert.doesNotMatch(source, /aria-pressed=\{lockedPart/);
   assert.match(source, /new ResizeObserver\(scheduleMeasure\)/);
   assert.match(source, /new MutationObserver\(scheduleMeasure\)/);
+  assert.match(source, /stage\.addEventListener\("animationend", scheduleMeasure\)/);
   assert.match(source, /onSettingChange=\{updateSettingFromDemo\}/);
   assert.match(source, /delete next\[key\]/);
+  assert.match(source, /controls\.length === 0/);
+  assert.doesNotMatch(source, /data-backdrop=/);
+  assert.match(source, /resolveMarkerCollisions/);
   assert.doesNotMatch(source, /fallbackTargets/);
   assert.match(config, /function semanticSelector\(label: string\)/);
+  assert.doesNotMatch(config, /universalControls/);
+  assert.doesNotMatch(config, /key: "backdrop"/);
+  assert.doesNotMatch(config, /key: "accent"/);
+  assert.doesNotMatch(config, /key: "radius"/);
+  assert.doesNotMatch(config, /key: "controlSize"/);
+  assert.doesNotMatch(config, /key: "motionMs"/);
   assert.match(config, /"date-picker": \[[\s\S]*?key: "weekStartsOn"[\s\S]*?key: "cellSize"[\s\S]*?key: "showWeekNumbers"/);
   assert.match(config, /"before-after-slider": \[[\s\S]*?key: "compare"/);
+  assert.match(config, /return componentControls\[slug\] \?\? \[\]/);
+  assert.match(config, /"progress-stepper": \[[\s\S]*?\.demo-stepper li button > span[\s\S]*?\.demo-stepper-connector/);
+  assert.match(config, /"focus-ring": \[[\s\S]*?\.demo-focus-surface button[\s\S]*?\.demo-focus-outline[\s\S]*?\.demo-focus-surface/);
+  assert.match(demoStage, /"--demo-marquee-duration": `\$\{settings\?\.marqueeDuration \?\? 12_000\}ms`/);
   assert.match(css, /\.demo-annotation-marker\[data-active="true"\]/);
+  assert.match(css, /--annotation-rail:/);
+  assert.doesNotMatch(css, /\.demo-annotation-marker > em/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
 });
 

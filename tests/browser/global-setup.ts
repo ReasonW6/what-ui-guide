@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 
-const port = 4173;
+const port = Number(process.env.PLAYWRIGHT_PORT ?? 3173);
 const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
 const productionServer = fileURLToPath(new URL("../../scripts/start-production.mjs", import.meta.url));
 

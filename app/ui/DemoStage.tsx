@@ -7,6 +7,7 @@ import {
   useId,
   useRef,
   useState,
+  type CSSProperties,
   type ComponentType,
   type KeyboardEvent,
   type ReactNode,
@@ -338,7 +339,7 @@ function NavigationDemo({ slug, density, onSettingChange, settings }: DemoProps 
       return (
         <div className="demo-stepper">
           <ol>
-            {steps.map((label, index) => <li className={index <= step ? "is-active" : ""} key={label}><button aria-current={index === step ? "step" : undefined} onClick={() => setStep(index)} type="button"><span>{index < step ? "✓" : index + 1}</span>{label}</button></li>)}
+            {steps.map((label, index) => <li className={index <= step ? "is-active" : ""} key={label}><button aria-current={index === step ? "step" : undefined} onClick={() => setStep(index)} type="button"><span>{index < step ? "✓" : index + 1}</span><strong>{label}</strong></button>{index < steps.length - 1 && <i aria-hidden="true" className="demo-stepper-connector" />}</li>)}
           </ol>
           {density === "detail" && <button className="demo-primary" disabled={step === 2} onClick={() => setStep((value) => Math.min(2, value + 1))} type="button">{step === 2 ? "已完成" : "下一步"}</button>}
         </div>
@@ -908,7 +909,7 @@ function FeedbackDemo({ slug, density, onSettingChange, settings }: DemoProps & 
       return count ? <div className="demo-empty"><span aria-hidden="true">⌁</span><strong>还没有收藏</strong><small>收藏的组件会出现在这里。</small><button className="demo-primary" onClick={() => changeEmptyState(0)} ref={emptyActionRef} type="button">模拟收藏一个</button></div> : <div className="demo-loaded-card"><span className="demo-avatar-small">✓</span><span><strong>已收藏 Slider</strong><small>你的第一个收藏</small></span><button aria-label="清空收藏" onClick={() => changeEmptyState(1)} ref={emptyActionRef} type="button">×</button></div>;
     case "focus-ring": {
       const targets = ["主要操作", "次要操作", "文字链接"].slice(0, density === "detail" ? 3 : 2);
-      return <div className="demo-focus-ring"><small>按 Tab 移动焦点，或点击预览</small><div aria-label="焦点环示例" role="group">{targets.map((target, index) => <button aria-pressed={focusTarget === index} className={focusTarget === index ? "is-focus-preview" : ""} key={target} onClick={() => setFocusTarget(index)} onFocus={() => setFocusTarget(index)} type="button">{target}</button>)}</div><Status>焦点：{targets[focusTarget] ?? targets[0]}</Status></div>;
+      return <div className="demo-focus-ring"><small>按 Tab 移动焦点，或点击预览</small><div aria-label="焦点环示例" className="demo-focus-surface" role="group">{targets.map((target, index) => <span className={`demo-focus-target ${focusTarget === index ? "is-focus-preview" : ""}`} key={target}><button aria-pressed={focusTarget === index} onClick={() => setFocusTarget(index)} onFocus={() => setFocusTarget(index)} type="button">{target}</button>{focusTarget === index && <i aria-hidden="true" className="demo-focus-outline" />}</span>)}</div><Status>焦点：{targets[focusTarget] ?? targets[0]}</Status></div>;
     }
     case "progress-ring":
       return <div className="demo-progress-ring-wrap"><div aria-label="导入进度" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress} aria-valuetext={`已完成 ${progress}%`} className="demo-progress-ring" role="progressbar"><svg aria-hidden="true" viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" /><circle cx="22" cy="22" pathLength="100" r="18" style={{ strokeDashoffset: 100 - progress }} /></svg><output>{progress}%</output></div><button className="demo-secondary" onClick={() => changeProgress(progress >= 100 ? 0 : progress + 17)} type="button">推进进度</button></div>;
@@ -1391,6 +1392,7 @@ export function DemoStage({ slug, density, onSettingChange, settings }: DemoStag
         aria-label={`${slug} 交互式演示`}
         className={`demo-stage demo-stage--${density}`}
         data-demo-slug={slug}
+        style={{ "--demo-marquee-duration": `${settings?.marqueeDuration ?? 12_000}ms` } as CSSProperties}
       >
         <div className="demo-canvas">
           {Demo ? (

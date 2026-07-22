@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { catalog } from "../../lib/catalog";
 
 const browserErrors = new WeakMap<Page, string[]>();
 const expectedIdentificationAbort = new WeakSet<Page>();
@@ -69,6 +70,36 @@ async function rect(locator: Locator) {
     const box = element.getBoundingClientRect();
     return { bottom: box.bottom, left: box.left, right: box.right, top: box.top };
   });
+}
+
+async function unionRect(locator: Locator) {
+  return locator.evaluateAll((elements) => {
+    const boxes = elements.map((element) => element.getBoundingClientRect());
+    return {
+      bottom: Math.max(...boxes.map((box) => box.bottom)),
+      left: Math.min(...boxes.map((box) => box.left)),
+      right: Math.max(...boxes.map((box) => box.right)),
+      top: Math.min(...boxes.map((box) => box.top)),
+    };
+  });
+}
+
+async function annotationEdgeDelta(
+  preview: Locator,
+  part: number,
+  target: Locator,
+  targetIsUnion = false,
+) {
+  const [actual, expected] = await Promise.all([
+    rect(preview.locator(`.demo-annotation-highlight[data-annotation-part="${part}"]`)),
+    targetIsUnion ? unionRect(target) : rect(target),
+  ]);
+  return Math.max(
+    Math.abs(actual.top - expected.top),
+    Math.abs(actual.right - expected.right),
+    Math.abs(actual.bottom - expected.bottom),
+    Math.abs(actual.left - expected.left),
+  );
 }
 
 function expectEdgesToMatch(
@@ -207,7 +238,16 @@ test("edge overlays use the full demo viewport", async ({ page }) => {
     await gotoReady(page, overlay.path);
     const stage = page.locator(".demo-stage--detail");
     await stage.getByRole("button", { name: overlay.trigger }).click();
-    expectEdgesToMatch(await rect(stage.locator(overlay.selector)), await rect(stage), ["top", "right", "bottom", "left"]);
+    await expect.poll(async () => {
+      const overlayBox = await rect(stage.locator(overlay.selector));
+      const stageBox = await rect(stage);
+      return Math.max(
+        Math.abs(overlayBox.top - stageBox.top),
+        Math.abs(overlayBox.right - stageBox.right),
+        Math.abs(overlayBox.bottom - stageBox.bottom),
+        Math.abs(overlayBox.left - stageBox.left),
+      );
+    }).toBeLessThanOrEqual(2);
   }
 
   await gotoReady(page, "/components/popover");
@@ -231,7 +271,11 @@ test("edge overlays use the full demo viewport", async ({ page }) => {
   const toastBox = await rect(toastStage.locator(".demo-toast"));
   const toastStageBox = await rect(toastStage);
   expect(Math.abs(toastStageBox.right - toastBox.right - 13)).toBeLessThanOrEqual(2);
-  expect(Math.abs(toastStageBox.bottom - toastBox.bottom - 13)).toBeLessThanOrEqual(2);
+  await expect.poll(async () => {
+    const settledToastBox = await rect(toastStage.locator(".demo-toast"));
+    const settledStageBox = await rect(toastStage);
+    return Math.abs(settledStageBox.bottom - settledToastBox.bottom - 13);
+  }).toBeLessThanOrEqual(2);
 });
 
 test("command palette shortcut opens, navigates, executes, and restores focus", async ({ page }) => {
@@ -307,6 +351,29 @@ test("detail lab links annotations and keeps customization bidirectional", async
   await expect(markers).toHaveCount(3);
   const gridMarker = preview.getByRole("button", { name: "部件 3：日期网格" });
   const gridGuide = page.locator(".demo-anatomy-list").getByRole("button", { name: /日期网格/ });
+  const dateInput = preview.getByRole("textbox", { name: "选择日期" });
+
+  await expect.poll(async () => {
+    const targetBox = await rect(preview.locator('[data-demo-part="3"]'));
+    const highlightBox = await rect(preview.locator('.demo-annotation-highlight[data-annotation-part="3"]'));
+    return Math.max(
+      Math.abs(targetBox.top - highlightBox.top),
+      Math.abs(targetBox.right - highlightBox.right),
+      Math.abs(targetBox.bottom - highlightBox.bottom),
+      Math.abs(targetBox.left - highlightBox.left),
+    );
+  }).toBeLessThanOrEqual(2);
+
+  await dateInput.hover();
+  await dateInput.focus();
+  await expect(preview.locator('.demo-annotation-marker[data-active="true"]')).toHaveCount(0);
+  await expect(preview.locator('.demo-annotation-highlight[data-active="true"]')).toHaveCount(0);
+
+  await gridGuide.hover();
+  await expect(gridMarker).toHaveAttribute("data-active", "true");
+  await expect(preview.locator('.demo-annotation-highlight[data-active="true"]')).toHaveCount(1);
+  await page.mouse.move(2, 2);
+  await expect(preview.locator('.demo-annotation-highlight[data-active="true"]')).toHaveCount(0);
 
   await gridMarker.scrollIntoViewIfNeeded();
   const markerBeforeHover = await rect(gridMarker);
@@ -323,8 +390,23 @@ test("detail lab links annotations and keeps customization bidirectional", async
 
   await gridMarker.click();
   await page.mouse.move(2, 2);
-  await expect(gridMarker).toHaveAttribute("aria-pressed", "true");
-  await expect(gridGuide).toHaveAttribute("data-active", "true");
+  await expect(gridMarker).not.toHaveAttribute("aria-pressed", "true");
+  await expect(preview.locator('.demo-annotation-marker[data-active="true"]')).toHaveCount(0);
+  await expect(preview.locator('.demo-annotation-highlight[data-active="true"]')).toHaveCount(0);
+  await expect(page.locator('.demo-anatomy-list button[data-active="true"]')).toHaveCount(0);
+
+  await gridMarker.focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Tab");
+  await expect(gridMarker).toBeFocused();
+  await expect(gridMarker).toHaveAttribute("data-active", "true");
+  const triggerGuide = page.locator(".demo-anatomy-list button").nth(1);
+  await triggerGuide.hover();
+  await expect(preview.locator('.demo-annotation-marker[data-annotation-part="2"]')).toHaveAttribute("data-active", "true");
+  await page.mouse.move(2, 2);
+  await expect(gridMarker).toHaveAttribute("data-active", "true");
+  await dateInput.click();
+  await expect(preview.locator('.demo-annotation-marker[data-active="true"]')).toHaveCount(0);
 
   const customizeTab = page.locator(".detail-demo-tabs").getByRole("tab", { name: /自由定制/ });
   await customizeTab.click();
@@ -361,11 +443,145 @@ test("detail lab links annotations and keeps customization bidirectional", async
   await page.getByRole("button", { name: "使用颜色 #af52de" }).click();
   await expect(colorValue).toHaveValue("#af52de");
 
+  await gotoReady(page, "/components/marquee");
+  await page.locator(".detail-demo-tabs").getByRole("tab", { name: /自由定制/ }).click();
+  const marqueeDuration = page.getByRole("slider", { name: "循环周期" });
+  await marqueeDuration.fill("18000");
+  await expect(page.locator(".demo-marquee > div")).toHaveCSS("animation-duration", "18s");
+
   await gotoReady(page, "/components/button");
   await expect(page.getByRole("button", { name: "部件 1：容器" })).toBeVisible();
   await expect(page.getByRole("button", { name: "部件 2：文字标签" })).toBeVisible();
   await expect(page.getByRole("button", { name: "部件 3：可选图标" })).toHaveCount(0);
   await expect(page.locator(".demo-anatomy-list").getByRole("button", { name: /3 可选图标/ })).toBeDisabled();
+});
+
+test("touch taps do not lock annotation highlights", async ({ browser }) => {
+  const context = await browser.newContext({
+    baseURL: test.info().project.use.baseURL as string,
+    hasTouch: true,
+    isMobile: true,
+    viewport: { width: 390, height: 844 },
+  });
+  const touchPage = await context.newPage();
+  try {
+    await gotoReady(touchPage, "/components/date-picker");
+    const preview = touchPage.locator(".detail-demo-preview");
+    await preview.getByRole("button", { name: "部件 3：日期网格" }).tap();
+    await expect(preview.locator('.demo-annotation-marker[data-active="true"]')).toHaveCount(0);
+    await expect(preview.locator('.demo-annotation-highlight[data-active="true"]')).toHaveCount(0);
+    await expect(touchPage.locator('.demo-anatomy-list button[data-active="true"]')).toHaveCount(0);
+  } finally {
+    await context.close();
+  }
+});
+
+test("stepper and focus-ring annotations target their visible parts", async ({ page }) => {
+  await gotoReady(page, "/components/progress-stepper");
+  let preview = page.locator(".detail-demo-preview");
+  await expect(preview).toHaveAttribute("data-annotation-layout-ready", "true");
+  const indicatorBounds = await unionRect(preview.locator(".demo-stepper li button > span"));
+  const labelBounds = await unionRect(preview.locator(".demo-stepper li button > strong"));
+  const connectorBounds = await unionRect(preview.locator(".demo-stepper-connector"));
+  await expect.poll(() => annotationEdgeDelta(preview, 1, preview.locator(".demo-stepper li button > span"), true)).toBeLessThanOrEqual(2);
+  await expect.poll(() => annotationEdgeDelta(preview, 2, preview.locator(".demo-stepper li button > strong"), true)).toBeLessThanOrEqual(2);
+  await expect.poll(() => annotationEdgeDelta(preview, 3, preview.locator(".demo-stepper-connector"), true)).toBeLessThanOrEqual(2);
+  expect(connectorBounds.bottom - connectorBounds.top).toBeLessThanOrEqual(3);
+  expect(labelBounds.top).toBeGreaterThanOrEqual(indicatorBounds.bottom);
+
+  await gotoReady(page, "/components/focus-ring");
+  preview = page.locator(".detail-demo-preview");
+  await expect(preview).toHaveAttribute("data-annotation-layout-ready", "true");
+  const surface = preview.locator(".demo-focus-surface");
+  await expect.poll(() => annotationEdgeDelta(preview, 1, preview.locator(".demo-focus-surface button"), true)).toBeLessThanOrEqual(2);
+  await expect.poll(() => annotationEdgeDelta(preview, 2, preview.locator(".demo-focus-outline"))).toBeLessThanOrEqual(2);
+  await expect.poll(() => annotationEdgeDelta(preview, 3, surface)).toBeLessThanOrEqual(2);
+  await expect(surface).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  const outlineBounds = await rect(preview.locator(".demo-focus-outline"));
+  const activeButtonBounds = await rect(preview.locator('.demo-focus-target.is-focus-preview button'));
+  expect(outlineBounds.top).toBeLessThan(activeButtonBounds.top);
+  expect(outlineBounds.right).toBeGreaterThan(activeButtonBounds.right);
+  expect(outlineBounds.bottom).toBeGreaterThan(activeButtonBounds.bottom);
+  expect(outlineBounds.left).toBeLessThan(activeButtonBounds.left);
+});
+
+test("all detail annotation markers stay in dedicated rails", async ({ page }) => {
+  test.setTimeout(600_000);
+  const componentPaths = catalog.map((item) => `/components/${item.slug}`).sort();
+  expect(componentPaths.length).toBeGreaterThanOrEqual(80);
+
+  const violations: string[] = [];
+  for (const viewport of [
+    { label: "desktop", width: 1280, height: 900 },
+    { label: "tablet", width: 768, height: 900 },
+    { label: "mobile", width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    for (const path of componentPaths) {
+      await gotoReady(page, path);
+      const preview = page.locator(".detail-demo-preview");
+      if (path === "/components/dialog") {
+        await preview.getByRole("button", { name: "编辑资料" }).click();
+        await expect(preview.getByRole("dialog", { name: "编辑资料" })).toBeVisible();
+      }
+      await expect(preview).toHaveAttribute("data-annotation-layout-ready", "true");
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      });
+      const layout = await preview.evaluate((previewElement) => {
+        const stage = previewElement.querySelector<HTMLElement>(".demo-stage--detail");
+        const markers = Array.from(previewElement.querySelectorAll<HTMLElement>(".demo-annotation-marker"));
+        if (!stage) return { markerCount: 0, problems: ["missing stage"] };
+        const previewRect = previewElement.getBoundingClientRect();
+        const stageRect = stage.getBoundingClientRect();
+        const markerRects = markers.map((marker) => {
+          const rect = marker.getBoundingClientRect();
+          return {
+            hitRect: {
+              bottom: rect.bottom + 9,
+              left: rect.left - 9,
+              right: rect.right + 9,
+              top: rect.top - 9,
+            } as DOMRect,
+            label: marker.getAttribute("aria-label") ?? "unlabelled marker",
+            rect,
+          };
+        });
+        const overlaps = (a: DOMRect, b: DOMRect) => (
+          Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1
+          && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1
+        );
+        const problems: string[] = [];
+        markerRects.forEach(({ hitRect, label, rect }) => {
+          if (overlaps(rect, stageRect)) problems.push(`${label} overlaps component stage`);
+          if (overlaps(hitRect, stageRect)) problems.push(`${label} hit area overlaps component stage`);
+          if (
+            rect.left < previewRect.left - 1
+            || rect.right > previewRect.right + 1
+            || rect.top < previewRect.top - 1
+            || rect.bottom > previewRect.bottom + 1
+          ) problems.push(`${label} leaves preview bounds`);
+        });
+        markerRects.forEach((marker, index) => {
+          markerRects.slice(index + 1).forEach((other) => {
+            if (overlaps(marker.hitRect, other.hitRect)) {
+              problems.push(`${marker.label} hit area overlaps ${other.label}`);
+            }
+          });
+        });
+        return { markerCount: markers.length, problems };
+      });
+      if (layout.problems.length) {
+        violations.push(`${viewport.label} ${path}: ${layout.problems.join("; ")}`);
+      }
+      if (layout.markerCount === 0) violations.push(`${viewport.label} ${path}: has no annotations`);
+      expect(layout.markerCount, `${viewport.label} ${path}`).toBeLessThanOrEqual(3);
+      await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    }
+  }
+  expect(violations).toEqual([]);
 });
 
 test("home defers card demos and loads the identification dialog on demand", async ({ page }) => {

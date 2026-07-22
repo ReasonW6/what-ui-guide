@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const port = 4173;
+const port = Number(process.env.PLAYWRIGHT_PORT ?? 3173);
 
 export default defineConfig({
   globalSetup: "./tests/browser/global-setup.ts",

@@ -1,9 +1,4 @@
 export interface DemoSettings {
-  accent: string;
-  radius: number;
-  controlSize: number;
-  motionMs: number;
-  backdrop: "dots" | "grid" | "plain";
   weekStartsOn: 0 | 1;
   cellSize: number;
   showWeekNumbers: boolean;
@@ -19,11 +14,6 @@ export interface DemoSettings {
 }
 
 export const DEFAULT_DEMO_SETTINGS: DemoSettings = {
-  accent: "#0a6cff",
-  radius: 12,
-  controlSize: 44,
-  motionMs: 180,
-  backdrop: "dots",
   weekStartsOn: 1,
   cellSize: 44,
   showWeekNumbers: false,
@@ -70,48 +60,6 @@ export type DemoControl =
   | RangeDemoControl
   | SelectDemoControl
   | ToggleDemoControl;
-
-const universalControls = [
-  { key: "accent", label: "强调色", type: "color" },
-  {
-    key: "radius",
-    label: "圆角",
-    type: "range",
-    min: 0,
-    max: 24,
-    step: 1,
-    unit: "px",
-  },
-  {
-    key: "controlSize",
-    label: "控件尺寸",
-    description: "保持至少 44px 的可点击区域。",
-    type: "range",
-    min: 44,
-    max: 60,
-    step: 1,
-    unit: "px",
-  },
-  {
-    key: "motionMs",
-    label: "动效时长",
-    type: "range",
-    min: 0,
-    max: 600,
-    step: 20,
-    unit: "ms",
-  },
-  {
-    key: "backdrop",
-    label: "画布背景",
-    type: "select",
-    options: [
-      { label: "点阵", value: "dots" },
-      { label: "网格", value: "grid" },
-      { label: "纯色", value: "plain" },
-    ],
-  },
-] as const satisfies readonly DemoControl[];
 
 const componentControls: Readonly<Record<string, readonly DemoControl[]>> = {
   "date-picker": [
@@ -236,8 +184,7 @@ const componentControls: Readonly<Record<string, readonly DemoControl[]>> = {
 };
 
 export function getDemoControls(slug: string): readonly DemoControl[] {
-  const specific = componentControls[slug];
-  return specific ? [...universalControls, ...specific] : universalControls;
+  return componentControls[slug] ?? [];
 }
 
 export interface AnnotationGuide {
@@ -269,6 +216,38 @@ const annotationDefinitions: Readonly<
       selector: '.demo-date-picker [role="grid"], .demo-field:has(input[type="date"])',
       placement: "right",
       description: "日期网格按周组织日期，并应支持方向键移动与清楚的选中状态。",
+    },
+  ],
+  "progress-stepper": [
+    {
+      selector: ".demo-stepper li button > span",
+      targetMode: "union",
+      description: "步骤指示器用编号或完成标记呈现每个阶段的状态。",
+    },
+    {
+      selector: ".demo-stepper li button > strong",
+      targetMode: "union",
+      description: "步骤标签说明各阶段任务，并让可返回的步骤保持可操作。",
+    },
+    {
+      selector: ".demo-stepper-connector",
+      targetMode: "union",
+      description: "连接线把离散步骤组织成一条有先后方向的流程。",
+    },
+  ],
+  "focus-ring": [
+    {
+      selector: ".demo-focus-surface button",
+      targetMode: "union",
+      description: "可聚焦控件组成键盘导航顺序，并可用 Tab 逐一到达。",
+    },
+    {
+      selector: ".demo-focus-outline",
+      description: "外侧轮廓贴合当前控件但不改变布局，清楚标示键盘位置。",
+    },
+    {
+      selector: ".demo-focus-surface",
+      description: "对比背景让焦点轮廓在明暗界面中都保持足够可见。",
     },
   ],
   tabs: [
@@ -391,7 +370,7 @@ function semanticSelector(label: string): string | null {
     return "[role='tabpanel'], [role='dialog'], section, article, .demo-side-sheet, .demo-drawer, .demo-popover";
   }
   if (/容器|面板|视口|区域|画布|主内容|正文|内容|对象|背景层|前景层/.test(label)) {
-    return ":scope > *";
+    return ":scope > .demo-canvas > *";
   }
   return null;
 }
