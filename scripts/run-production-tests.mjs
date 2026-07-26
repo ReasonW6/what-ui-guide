@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
+import { access } from "node:fs/promises";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
 
@@ -36,6 +38,38 @@ async function reservePort() {
     server.close((error) => (error ? reject(error) : resolveClose()));
   });
   return address.port;
+}
+
+async function assertDeploymentOutputIsStateless() {
+  const stateDirectory = resolve(root, "dist", "server", ".wrangler", "state");
+  try {
+    await access(stateDirectory);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+    throw error;
+  }
+  throw new Error(`Production preview persisted local state inside deployment output: ${stateDirectory}`);
+}
+
+function inlineElementSources(html, tagName) {
+  const expression = new RegExp(
+    `<${tagName}\\b([^>]*)>([\\s\\S]*?)<\\/${tagName}\\s*>`,
+    "gi",
+  );
+  return [...html.matchAll(expression)]
+    .filter((match) => tagName !== "script" || !/\bsrc\s*=/i.test(match[1]))
+    .map((match) => match[2])
+    .filter(Boolean);
+}
+
+function sha256Source(value) {
+  return createHash("sha256").update(value).digest("base64");
+}
+
+function cspDirective(policy, name) {
+  return policy.split(";")
+    .map((directive) => directive.trim())
+    .find((directive) => directive.startsWith(`${name} `)) ?? "";
 }
 
 async function stopProcessTree(child) {
@@ -116,8 +150,31 @@ async function verifyProductionSurface(baseUrl) {
   if (home.status !== 200 || !/^text\/html\b/i.test(homeContentType)) {
     throw new Error(`Production health check failed (${home.status}, ${homeContentType || "no content type"}).`);
   }
+  const html = await home.text();
+  const contentSecurityPolicy = home.headers.get("content-security-policy") ?? "";
+  const scriptDirective = cspDirective(contentSecurityPolicy, "script-src");
+  const styleDirective = cspDirective(contentSecurityPolicy, "style-src");
+  if (
+    !scriptDirective
+    || !styleDirective
+    || /unsafe-inline/.test(scriptDirective)
+    || /unsafe-inline/.test(styleDirective)
+    || !contentSecurityPolicy.includes("style-src-attr 'unsafe-inline'")
+  ) {
+    throw new Error("Production CSP did not isolate inline scripts and style elements.");
+  }
+  for (const [tagName, directive] of [
+    ["script", scriptDirective],
+    ["style", styleDirective],
+  ]) {
+    for (const source of inlineElementSources(html, tagName)) {
+      const token = `'sha256-${sha256Source(source)}'`;
+      if (!directive.includes(token)) {
+        throw new Error(`Production CSP is missing the ${tagName} hash ${token}.`);
+      }
+    }
+  }
   for (const [name, expected] of [
-    ["content-security-policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.siliconflow.cn; worker-src 'self' blob:; frame-src 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"],
     ["permissions-policy", "camera=(), geolocation=(), microphone=()"],
     ["referrer-policy", "strict-origin-when-cross-origin"],
     ["x-content-type-options", "nosniff"],
@@ -127,7 +184,6 @@ async function verifyProductionSurface(baseUrl) {
       throw new Error(`Production response is missing the expected ${name} header.`);
     }
   }
-  await home.body?.cancel();
 
   const imageUrl = new URL("/_vinext/image", baseUrl);
   imageUrl.searchParams.set("url", "/og.png");
@@ -147,7 +203,7 @@ async function main() {
   console.log(`[what-ui] Starting production HTTP tests at ${baseUrl}`);
   const server = spawn(
     process.execPath,
-    ["scripts/start-production.mjs", "--port", String(port)],
+    ["scripts/start-production.mjs", "--local", "--port", String(port)],
     {
       cwd: root,
       detached: process.platform !== "win32",
@@ -190,6 +246,7 @@ async function main() {
     }
   } finally {
     await stopProcessTree(server);
+    await assertDeploymentOutputIsStateless();
   }
 }
 

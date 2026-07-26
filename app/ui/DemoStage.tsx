@@ -150,7 +150,8 @@ function NavigationDemo({ slug, density, onSettingChange, settings }: DemoProps 
   const initialActive = slug === "breadcrumb" ? "滑块" : slug === "anchor-navigation" ? "简介" : slug === "split-view" ? "收件箱" : labels[0];
   const [active, setActive] = useState(initialActive);
   const [globalActionStatus, setGlobalActionStatus] = useState("");
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(density === "detail" && slug === "navigation-drawer");
+  const [drawerEngaged, setDrawerEngaged] = useState(false);
   const [page, setPage] = useState(2);
   const [step, setStep] = useState(1);
   const [internalSplitPosition, setSplitPosition] = useState(38);
@@ -160,16 +161,18 @@ function NavigationDemo({ slug, density, onSettingChange, settings }: DemoProps 
   const drawerRef = useRef<HTMLDivElement>(null);
   const anchorContentRef = useRef<HTMLDivElement>(null);
   const drawerOpened = useRef(false);
+  const drawerFocusOnOpen = useRef(false);
 
   useEffect(() => {
-    if (drawerOpen) {
+    if (drawerOpen && drawerFocusOnOpen.current) {
       drawerOpened.current = true;
+      drawerFocusOnOpen.current = false;
       drawerCloseRef.current?.focus();
     } else if (drawerOpened.current) {
       drawerTriggerRef.current?.focus();
       drawerOpened.current = false;
     }
-  }, [drawerOpen]);
+  }, [drawerEngaged, drawerOpen]);
 
   const navButtons = (vertical = false) => (
     <div className={vertical ? "demo-nav-list is-vertical" : "demo-nav-list"}>
@@ -185,7 +188,7 @@ function NavigationDemo({ slug, density, onSettingChange, settings }: DemoProps 
           type="button"
         >
           <MiniIcon>{["⌂", "◇", "☷", "◎"][index]}</MiniIcon>
-          {label}
+          <span className="demo-nav-label">{label}</span>
         </button>
       ))}
     </div>
@@ -203,15 +206,20 @@ function NavigationDemo({ slug, density, onSettingChange, settings }: DemoProps 
     changeSplitPosition(((clientX - rect.left) / rect.width) * 100);
   };
 
+  const closeDrawer = () => {
+    drawerOpened.current = true;
+    setDrawerOpen(false);
+  };
+
   const handleDrawerKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!drawerOpen) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      setDrawerOpen(false);
+      closeDrawer();
       return;
     }
-    if (event.key !== "Tab" || !drawerRef.current) return;
+    if (event.key !== "Tab" || !drawerEngaged || !drawerRef.current) return;
 
     const focusable = Array.from(drawerRef.current.querySelectorAll<HTMLElement>(
       "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
@@ -259,11 +267,11 @@ function NavigationDemo({ slug, density, onSettingChange, settings }: DemoProps 
     case "navigation-drawer":
       return (
         <div className="demo-drawer-scene" onKeyDown={handleDrawerKeyDown}>
-          <button aria-controls={drawerId} aria-expanded={drawerOpen} className="demo-primary" onClick={() => setDrawerOpen(true)} ref={drawerTriggerRef} type="button">
+          <button aria-controls={drawerId} aria-expanded={drawerOpen} className="demo-primary" onClick={() => { drawerOpened.current = true; drawerFocusOnOpen.current = true; setDrawerEngaged(true); setDrawerOpen(true); }} ref={drawerTriggerRef} type="button">
             <MiniIcon>☰</MiniIcon>打开导航抽屉
           </button>
-          {drawerOpen && <><button aria-label="关闭导航抽屉" className="demo-drawer-scrim" onClick={() => setDrawerOpen(false)} tabIndex={-1} type="button" /><div aria-labelledby={drawerTitleId} aria-modal={density === "detail" ? true : undefined} className="demo-drawer is-open" id={drawerId} ref={drawerRef} role="dialog">
-            <button aria-label="关闭导航抽屉" className="demo-close" onClick={() => setDrawerOpen(false)} ref={drawerCloseRef} type="button">×</button>
+          {drawerOpen && <><button aria-label="关闭导航抽屉" className="demo-drawer-scrim" onClick={closeDrawer} tabIndex={-1} type="button" /><div aria-labelledby={drawerTitleId} aria-modal={density === "detail" && drawerEngaged ? true : undefined} className="demo-drawer is-open" id={drawerId} ref={drawerRef} role="dialog">
+            <button aria-label="关闭导航抽屉" className="demo-close" onClick={closeDrawer} ref={drawerCloseRef} type="button">×</button>
             <strong id={drawerTitleId}>浏览</strong>
             {navButtons(true)}
           </div></>}
@@ -413,15 +421,17 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const commandDialogId = id("command-dialog");
   const commandTitleId = id("command-title");
   const commandListId = id("command-list");
+  const iconButtonLabelId = id("icon-button-label");
   const commandOptionId = (index: number) => id(`command-${index}`);
   const [count, setCount] = useState(0);
   const [selected, setSelected] = useState(slug === "split-button" ? "选择发布方式" : "左对齐");
   const [menuOpen, setMenuOpen] = useState(
-    density === "card" && ["split-button", "dropdown-menu", "context-menu", "overflow-menu"].includes(slug),
+    ["split-button", "dropdown-menu", "context-menu", "overflow-menu"].includes(slug),
   );
   const [favorite, setFavorite] = useState(false);
   const [toolbarFocus, setToolbarFocus] = useState(0);
-  const [commandOpen, setCommandOpen] = useState(density === "card" && slug === "command-palette");
+  const [commandOpen, setCommandOpen] = useState(slug === "command-palette");
+  const [commandEngaged, setCommandEngaged] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
   const [commandIndex, setCommandIndex] = useState(0);
   const menuHostRef = useRef<HTMLDivElement>(null);
@@ -459,11 +469,15 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     if (slug !== "command-palette") return;
     if (commandOpen && commandReturnFocus.current) {
       commandInputRef.current?.focus();
-    } else if (!commandOpen && commandReturnFocus.current) {
-      if (commandReturnFocus.current.isConnected) commandReturnFocus.current.focus();
+    } else if (!commandOpen) {
+      if (commandReturnFocus.current?.isConnected) {
+        commandReturnFocus.current.focus();
+      } else {
+        commandTriggerRef.current?.focus();
+      }
       commandReturnFocus.current = null;
     }
-  }, [commandOpen, slug]);
+  }, [commandEngaged, commandOpen, slug]);
 
   useEffect(() => {
     if (slug !== "command-palette" || density !== "detail") return;
@@ -471,12 +485,14 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
       event.preventDefault();
       if (commandOpen) {
+        commandReturnFocus.current ??= commandTriggerRef.current;
         setCommandOpen(false);
         return;
       }
       commandReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : commandTriggerRef.current;
       setCommandQuery("");
       setCommandIndex(0);
+      setCommandEngaged(true);
       setCommandOpen(true);
     };
     document.addEventListener("keydown", handleShortcut);
@@ -504,21 +520,27 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     commandReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : commandTriggerRef.current;
     setCommandQuery("");
     setCommandIndex(0);
+    setCommandEngaged(true);
     setCommandOpen(true);
+  };
+
+  const closeCommandPalette = () => {
+    commandReturnFocus.current ??= commandTriggerRef.current;
+    setCommandOpen(false);
   };
 
   const chooseCommand = (command: string) => {
     setSelected(command);
-    setCommandOpen(false);
+    closeCommandPalette();
   };
 
   const handleCommandKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape") {
       event.preventDefault();
-      setCommandOpen(false);
+      closeCommandPalette();
       return;
     }
-    if (event.key === "Tab") {
+    if (event.key === "Tab" && commandEngaged) {
       event.preventDefault();
       commandInputRef.current?.focus();
       return;
@@ -568,9 +590,9 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
 
   switch (slug) {
     case "button":
-      return <div className="demo-centered"><button className="demo-primary" onClick={() => setCount((value) => value + 1)} type="button">开始探索</button><Status>{count ? `已点击 ${count} 次` : "试着点击按钮"}</Status></div>;
+      return <div className="demo-centered"><button className="demo-primary" onClick={() => setCount((value) => value + 1)} type="button"><MiniIcon>→</MiniIcon><span className="demo-button-label">开始探索</span></button><Status>{count ? `已点击 ${count} 次` : "试着点击按钮"}</Status></div>;
     case "icon-button":
-      return <div className="demo-centered"><button aria-label={favorite ? "取消收藏" : "收藏"} className={`demo-icon-button ${favorite ? "is-active" : ""}`} onClick={() => setFavorite((value) => !value)} type="button">{favorite ? "♥" : "♡"}</button><Status>{favorite ? "已收藏" : "收藏这个项目"}</Status></div>;
+      return <div className="demo-centered"><button aria-labelledby={iconButtonLabelId} className={`demo-icon-button ${favorite ? "is-active" : ""}`} onClick={() => setFavorite((value) => !value)} type="button"><span aria-hidden="true">{favorite ? "♥" : "♡"}</span></button><small className="demo-accessible-name" id={iconButtonLabelId}>{favorite ? "取消收藏" : "收藏"}</small><Status>{favorite ? "已收藏" : "收藏这个项目"}</Status></div>;
     case "button-group":
       return (
         <div className="demo-centered">
@@ -643,7 +665,7 @@ function ActionDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     case "overflow-menu":
       return <div className="demo-popup-wrap" ref={menuHostRef}><div className="demo-record-row"><span className="demo-avatar-small">UI</span><span><strong>组件词典</strong><small>刚刚更新</small></span><button aria-controls={menuId} aria-expanded={menuOpen} aria-haspopup="menu" aria-label="更多操作" className="demo-icon-button" onClick={toggleMenu} ref={menuTriggerRef} type="button">•••</button></div>{popup}</div>;
     case "command-palette":
-      return <div className="demo-command-scene">{!(density === "card" && commandOpen) && <button aria-controls={commandDialogId} aria-expanded={commandOpen} aria-haspopup="dialog" className="demo-secondary" onClick={openCommandPalette} ref={commandTriggerRef} type="button">打开命令面板 <kbd>⌘K</kbd></button>}{commandOpen && <div className="demo-command-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) setCommandOpen(false); }}><div aria-labelledby={commandTitleId} aria-modal={density === "detail" ? true : undefined} className="demo-command-dialog" id={commandDialogId} onKeyDown={handleCommandKeyDown} role="dialog"><strong id={commandTitleId}>快速操作</strong><label className="demo-command-input"><span className="sr-only">搜索命令</span><MiniIcon>⌕</MiniIcon><input aria-activedescendant={visibleCommands[commandIndex] ? commandOptionId(commandIndex) : undefined} aria-autocomplete="list" aria-controls={commandListId} aria-expanded="true" onChange={(event) => { setCommandQuery(event.target.value); setCommandIndex(0); }} placeholder="输入命令…" ref={commandInputRef} role="combobox" value={commandQuery} /></label><div id={commandListId} role="listbox">{visibleCommands.length ? visibleCommands.map((command, index) => <button aria-selected={commandIndex === index} id={commandOptionId(index)} key={command} onClick={() => chooseCommand(command)} onMouseEnter={() => setCommandIndex(index)} role="option" tabIndex={-1} type="button"><span aria-hidden="true">{["＋", "⌕", "⚙"][commands.indexOf(command)]}</span>{command}</button>) : <p>没有匹配命令</p>}</div>{density === "detail" && <small>↑↓ 导航 · Enter 执行 · Esc 关闭</small>}</div></div>} {!commandOpen && <Status>{selected === "左对齐" ? "⌘K 打开" : `已执行：${selected}`}</Status>}</div>;
+      return <div className="demo-command-scene">{!(density === "card" && commandOpen) && <button aria-controls={commandDialogId} aria-expanded={commandOpen} aria-haspopup="dialog" className="demo-secondary" onClick={openCommandPalette} ref={commandTriggerRef} type="button">打开命令面板 <kbd>⌘K</kbd></button>}{commandOpen && <div className="demo-command-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) closeCommandPalette(); }}><div aria-labelledby={commandTitleId} aria-modal={density === "detail" && commandEngaged ? true : undefined} className="demo-command-dialog" id={commandDialogId} onKeyDown={handleCommandKeyDown} role="dialog"><strong id={commandTitleId}>快速操作</strong><label className="demo-command-input"><span className="sr-only">搜索命令</span><MiniIcon>⌕</MiniIcon><input aria-activedescendant={visibleCommands[commandIndex] ? commandOptionId(commandIndex) : undefined} aria-autocomplete="list" aria-controls={commandListId} aria-expanded="true" onChange={(event) => { setCommandQuery(event.target.value); setCommandIndex(0); }} placeholder="输入命令…" ref={commandInputRef} role="combobox" value={commandQuery} /></label><div id={commandListId} role="listbox">{visibleCommands.length ? visibleCommands.map((command, index) => <button aria-selected={commandIndex === index} id={commandOptionId(index)} key={command} onClick={() => chooseCommand(command)} onPointerMove={() => setCommandIndex(index)} role="option" tabIndex={-1} type="button"><span aria-hidden="true">{["＋", "⌕", "⚙"][commands.indexOf(command)]}</span>{command}</button>) : <p>没有匹配命令</p>}</div>{density === "detail" && <small>↑↓ 导航 · Enter 执行 · Esc 关闭</small>}</div></div>} {!commandOpen && <Status>{selected === "左对齐" ? "⌘K 打开" : `已执行：${selected}`}</Status>}</div>;
     default:
       return null;
   }
@@ -653,6 +675,7 @@ function InputDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const id = useDemoId();
   const passwordId = id("password");
   const participantsId = id("participants");
+  const searchInputId = id("search");
   const tagInputId = id("tag-input");
   const fileStatusId = id("file-status");
   const [text, setText] = useState("");
@@ -708,7 +731,7 @@ function InputDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     case "search-field":
       return (
         <div className="demo-search-demo">
-          <label className="demo-search-box"><MiniIcon>⌕</MiniIcon><span className="sr-only">搜索组件</span><input onChange={(event) => setText(event.target.value)} placeholder="搜索组件…" type="search" value={text} /></label>
+          <div className="demo-search-box"><MiniIcon>⌕</MiniIcon><label className="sr-only" htmlFor={searchInputId}>搜索组件</label><input id={searchInputId} onChange={(event) => setText(event.target.value)} placeholder="搜索组件…" type="search" value={text} /><button aria-label="清除搜索" disabled={!text} onClick={() => setText("")} type="button">×</button></div>
           <div className="demo-suggestions">{(text ? suggestions : suggestions.slice(0, 2)).map((item) => <button key={item} onClick={() => setText(item.split(" ")[0])} type="button">{item}</button>)}</div>
         </div>
       );
@@ -722,7 +745,7 @@ function InputDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
       );
     case "tags-input":
       return (
-        <div className="demo-form"><div className="demo-field"><label htmlFor={tagInputId}>关键词</label><div className="demo-tags-box">{tags.map((tag, index) => <button aria-label={`移除 ${tag}`} key={tag} onClick={() => setTags((items) => items.filter((_, itemIndex) => itemIndex !== index))} type="button">{tag} ×</button>)}<input id={tagInputId} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(); } }} placeholder="添加标签" value={text} /></div></div><button className="demo-secondary" disabled={!canAddTag} onClick={addTag} type="button">添加</button>{text.trim() && !canAddTag && <Status>该标签已存在</Status>}</div>
+        <div className="demo-form"><div className="demo-field"><label htmlFor={tagInputId}>关键词</label><div className="demo-tags-box">{tags.map((tag, index) => <span className="demo-tag" key={tag}><span className="demo-tag-label">{tag}</span><button aria-label={`移除 ${tag}`} onClick={() => setTags((items) => items.filter((_, itemIndex) => itemIndex !== index))} type="button"><span aria-hidden="true">×</span></button></span>)}<input id={tagInputId} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(); } }} placeholder="添加标签" value={text} /></div></div><button className="demo-secondary" disabled={!canAddTag} onClick={addTag} type="button">添加</button>{text.trim() && !canAddTag && <Status>该标签已存在</Status>}</div>
       );
     case "file-upload":
       return <div aria-describedby={fileStatusId} aria-label="图片拖放区" className={`demo-dropzone ${fileName ? "is-ready" : ""}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); handleLocalFile(event.dataTransfer.files[0]); }}><input accept="image/png,image/jpeg" hidden onChange={(event) => handleLocalFile(event.target.files?.[0])} ref={fileInputRef} type="file" /><MiniIcon>{fileName ? "✓" : "⇧"}</MiniIcon><strong>{fileName || "拖放文件到这里"}</strong><small className={fileError ? "is-error" : undefined} id={fileStatusId}>{fileError || (fileName ? "仅作本地演示，未上传" : "PNG、JPG，最大 10 MB")}</small><button className="demo-secondary" onClick={() => { if (fileName || fileError) { setFileName(""); setFileError(""); if (fileInputRef.current) fileInputRef.current.value = ""; } else { fileInputRef.current?.click(); } }} type="button">{fileName || fileError ? "清除所选文件" : "选择文件"}</button></div>;
@@ -749,10 +772,11 @@ function SelectionDemo({ slug, density, onSettingChange, settings }: DemoProps &
   const rangeLow = configuredRangeLow ?? value;
   const rangeHigh = configuredRangeHigh ?? secondValue;
   const displayedColor = configuredPickerColor ?? color;
-  const [query, setQuery] = useState(density === "card" && slug === "combobox" ? "sl" : "");
-  const [comboOpen, setComboOpen] = useState(density === "card" && slug === "combobox");
+  const [query, setQuery] = useState(slug === "combobox" ? "sl" : "");
+  const [comboOpen, setComboOpen] = useState(slug === "combobox");
   const [comboIndex, setComboIndex] = useState(0);
   const options = ["自动", "Web", "Mobile"];
+  const radioName = id("device");
   const matches = ["Slider · 滑块", "Range slider · 范围滑块", "Switch · 开关"].filter((item) => item.toLowerCase().includes(query.toLowerCase()));
 
   const changeSliderValue = (next: number) => {
@@ -784,13 +808,13 @@ function SelectionDemo({ slug, density, onSettingChange, settings }: DemoProps &
 
   switch (slug) {
     case "checkbox":
-      return <label className="demo-check"><input checked={checked} onChange={(event) => setChecked(event.target.checked)} type="checkbox" /><span>接收每周组件灵感</span><Status>{checked ? "已订阅" : "未订阅"}</Status></label>;
+      return <label className="demo-check"><input className="demo-check-native" checked={checked} onChange={(event) => setChecked(event.target.checked)} type="checkbox" /><span aria-hidden="true" className="demo-check-box"><span className="demo-check-mark">{checked ? "✓" : ""}</span></span><span className="demo-check-label">接收每周组件灵感</span><Status>{checked ? "已订阅" : "未订阅"}</Status></label>;
     case "radio-group":
-      return <fieldset className="demo-radio"><legend>预览设备</legend>{options.map((item) => <label key={item}><input checked={choice === item} name="device" onChange={() => setChoice(item)} type="radio" /><span>{item}</span></label>)}<Status>{choice}</Status></fieldset>;
+      return <fieldset className="demo-radio"><legend>预览设备</legend>{options.map((item) => <label key={item}><input checked={choice === item} name={radioName} onChange={() => setChoice(item)} type="radio" /><span>{item}</span></label>)}<Status>{choice}</Status></fieldset>;
     case "switch":
       return <div className="demo-setting-row"><span><strong id={switchLabelId}>深色模式</strong><small>跟随你的阅读偏好</small></span><button aria-checked={checked} aria-labelledby={switchLabelId} className={`demo-switch ${checked ? "is-on" : ""}`} onClick={() => setChecked((state) => !state)} role="switch" type="button"><span /></button></div>;
     case "select":
-      return <label className="demo-field"><span>平台</span><select onChange={(event) => setChoice(event.target.value)} value={choice}>{options.map((item) => <option key={item}>{item}</option>)}</select><small>已选择：{choice}</small></label>;
+      return <label className="demo-field"><span>平台</span><select onChange={(event) => setChoice(event.target.value)} value={choice}>{options.map((item) => <option key={item}>{item}</option>)}</select><small>可选：{options.join(" / ")}</small></label>;
     case "combobox":
       return (
         <div className="demo-combobox" onBlur={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setComboOpen(false); }}><label className="demo-field"><span>查找组件</span><input aria-activedescendant={comboOpen && matches[comboIndex] ? comboOptionId(comboIndex) : undefined} aria-autocomplete="list" aria-controls={comboListId} aria-expanded={comboOpen} onChange={(event) => { setQuery(event.target.value); setComboIndex(0); setComboOpen(true); }} onFocus={() => { if (query) setComboOpen(true); }} onKeyDown={(event) => {
@@ -808,16 +832,16 @@ function SelectionDemo({ slug, density, onSettingChange, settings }: DemoProps &
           } else if (event.key === "Escape") {
             setComboOpen(false);
           }
-        }} placeholder="输入 slider…" role="combobox" value={query} /></label>{comboOpen && query && <div id={comboListId} role="listbox">{matches.length ? matches.map((item, index) => <button aria-selected={comboIndex === index} id={comboOptionId(index)} key={item} onClick={() => chooseComboOption(item)} onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => setComboIndex(index)} role="option" tabIndex={-1} type="button">{item}</button>) : <p>没有匹配组件</p>}</div>}</div>
+        }} placeholder="输入 slider…" role="combobox" value={query} /></label><button aria-controls={comboListId} aria-expanded={comboOpen} aria-label={comboOpen ? "收起建议" : "展开建议"} className="demo-combobox-trigger" onClick={() => setComboOpen((value) => !value)} type="button">⌄</button>{comboOpen && query && <div id={comboListId} role="listbox">{matches.length ? matches.map((item, index) => <button aria-selected={comboIndex === index} id={comboOptionId(index)} key={item} onClick={() => chooseComboOption(item)} onMouseDown={(event) => event.preventDefault()} onMouseEnter={() => setComboIndex(index)} role="option" tabIndex={-1} type="button">{item}</button>) : <p>没有匹配组件</p>}</div>}</div>
       );
     case "segmented-control":
       return <div className="demo-centered"><div className="demo-segments" role="group" aria-label="视图模式">{["卡片", "列表", "紧凑"].map((item) => <button aria-pressed={choice === item} className={choice === item ? "is-active" : ""} key={item} onClick={() => setChoice(item)} type="button">{item}</button>)}</div><Status>{choice}视图</Status></div>;
     case "slider":
-      return <label className="demo-range"><span><strong>音量</strong><output>{sliderValue}%</output></span><input max="100" min="0" onChange={(event) => changeSliderValue(Number(event.target.value))} type="range" value={sliderValue} />{density === "detail" && <div className="demo-range-scale"><span>静音</span><span>最大</span></div>}</label>;
+      return <label className="demo-range"><span><strong>音量</strong><output>{sliderValue}%</output></span><span className="demo-slider-control"><span aria-hidden="true" className="demo-slider-track" /><span aria-hidden="true" className="demo-slider-fill" style={{ width: `${sliderValue}%` }} /><span aria-hidden="true" className="demo-slider-thumb" style={{ left: `calc(${sliderValue}% - 10px)` }} /><input max="100" min="0" onChange={(event) => changeSliderValue(Number(event.target.value))} type="range" value={sliderValue} /></span>{density === "detail" && <div className="demo-range-scale"><span>静音</span><span>最大</span></div>}</label>;
     case "range-slider": {
       const low = Math.min(rangeLow, rangeHigh);
       const high = Math.max(rangeLow, rangeHigh);
-      return <div className="demo-range"><span><strong>价格范围</strong><output>¥{low} – ¥{high}</output></span><div className="demo-dual-range" onPointerDown={(event) => { if (event.target !== event.currentTarget) return; const rect = event.currentTarget.getBoundingClientRect(); const next = Math.round(((event.clientX - rect.left) / rect.width) * 100); if (Math.abs(next - low) <= Math.abs(next - high)) changeRangeLow(Math.min(next, high)); else changeRangeHigh(Math.max(next, low)); }}><input aria-label="最低价格" max="100" min="0" onChange={(event) => changeRangeLow(Number(event.target.value))} type="range" value={low} /><input aria-label="最高价格" max="100" min="0" onChange={(event) => changeRangeHigh(Number(event.target.value))} type="range" value={high} /></div></div>;
+      return <div className="demo-range"><span><strong>价格范围</strong><output>¥{low} – ¥{high}</output></span><div className="demo-dual-range" onPointerDown={(event) => { if (event.target !== event.currentTarget) return; const rect = event.currentTarget.getBoundingClientRect(); const next = Math.round(((event.clientX - rect.left) / rect.width) * 100); if (Math.abs(next - low) <= Math.abs(next - high)) changeRangeLow(Math.min(next, high)); else changeRangeHigh(Math.max(next, low)); }}><span aria-hidden="true" className="demo-dual-range-track" /><span aria-hidden="true" className="demo-dual-range-fill" style={{ left: `${low}%`, right: `${100 - high}%` }} /><span aria-hidden="true" className="demo-dual-range-thumb is-low" style={{ left: `calc(${low}% - 10px)` }} /><span aria-hidden="true" className="demo-dual-range-thumb is-high" style={{ left: `calc(${high}% - 10px)` }} /><input aria-label="最低价格" max="100" min="0" onChange={(event) => changeRangeLow(Number(event.target.value))} type="range" value={low} /><input aria-label="最高价格" max="100" min="0" onChange={(event) => changeRangeHigh(Number(event.target.value))} type="range" value={high} /></div></div>;
     }
     case "date-picker":
       return <DatePickerDemo density={density} settings={settings} />;
@@ -830,9 +854,7 @@ function SelectionDemo({ slug, density, onSettingChange, settings }: DemoProps &
 
 function FeedbackDemo({ slug, density, onSettingChange, settings }: DemoProps & { slug: DemoSlug }) {
   const id = useDemoId();
-  const [visible, setVisible] = useState(
-    density === "card" || !["toast", "snackbar"].includes(slug),
-  );
+  const [visible, setVisible] = useState(true);
   const [internalProgress, setProgress] = useState(42);
   const progress = settings?.progress ?? internalProgress;
   const [text, setText] = useState("ui.example");
@@ -898,13 +920,13 @@ function FeedbackDemo({ slug, density, onSettingChange, settings }: DemoProps & 
       return <label className={`demo-field ${invalid ? "has-error" : ""}`}><span>个人网址</span><input aria-describedby={hintId} aria-invalid={invalid} onChange={(event) => setText(event.target.value)} value={text} /><small id={hintId}>{invalid ? "请输入包含点号的域名" : "网址格式正确"}</small></label>;
     }
     case "progress-bar":
-      return <div className="demo-progress-demo"><div><strong>正在导入组件</strong><output>{progress}%</output></div><progress max="100" value={progress}>{progress}%</progress><button className="demo-secondary" onClick={() => changeProgress(progress >= 100 ? 0 : progress + 14)} type="button">推进进度</button></div>;
+      return <div className="demo-progress-demo"><div><strong>正在导入组件</strong><output>{progress}%</output></div><div aria-label="导入进度" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress} className="demo-progress-track" role="progressbar"><span className="demo-progress-fill" style={{ width: `${progress}%` }} /></div><button className="demo-secondary" onClick={() => changeProgress(progress >= 100 ? 0 : progress + 14)} type="button">推进进度</button></div>;
     case "spinner":
-      return <div className="demo-centered"><button className="demo-primary" onClick={() => setVisible((value) => !value)} type="button">{visible ? "停止加载" : "开始加载"}</button>{visible && <span className="demo-spinner" role="status"><span className="sr-only">加载中</span></span>}</div>;
+      return <div className="demo-centered"><button className="demo-primary" onClick={() => setVisible((value) => !value)} type="button">{visible ? "停止加载" : "开始加载"}</button>{visible && <><span aria-label="加载中" className="demo-spinner" role="status" /><small className="demo-spinner-label">加载中</small></>}</div>;
     case "skeleton-screen":
       return <div className="demo-skeleton-wrap"><button className="demo-secondary" onClick={() => setVisible((value) => !value)} type="button">{visible ? "显示内容" : "重新加载"}</button>{visible ? <div aria-busy="true" aria-label="内容加载中" aria-live="polite" className="demo-skeleton" role="status"><i aria-hidden="true" /><span aria-hidden="true"><i /><i /><i /></span></div> : <div className="demo-loaded-card"><span className="demo-avatar-small">UI</span><span><strong>滑块 Slider</strong><small>拖动圆点选择数值</small></span></div>}</div>;
     case "badge":
-      return <div className="demo-centered"><button className="demo-bell" onClick={() => setCount((value) => (value + 1) % 10)} type="button"><span aria-hidden="true">♢</span><span className="demo-badge">{count}</span><span className="sr-only">通知，{count} 条</span></button><Status>点击增加通知</Status></div>;
+      return <div className="demo-centered"><button className="demo-bell" onClick={() => setCount((value) => (value + 1) % 10)} type="button"><span aria-hidden="true">♢</span><span className="demo-badge"><span className="demo-badge-value">{count}</span></span><span className="sr-only">通知，{count} 条</span></button><Status>点击增加通知</Status></div>;
     case "empty-state":
       return count ? <div className="demo-empty"><span aria-hidden="true">⌁</span><strong>还没有收藏</strong><small>收藏的组件会出现在这里。</small><button className="demo-primary" onClick={() => changeEmptyState(0)} ref={emptyActionRef} type="button">模拟收藏一个</button></div> : <div className="demo-loaded-card"><span className="demo-avatar-small">✓</span><span><strong>已收藏 Slider</strong><small>你的第一个收藏</small></span><button aria-label="清空收藏" onClick={() => changeEmptyState(1)} ref={emptyActionRef} type="button">×</button></div>;
     case "focus-ring": {
@@ -920,7 +942,7 @@ function FeedbackDemo({ slug, density, onSettingChange, settings }: DemoProps & 
 
 function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const id = useDemoId();
-  const previewOpen = density === "card" && [
+  const previewOpen = [
     "dialog",
     "alert-dialog",
     "popover",
@@ -931,21 +953,22 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     "scrim",
   ].includes(slug);
   const [open, setOpen] = useState(previewOpen || slug === "accordion" || slug === "disclosure");
+  const [modalEngaged, setModalEngaged] = useState(false);
+  const [tooltipHovered, setTooltipHovered] = useState(false);
+  const [tooltipFocusWithin, setTooltipFocusWithin] = useState(false);
   const [openAccordionIndex, setOpenAccordionIndex] = useState<number | null>(0);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const hoverTriggerRef = useRef<HTMLAnchorElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const safeActionRef = useRef<HTMLButtonElement>(null);
-  const openedOnce = useRef(
-    previewOpen && !["tooltip", "hover-card"].includes(slug),
-  );
+  const openedOnce = useRef(false);
   const focusOnOpen = useRef(false);
   const isModal = ["dialog", "alert-dialog", "lightbox", "scrim", "side-sheet"].includes(slug);
   const lightboxItems = ["界面总览", "组件细节", "移动端预览"];
 
   useEffect(() => {
-    if ((density === "detail" || focusOnOpen.current) && open && !["accordion", "disclosure", "tooltip", "hover-card"].includes(slug)) {
+    if (focusOnOpen.current && open && !["accordion", "disclosure", "tooltip", "hover-card"].includes(slug)) {
       openedOnce.current = true;
       focusOnOpen.current = false;
       const firstFocusable = panelRef.current?.querySelector<HTMLElement>(
@@ -962,7 +985,12 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
       triggerRef.current?.focus();
       openedOnce.current = false;
     }
-  }, [density, isModal, open, slug]);
+  }, [density, isModal, modalEngaged, open, slug]);
+
+  const closeOverlay = () => {
+    openedOnce.current = true;
+    setOpen(false);
+  };
 
   const handleOverlayKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (slug === "lightbox" && open && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
@@ -973,11 +1001,11 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     }
     if (event.key === "Escape" && open) {
       event.stopPropagation();
-      setOpen(false);
+      closeOverlay();
       return;
     }
 
-    if (event.key === "Tab" && open && isModal && panelRef.current) {
+    if (event.key === "Tab" && open && isModal && modalEngaged && panelRef.current) {
       const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(
         "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])",
       ));
@@ -1001,7 +1029,15 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   const openOverlay = () => {
     openedOnce.current = true;
     focusOnOpen.current = true;
+    setModalEngaged(true);
     setOpen(true);
+  };
+  const hoverContentOpen = open || tooltipHovered || tooltipFocusWithin;
+  const dismissHoverContent = (triggerElement: HTMLElement | null) => {
+    setOpen(false);
+    setTooltipHovered(false);
+    setTooltipFocusWithin(false);
+    triggerElement?.focus();
   };
   const trigger = (label = "打开演示") => density === "card" && open
     ? null
@@ -1009,25 +1045,25 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
 
   switch (slug) {
     case "scrim":
-      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("显示遮罩")}{open && <div className="demo-scrim-layer" onPointerDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}><div aria-describedby={id("scrim-copy")} aria-labelledby={id("scrim-title")} aria-modal={density === "detail" ? true : undefined} className="demo-scrim-card" ref={panelRef} role="dialog" tabIndex={-1}><strong id={id("scrim-title")}>继续编辑？</strong><small id={id("scrim-copy")}>遮罩弱化后方内容并聚焦当前任务。</small><button className="demo-primary" onClick={() => setOpen(false)} type="button">继续</button></div></div>}</div>;
+      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("显示遮罩")}{open && <div className="demo-scrim-layer" onPointerDown={(event) => { if (event.target === event.currentTarget) closeOverlay(); }}><div aria-describedby={id("scrim-copy")} aria-labelledby={id("scrim-title")} aria-modal={density === "detail" && modalEngaged ? true : undefined} className="demo-scrim-card" ref={panelRef} role="dialog" tabIndex={-1}><strong id={id("scrim-title")}>继续编辑？</strong><small id={id("scrim-copy")}>遮罩弱化后方内容并聚焦当前任务。</small><button className="demo-primary" onClick={closeOverlay} type="button">继续</button></div></div>}</div>;
     case "dialog":
-      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("编辑资料")}{open && <div className="demo-backdrop"><div aria-labelledby={id("dialog-title")} aria-modal={density === "detail" ? true : undefined} className="demo-dialog" ref={panelRef} role="dialog" tabIndex={-1}><strong id={id("dialog-title")}>编辑资料</strong><label className="demo-field"><span>显示名称</span><input defaultValue="林间团队" /></label><div className="demo-dialog-actions"><button onClick={() => setOpen(false)} type="button">取消</button><button className="demo-primary" onClick={() => setOpen(false)} type="button">保存</button></div></div></div>}</div>;
+      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("编辑资料")}{open && <div className="demo-backdrop"><div aria-labelledby={id("dialog-title")} aria-modal={density === "detail" && modalEngaged ? true : undefined} className="demo-dialog" ref={panelRef} role="dialog" tabIndex={-1}><strong id={id("dialog-title")}>编辑资料</strong><label className="demo-field"><span>显示名称</span><input defaultValue="林间团队" /></label><div className="demo-dialog-actions"><button onClick={closeOverlay} type="button">取消</button><button className="demo-primary" onClick={closeOverlay} type="button">保存</button></div></div></div>}</div>;
     case "alert-dialog":
-      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("移除项目")}{open && <div className="demo-backdrop"><div aria-describedby={id("alert-copy")} aria-labelledby={id("alert-title")} aria-modal={density === "detail" ? true : undefined} className="demo-dialog is-alert" ref={panelRef} role="alertdialog" tabIndex={-1}><span className="demo-warning">!</span><strong id={id("alert-title")}>移除这个项目？</strong><small id={id("alert-copy")}>这是模拟操作，不会删除任何内容。</small><div className="demo-dialog-actions"><button onClick={() => setOpen(false)} ref={safeActionRef} type="button">取消</button><button className="demo-danger" onClick={() => setOpen(false)} type="button">确认移除</button></div></div></div>}</div>;
+      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("移除项目")}{open && <div className="demo-backdrop"><div aria-describedby={id("alert-copy")} aria-labelledby={id("alert-title")} aria-modal={density === "detail" && modalEngaged ? true : undefined} className="demo-dialog is-alert" ref={panelRef} role="alertdialog" tabIndex={-1}><span className="demo-warning">!</span><strong id={id("alert-title")}>移除这个项目？</strong><small id={id("alert-copy")}>这是模拟操作，不会删除任何内容。</small><div className="demo-dialog-actions"><button onClick={closeOverlay} ref={safeActionRef} type="button">取消</button><button className="demo-danger" onClick={closeOverlay} type="button">确认移除</button></div></div></div>}</div>;
     case "popover":
-      return <div className="demo-overlay-scene demo-popup-wrap" onKeyDown={handleOverlayKeyDown}>{trigger("查看详情")}{open && <div aria-labelledby={id("popover-title")} className="demo-popover" ref={panelRef} role="dialog" tabIndex={-1}><strong id={id("popover-title")}>Slider · 滑块</strong><p>沿轨道拖动圆点，选择一个数值。</p><button onClick={() => setOpen(false)} type="button">知道了</button></div>}</div>;
+      return <div className="demo-overlay-scene demo-popup-wrap" onKeyDown={handleOverlayKeyDown}>{trigger("查看详情")}{open && <div aria-labelledby={id("popover-title")} className="demo-popover" ref={panelRef} role="dialog" tabIndex={-1}><strong id={id("popover-title")}>Slider · 滑块</strong><p>沿轨道拖动圆点，选择一个数值。</p><button onClick={closeOverlay} type="button">知道了</button></div>}</div>;
     case "tooltip":
-      return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlur={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onFocus={() => setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); triggerRef.current?.focus(); } }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}><button aria-describedby={open ? id("tooltip-content") : undefined} aria-label="查看术语解释" className="demo-icon-button" onClick={() => setOpen((value) => !value)} ref={triggerRef} type="button">?</button>{open && <div className="demo-tooltip" id={id("tooltip-content")} role="tooltip">查看术语解释</div>}</div></div>;
+      return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlurCapture={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setTooltipFocusWithin(false); }} onFocusCapture={() => setTooltipFocusWithin(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); dismissHoverContent(triggerRef.current); } }} onMouseEnter={() => setTooltipHovered(true)} onMouseLeave={() => setTooltipHovered(false)}><button aria-describedby={hoverContentOpen ? id("tooltip-content") : undefined} aria-label="查看术语解释" className="demo-icon-button" onClick={() => setOpen((value) => !value)} ref={triggerRef} type="button">?</button>{hoverContentOpen && <div className="demo-tooltip" id={id("tooltip-content")} role="tooltip"><span aria-hidden="true" className="demo-tooltip-arrow" />查看术语解释</div>}</div></div>;
     case "hover-card":
-      return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlur={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }} onFocus={() => setOpen(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); setOpen(false); hoverTriggerRef.current?.focus(); } }} onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}><a aria-describedby={open ? id("hover-card-content") : undefined} className="demo-text-link" href="#design-system-profile" onClick={(event) => { event.preventDefault(); setOpen((value) => !value); }} ref={hoverTriggerRef}>@design-system</a>{open && <div className="demo-hover-card" id={id("hover-card-content")}><span className="demo-avatar-small">DS</span><span><strong>Design System</strong><small>收录 81 个常用组件</small></span></div>}</div></div>;
+      return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlurCapture={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setTooltipFocusWithin(false); }} onFocusCapture={() => setTooltipFocusWithin(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); dismissHoverContent(hoverTriggerRef.current); } }} onMouseEnter={() => setTooltipHovered(true)} onMouseLeave={() => setTooltipHovered(false)}><a aria-describedby={hoverContentOpen ? id("hover-card-content") : undefined} className="demo-text-link" href="#design-system-profile" onClick={(event) => { event.preventDefault(); setOpen((value) => !value); }} ref={hoverTriggerRef}>@design-system</a>{hoverContentOpen && <div className="demo-hover-card" id={id("hover-card-content")}><span className="demo-avatar-small">DS</span><span><strong>Design System</strong><small>收录 81 个常用组件</small></span></div>}</div></div>;
     case "side-sheet":
-      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("打开设置")}{open && <div className="demo-side-sheet-layer" onPointerDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}><div aria-labelledby={id("sheet-title")} aria-modal={density === "detail" ? true : undefined} className="demo-side-sheet" ref={panelRef} role="dialog" tabIndex={-1}><div><strong id={id("sheet-title")}>页面设置</strong><button aria-label="关闭" onClick={() => setOpen(false)} type="button">×</button></div><label className="demo-check"><input defaultChecked type="checkbox" />显示网格</label><label className="demo-check"><input type="checkbox" />紧凑模式</label>{density === "detail" && <button className="demo-primary" onClick={() => setOpen(false)} type="button">应用</button>}</div></div>}</div>;
+      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("打开设置")}{open && <div className="demo-side-sheet-layer" onPointerDown={(event) => { if (event.target === event.currentTarget) closeOverlay(); }}><div aria-labelledby={id("sheet-title")} aria-modal={density === "detail" && modalEngaged ? true : undefined} className="demo-side-sheet" ref={panelRef} role="dialog" tabIndex={-1}><div><strong id={id("sheet-title")}>页面设置</strong><button aria-label="关闭" onClick={closeOverlay} type="button">×</button></div><label className="demo-check"><input defaultChecked type="checkbox" />显示网格</label><label className="demo-check"><input type="checkbox" />紧凑模式</label>{density === "detail" && <button className="demo-primary" onClick={closeOverlay} type="button">应用</button>}</div></div>}</div>;
     case "accordion":
       return <div className="demo-accordion">{[["什么是 Slider？", "一种让用户在连续范围内选择数值的输入控件。"], ["何时使用？", "适合有明确上下界、强调相对值的场景。"], ["键盘如何操作？", "聚焦滑块后，使用方向键逐步调整数值。"]].map(([label, copy], index) => { const expanded = openAccordionIndex === index; const triggerId = id(`accordion-trigger-${index}`); const panelId = id(`accordion-panel-${index}`); return <div key={label}><h3><button aria-controls={panelId} aria-expanded={expanded} id={triggerId} onClick={() => toggleAccordionSection(index)} type="button"><span>{label}</span><span aria-hidden="true">{expanded ? "−" : "+"}</span></button></h3>{expanded && <div aria-labelledby={triggerId} className="demo-accordion-panel" id={panelId} role="region">{copy}</div>}</div>; })}</div>;
     case "disclosure":
       return <div className="demo-disclosure"><button aria-expanded={open} onClick={() => setOpen((value) => !value)} type="button"><span className={`demo-chevron ${open ? "is-open" : ""}`}>›</span><strong>显示高级选项</strong></button>{open && <div><label className="demo-check"><input defaultChecked type="checkbox" />启用键盘步进</label>{density === "detail" && <label className="demo-field"><span>步长</span><input defaultValue="5" type="number" /></label>}</div>}</div>;
     case "lightbox":
-      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}><button aria-label="打开三张组件预览" className="demo-photo-thumb" onClick={openOverlay} ref={triggerRef} type="button"><span>UI</span><small>3 张 · 点击放大</small></button>{open && <div aria-label="组件预览灯箱" aria-modal={density === "detail" ? true : undefined} className="demo-lightbox" ref={panelRef} role="dialog" tabIndex={-1}><button aria-label="关闭灯箱" className="demo-lightbox-close" onClick={() => setOpen(false)} type="button">×</button><button aria-label="上一张" className="demo-lightbox-nav is-previous" onClick={() => setLightboxIndex((index) => (index - 1 + lightboxItems.length) % lightboxItems.length)} type="button">‹</button><figure aria-atomic="true" aria-live="polite"><div className={`tone-${lightboxIndex}`}><span>{["UI", "02", "M"][lightboxIndex]}</span></div><figcaption><strong>{lightboxItems[lightboxIndex]}</strong><span>{lightboxIndex + 1} / {lightboxItems.length}</span></figcaption></figure><button aria-label="下一张" className="demo-lightbox-nav is-next" onClick={() => setLightboxIndex((index) => (index + 1) % lightboxItems.length)} type="button">›</button></div>}</div>;
+      return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}><button aria-label="打开三张组件预览" className="demo-photo-thumb" onClick={openOverlay} ref={triggerRef} type="button"><span>UI</span><small>3 张 · 点击放大</small></button>{open && <div aria-label="组件预览灯箱" aria-modal={density === "detail" && modalEngaged ? true : undefined} className="demo-lightbox" ref={panelRef} role="dialog" tabIndex={-1}><button aria-label="关闭灯箱" className="demo-lightbox-close" onClick={closeOverlay} type="button">×</button><button aria-label="上一张" className="demo-lightbox-nav is-previous" onClick={() => setLightboxIndex((index) => (index - 1 + lightboxItems.length) % lightboxItems.length)} type="button">‹</button><figure aria-atomic="true" aria-live="polite"><div className={`tone-${lightboxIndex}`}><span>{["UI", "02", "M"][lightboxIndex]}</span></div><figcaption><strong>{lightboxItems[lightboxIndex]}</strong><span>{lightboxIndex + 1} / {lightboxItems.length}</span></figcaption></figure><button aria-label="下一张" className="demo-lightbox-nav is-next" onClick={() => setLightboxIndex((index) => (index + 1) % lightboxItems.length)} type="button">›</button></div>}</div>;
     default:
       return null;
   }
@@ -1046,15 +1082,15 @@ function ContentDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     case "list-item":
       return <ul className="demo-list">{["Slider", "Dialog", "Toast"].slice(0, density === "detail" ? 3 : 2).map((item, index) => <li key={item}><button className={active === index ? "is-active" : ""} onClick={() => setActive(index)} type="button"><span className="demo-avatar-small">{item.slice(0, 1)}</span><span><strong>{item}</strong><small>{["连续数值输入", "聚焦式浮层", "短暂状态反馈"][index]}</small></span><span>›</span></button></li>)}</ul>;
     case "avatar":
-      return <div className="demo-centered"><button aria-label="切换在线状态" className={`demo-avatar-large ${favorite ? "is-away" : ""}`} onClick={() => setFavorite((value) => !value)} type="button">LX<span /></button><strong>林小夏</strong><Status>{favorite ? "离开" : "在线"}</Status></div>;
+      return <div className="demo-centered"><button aria-label="切换在线状态" className={`demo-avatar-large ${favorite ? "is-away" : ""}`} onClick={() => setFavorite((value) => !value)} type="button"><span className="demo-avatar-initials">LX</span><span className="demo-avatar-status" /></button><strong>林小夏</strong><Status>{favorite ? "离开" : "在线"}</Status></div>;
     case "chip":
-      return <div className="demo-centered"><button aria-pressed={favorite} className={`demo-chip ${favorite ? "is-active" : ""}`} onClick={() => setFavorite((value) => !value)} type="button"><span>●</span>无障碍{favorite ? " ✓" : ""}</button><Status>{favorite ? "筛选已启用" : "点击筛选"}</Status></div>;
+      return <div className="demo-centered"><button aria-pressed={favorite} className={`demo-chip ${favorite ? "is-active" : ""}`} onClick={() => setFavorite((value) => !value)} type="button"><span aria-hidden="true" className="demo-chip-icon">●</span><span className="demo-chip-label">无障碍{favorite ? " ✓" : ""}</span></button><Status>{favorite ? "筛选已启用" : "点击筛选"}</Status></div>;
     case "carousel":
       return <div aria-label="常用组件" aria-roledescription="轮播" className="demo-carousel" role="region"><div aria-atomic="true" aria-live="polite" className={`demo-slide tone-${active}`}><small>组件 {active + 1} / {slides.length}</small><strong>{slides[active]}</strong></div><button aria-label="上一张" onClick={() => setActive((value) => (value - 1 + slides.length) % slides.length)} type="button">‹</button><button aria-label="下一张" onClick={() => setActive((value) => (value + 1) % slides.length)} type="button">›</button><div className="demo-dots">{slides.map((item, index) => <button aria-current={active === index ? "true" : undefined} aria-label={`查看 ${item}`} className={active === index ? "is-active" : ""} key={item} onClick={() => setActive(index)} type="button" />)}</div></div>;
     case "image-gallery":
-      return <div className="demo-gallery"><div className={`demo-gallery-main tone-${active}`}><span>{["A", "B", "C"][active]}</span></div><div>{[0, 1, 2].map((item) => <button aria-label={`查看图片 ${item + 1}`} aria-pressed={active === item} className={`tone-${item} ${active === item ? "is-active" : ""}`} key={item} onClick={() => setActive(item)} type="button"><span>{["A", "B", "C"][item]}</span></button>)}</div></div>;
+      return <div className="demo-gallery"><figure className={`demo-gallery-main tone-${active}`}><span>{["A", "B", "C"][active]}</span><figcaption className="demo-gallery-caption">{["组件总览", "交互细节", "移动端布局"][active]}</figcaption></figure><div>{[0, 1, 2].map((item) => <button aria-label={`查看图片 ${item + 1}`} aria-pressed={active === item} className={`tone-${item} ${active === item ? "is-active" : ""}`} key={item} onClick={() => setActive(item)} type="button"><span>{["A", "B", "C"][item]}</span></button>)}</div></div>;
     case "truncated-text":
-      return <div className="demo-truncated"><p className={expanded ? "is-expanded" : ""} id={id("truncated-copy")}>设计系统中的组件名称常常因平台而异。理解标准术语，可以更准确地检索文档、描述需求，也能让 AI 更快理解你想实现的交互效果。</p><button aria-controls={id("truncated-copy")} aria-expanded={expanded} className="demo-text-link" onClick={() => setExpanded((value) => !value)} type="button">{expanded ? "收起" : "显示更多"}</button></div>;
+      return <div className="demo-truncated"><p className={expanded ? "is-expanded" : ""} id={id("truncated-copy")}>设计系统中的组件名称常常因平台而异。理解标准术语，可以更准确地检索文档、描述需求，也能让 AI 更快理解你想实现的交互效果。</p><span aria-hidden="true" className="demo-truncation-cue">{expanded ? "全文" : "…"}</span><button aria-controls={id("truncated-copy")} aria-expanded={expanded} className="demo-text-link" onClick={() => setExpanded((value) => !value)} type="button">{expanded ? "收起" : "显示更多"}</button></div>;
     case "divider": {
       const vertical = active === 1;
       return <div className="demo-divider-wrap"><div className={`demo-divider-example ${vertical ? "is-vertical" : ""}`}><span><strong>{density === "detail" ? "主要内容" : "内容 A"}</strong><small>上一个区域</small></span><div aria-label="内容分隔线" aria-orientation={vertical ? "vertical" : "horizontal"} className="demo-divider-rule" role="separator" /><span><strong>{density === "detail" ? "补充内容" : "内容 B"}</strong><small>下一个区域</small></span></div><button aria-pressed={vertical} className="demo-secondary" onClick={() => setActive((value) => value === 1 ? 0 : 1)} type="button">切换为{vertical ? "水平" : "垂直"}分隔线</button></div>;
@@ -1065,6 +1101,8 @@ function ContentDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
 }
 
 function DataDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
+  const id = useDemoId();
+  const gridTitleId = id("data-grid-title");
   const [active, setActive] = useState(() => slug === "data-grid" ? 3 : 1);
   const [ascending, setAscending] = useState(true);
   const [expanded, setExpanded] = useState(true);
@@ -1150,13 +1188,13 @@ function DataDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
 
   switch (slug) {
     case "data-table":
-      return <div aria-label="可横向滚动的组件数据表" className="demo-table-scroll" tabIndex={0}><table><caption className="sr-only">组件数据表</caption><thead><tr><th aria-sort={ascending ? "ascending" : "descending"}><button onClick={() => setAscending((value) => !value)} type="button">组件 {ascending ? "↑" : "↓"}</button></th><th>类型</th><th>平台</th></tr></thead><tbody>{sortedRows.slice(0, density === "detail" ? 3 : 2).map((row) => <tr key={row[0]}>{row.map((cell) => <td key={cell}>{cell}</td>)}</tr>)}</tbody></table></div>;
+      return <div aria-label="可横向滚动的组件数据表" className="demo-table-scroll" tabIndex={0}><table><caption className="demo-table-title">组件数据表</caption><thead><tr><th aria-sort={ascending ? "ascending" : "descending"}><button onClick={() => setAscending((value) => !value)} type="button">组件 {ascending ? "↑" : "↓"}</button></th><th>类型</th><th>平台</th></tr></thead><tbody>{sortedRows.slice(0, density === "detail" ? 3 : 2).map((row) => <tr key={row[0]}>{row.map((cell) => <td key={cell}>{cell}</td>)}</tr>)}</tbody></table></div>;
     case "data-grid":
-      return <div className="demo-data-grid" role="grid" aria-label="组件数据"><div className="demo-data-grid-row" role="row">{["名称", "评分", "状态"].map((cell) => <div className="is-heading" key={cell} role="columnheader">{cell}</div>)}</div>{[["Slider", "9.4", "推荐"], ["Dialog", "9.1", "常用"]].map((row, rowIndex) => <div className="demo-data-grid-row" key={row[0]} role="row">{row.map((cell, columnIndex) => { const index = 3 + rowIndex * 3 + columnIndex; return <button aria-selected={active === index} className={active === index ? "is-active" : ""} data-grid-index={index} key={`${cell}-${index}`} onClick={() => setActive(index)} onKeyDown={(event) => handleGridKeyDown(event, index)} role="gridcell" tabIndex={active === index ? 0 : -1} type="button">{cell}</button>; })}</div>)}</div>;
+      return <div className="demo-data-grid-shell"><strong className="demo-data-grid-title" id={gridTitleId}>组件数据</strong><div aria-labelledby={gridTitleId} className="demo-data-grid" role="grid"><div className="demo-data-grid-row" role="row">{["名称", "评分", "状态"].map((cell) => <div className="is-heading" key={cell} role="columnheader">{cell}</div>)}</div>{[["Slider", "9.4", "推荐"], ["Dialog", "9.1", "常用"]].map((row, rowIndex) => <div className={`demo-data-grid-row ${Math.floor((active - 3) / 3) === rowIndex ? "is-active-row" : ""}`} key={row[0]} role="row">{row.map((cell, columnIndex) => { const index = 3 + rowIndex * 3 + columnIndex; return <button aria-selected={active === index} className={active === index ? "is-active" : ""} data-grid-index={index} key={`${cell}-${index}`} onClick={() => setActive(index)} onKeyDown={(event) => handleGridKeyDown(event, index)} role="gridcell" tabIndex={active === index ? 0 : -1} type="button">{cell}</button>; })}</div>)}</div></div>;
     case "tree-view":
       return <div aria-label="组件分类" className="demo-tree" role="tree"><button aria-expanded={expanded} aria-selected={active === 0} onClick={() => { setActive(0); setExpanded((value) => !value); }} onKeyDown={(event) => handleTreeKeyDown(event, 0)} role="treeitem" tabIndex={active === 0 ? 0 : -1} type="button"><span>{expanded ? "⌄" : "›"}</span>组件</button>{expanded && <div role="group"><button aria-selected={active === 1} className={active === 1 ? "is-active" : ""} onClick={() => setActive(1)} onKeyDown={(event) => handleTreeKeyDown(event, 1)} role="treeitem" tabIndex={active === 1 ? 0 : -1} type="button">选择与取值</button><button aria-selected={active === 2} className={active === 2 ? "is-active" : ""} onClick={() => setActive(2)} onKeyDown={(event) => handleTreeKeyDown(event, 2)} role="treeitem" tabIndex={active === 2 ? 0 : -1} type="button">反馈与状态</button></div>}</div>;
     case "timeline":
-      return <div className="demo-timeline">{["创建词条", "补充演示", "发布上线"].map((item, index) => <button aria-current={index === active ? "step" : undefined} className={index <= active ? "is-active" : ""} key={item} onClick={() => setActive(index)} type="button"><span>{index < active ? "✓" : index + 1}</span><span><strong>{item}</strong><small>{["09:20", "10:45", "待完成"][index]}</small></span></button>)}</div>;
+      return <div className="demo-timeline">{["创建词条", "补充演示", "发布上线"].map((item, index) => <button aria-current={index === active ? "step" : undefined} className={index <= active ? "is-active" : ""} key={item} onClick={() => setActive(index)} type="button"><span className="demo-timeline-marker">{index < active ? "✓" : index + 1}</span><span className="demo-timeline-content"><strong>{item}</strong><small>{["09:20", "10:45", "待完成"][index]}</small></span>{index < 2 && <span aria-hidden="true" className="demo-timeline-connector" />}</button>)}</div>;
     case "calendar-view": {
       const days = Array.from({ length: 14 }, (_, index) => index + 7);
       return <div className="demo-calendar"><div><button aria-label="上个月" onClick={() => setMonthOffset((value) => value - 1)} type="button">‹</button><strong>{calendarYear} 年 {calendarMonth} 月</strong><button aria-label="下个月" onClick={() => setMonthOffset((value) => value + 1)} type="button">›</button></div><div aria-label={`${calendarYear} 年 ${calendarMonth} 月日期`} className="demo-calendar-grid" role="grid">{[days.slice(0, 7), days.slice(7)].map((week, weekIndex) => <div className="demo-calendar-row" key={weekIndex} role="row">{week.map((day) => { const eventName = calendarEvents[day]; return <button aria-label={`${calendarMonth} 月 ${day} 日${eventName ? `，${eventName}` : "，无日程"}`} aria-selected={selectedDay === day} className={`${selectedDay === day ? "is-active" : ""} ${eventName ? "has-event" : ""}`} data-day={day} key={day} onClick={() => setSelectedDay(day)} onKeyDown={(event) => handleCalendarKeyDown(event, day)} role="gridcell" tabIndex={selectedDay === day ? 0 : -1} type="button">{day}{eventName && <span aria-hidden="true" className="demo-calendar-event-dot" />}</button>; })}</div>)}</div><Status>{calendarMonth} 月 {selectedDay} 日 · {calendarEvents[selectedDay] ?? "无日程"}</Status></div>;
@@ -1168,17 +1206,21 @@ function DataDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
   }
 }
 
-function MotionDemo({ slug, onSettingChange, settings }: DemoProps & { slug: DemoSlug }) {
+function MotionDemo({ slug, density, onSettingChange, settings }: DemoProps & { slug: DemoSlug }) {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [marqueeHovered, setMarqueeHovered] = useState(false);
+  const [marqueeFocusWithin, setMarqueeFocusWithin] = useState(false);
   const [items, setItems] = useState(["Slider", "Dialog", "Toast"]);
   const [sortAnnouncement, setSortAnnouncement] = useState("");
-  const [loaded, setLoaded] = useState(() => slug === "infinite-scroll" ? 3 : 2);
+  const [loaded, setLoaded] = useState(() => slug === "infinite-scroll" || (slug === "lazy-loading" && density === "detail") ? 3 : 2);
   const [internalZoom, setZoom] = useState(1);
   const [internalCompare, setCompare] = useState(48);
   const zoom = settings?.zoom ?? internalZoom;
   const compare = settings?.compare ?? internalCompare;
   const snapRef = useRef<HTMLDivElement>(null);
+  const marqueeItems = ["Slider", "Dialog", "Toast", "Carousel"];
+  const marqueePaused = paused || marqueeHovered || marqueeFocusWithin;
 
   const changeZoom = (next: number) => {
     const clamped = Math.round(Math.max(0.7, Math.min(1.6, next)) * 100) / 100;
@@ -1226,13 +1268,13 @@ function MotionDemo({ slug, onSettingChange, settings }: DemoProps & { slug: Dem
 
   switch (slug) {
     case "drag-and-drop":
-      return <div className="demo-sortable"><small>拖动，或用箭头排序</small>{items.map((item, index) => <div className={active === index ? "is-active" : ""} draggable key={item} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(index)); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={(event) => { event.preventDefault(); const from = Number(event.dataTransfer.getData("text/plain")); if (Number.isInteger(from)) reorder(from, index); }}><span aria-hidden="true">⠿</span><strong>{item}</strong><span><button aria-label={`上移 ${item}`} disabled={index === 0} onClick={() => move(index, -1)} type="button">↑</button><button aria-label={`下移 ${item}`} disabled={index === items.length - 1} onClick={() => move(index, 1)} type="button">↓</button></span></div>)}<span aria-atomic="true" aria-live="polite" className="sr-only">{sortAnnouncement}</span></div>;
+      return <div className="demo-sortable"><small className="demo-drop-hint">拖动，或用箭头调整放置位置</small>{items.map((item, index) => <div className={active === index ? "is-active" : ""} draggable key={item} onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(index)); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={(event) => { event.preventDefault(); const from = Number(event.dataTransfer.getData("text/plain")); if (Number.isInteger(from)) reorder(from, index); }}><span aria-hidden="true">⠿</span><strong>{item}</strong><span><button aria-label={`上移 ${item}`} disabled={index === 0} onClick={() => move(index, -1)} type="button">↑</button><button aria-label={`下移 ${item}`} disabled={index === items.length - 1} onClick={() => move(index, 1)} type="button">↓</button></span></div>)}<span aria-atomic="true" aria-live="polite" className="sr-only">{sortAnnouncement}</span></div>;
     case "infinite-scroll":
       return <div className="demo-feed"><div aria-label="滚动加载内容" onScroll={(event) => { const target = event.currentTarget; if (target.scrollHeight - target.scrollTop - target.clientHeight < 18) setLoaded((value) => Math.min(4, value + 1)); }} tabIndex={0}>{Array.from({ length: loaded }, (_, index) => <article key={index}><span className="demo-avatar-small">{index + 1}</span><span><strong>{["Slider 设计要点", "Dialog 的焦点管理", "新增组件条目", "键盘操作清单"][index]}</strong><small>阅读 2 分钟</small></span></article>)}</div><button className="demo-secondary" disabled={loaded >= 4} onClick={() => setLoaded((value) => Math.min(4, value + 1))} type="button">{loaded >= 4 ? "已加载全部" : "继续加载"}</button><Status>已显示 {loaded} 条</Status></div>;
     case "lazy-loading":
-      return <div className="demo-lazy"><div className={loaded > 2 ? "is-loaded" : ""}>{loaded > 2 ? <><span>UI</span><small>图片内容已显示</small></> : <><i /><i /><small>内容尚未进入视口</small></>}</div><button className="demo-primary" onClick={() => setLoaded((value) => value > 2 ? 2 : 3)} type="button">{loaded > 2 ? "卸载演示" : "模拟进入视口"}</button></div>;
+      return <div className="demo-lazy"><div className={`demo-lazy-slot ${loaded > 2 ? "is-loaded" : ""}`}>{loaded > 2 ? <><span className="demo-lazy-content">UI</span><small>图片内容已显示</small></> : <><i /><i /><small>内容尚未进入视口</small></>}</div><button className="demo-primary" onClick={() => setLoaded((value) => value > 2 ? 2 : 3)} type="button">{loaded > 2 ? "卸载演示" : "模拟进入视口"}</button></div>;
     case "marquee":
-      return <div className="demo-motion-control"><div className={`demo-marquee ${paused ? "is-paused" : ""}`}><div>{["Slider", "Dialog", "Toast", "Carousel", "Slider", "Dialog", "Toast", "Carousel"].map((item, index) => <span key={`${item}-${index}`}>{item} <i>◆</i></span>)}</div></div><button className="demo-secondary" onClick={() => setPaused((value) => !value)} type="button">{paused ? "继续滚动" : "暂停滚动"}</button></div>;
+      return <div className="demo-motion-control" onBlurCapture={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setMarqueeFocusWithin(false); }} onFocusCapture={() => setMarqueeFocusWithin(true)} onMouseEnter={() => setMarqueeHovered(true)} onMouseLeave={() => setMarqueeHovered(false)}><div className={`demo-marquee ${marqueePaused ? "is-paused" : ""}`}><div>{marqueeItems.map((item) => <span key={item}>{item} <i>◆</i></span>)}<span aria-hidden="true" style={{ display: "contents" }}>{marqueeItems.map((item) => <span key={`duplicate-${item}`}>{item} <i>◆</i></span>)}</span></div></div><button className="demo-secondary" onClick={() => setPaused((value) => !value)} type="button">{paused ? "继续滚动" : "暂停滚动"}</button></div>;
     case "parallax-scrolling":
       return <div className="demo-parallax"><div aria-label="可滚动的视差预览" className="demo-parallax-scroll" onScroll={(event) => { const maxScroll = event.currentTarget.scrollHeight - event.currentTarget.clientHeight; setActive(maxScroll > 0 ? Math.round((event.currentTarget.scrollTop / maxScroll) * 100) : 0); }} tabIndex={0}><div className="demo-parallax-scene"><span className="demo-orb orb-one" style={{ transform: `translateY(${active * -0.22}px)` }} /><span className="demo-orb orb-two" style={{ transform: `translateY(${active * 0.3}px)` }} /><strong style={{ transform: `translateY(${active * -0.08}px)` }}>层叠滚动</strong><small>滚动这里，观察图层速度差</small></div><div aria-hidden="true" className="demo-parallax-space"><span>SCROLL</span></div></div><Status>滚动位置 {active}%</Status></div>;
     case "scroll-snap":

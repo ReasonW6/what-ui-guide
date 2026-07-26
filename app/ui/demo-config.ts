@@ -1,3 +1,5 @@
+import type { DemoSlug } from "./DemoStage";
+
 export interface DemoSettings {
   weekStartsOn: 0 | 1;
   cellSize: number;
@@ -191,33 +193,79 @@ export interface AnnotationGuide {
   id: number;
   label: string;
   description: string;
-  selector: string | null;
+  selector: string;
   placement?: "left" | "right" | "top";
   targetMode?: "first" | "all" | "union";
 }
 
-type AnnotationDefinition = Omit<AnnotationGuide, "id" | "label">;
+type AnnotationDefinition = Omit<AnnotationGuide, "id" | "label" | "description"> & {
+  description?: string;
+};
 
-const annotationDefinitions: Readonly<
-  Record<string, readonly [AnnotationDefinition, AnnotationDefinition, AnnotationDefinition]>
-> = {
-  "date-picker": [
+type AnnotationTriplet = readonly [
+  AnnotationDefinition,
+  AnnotationDefinition,
+  AnnotationDefinition,
+];
+
+const parts = (
+  first: string,
+  second: string,
+  third: string,
+): AnnotationTriplet => [
+  { selector: first, targetMode: "union" },
+  { selector: second, targetMode: "union" },
+  { selector: third, targetMode: "union" },
+];
+
+const annotationDefinitions: Record<DemoSlug, AnnotationTriplet> = {
+  "navigation-bar": parts(
+    ".demo-navbar > strong",
+    ".demo-navbar > .demo-nav-list > button",
+    ".demo-navbar-actions",
+  ),
+  "sidebar-navigation": parts(
+    ".demo-sidebar-layout > nav",
+    ".demo-sidebar-layout > nav > strong",
+    ".demo-sidebar-layout .demo-nav-list > button",
+  ),
+  "navigation-drawer": parts(
+    ".demo-drawer-scene > .demo-primary",
+    ".demo-drawer-scrim",
+    ".demo-drawer",
+  ),
+  "bottom-navigation": parts(
+    ".demo-bottom-nav",
+    ".demo-bottom-nav .demo-icon",
+    ".demo-bottom-nav .demo-nav-label",
+  ),
+  tabs: [
     {
-      selector: '.demo-date-picker input, .demo-field input[type="date"]',
-      placement: "left",
-      description: "日期输入显示当前值，也保留直接键入日期的路径。",
+      selector: '.demo-tabs [role="tablist"]',
+      targetMode: "union",
+      description: "标签列表把一组同级视图组织在同一个键盘导航范围内。",
     },
     {
-      selector: '.demo-date-picker button[aria-haspopup="dialog"], .demo-field input[type="date"]',
-      placement: "right",
-      description: "日历触发器负责展开选择面板，并向辅助技术同步展开状态。",
+      selector: '.demo-tabs [role="tab"]',
+      targetMode: "union",
+      description: "标签按钮切换当前项目，并通过选中状态说明哪个面板正在显示。",
     },
     {
-      selector: '.demo-date-picker [role="grid"], .demo-field:has(input[type="date"])',
-      placement: "right",
-      description: "日期网格按周组织日期，并应支持方向键移动与清楚的选中状态。",
+      selector: '.demo-tabs [role="tabpanel"]',
+      targetMode: "union",
+      description: "内容面板承载当前标签对应的信息，并与活动标签保持关联。",
     },
   ],
+  breadcrumb: parts(
+    ".demo-breadcrumb",
+    ".demo-breadcrumb a:not([aria-current])",
+    ".demo-breadcrumb a[aria-current]",
+  ),
+  pagination: parts(
+    ".demo-pagination > button:first-of-type",
+    ".demo-pagination > button:not(:first-of-type):not(:last-of-type)",
+    ".demo-pagination > button:last-of-type",
+  ),
   "progress-stepper": [
     {
       selector: ".demo-stepper li button > span",
@@ -235,6 +283,226 @@ const annotationDefinitions: Readonly<
       description: "连接线把离散步骤组织成一条有先后方向的流程。",
     },
   ],
+  "anchor-navigation": parts(
+    ".demo-anchor-layout > nav a:not([aria-current])",
+    ".demo-anchor-content section",
+    ".demo-anchor-layout > nav a[aria-current]",
+  ),
+  "split-view": [
+    {
+      selector: ".demo-split-view > nav",
+      targetMode: "union",
+      description: "主面板保留列表或导航上下文，让用户不必离开当前工作区。",
+    },
+    {
+      selector: '.demo-split-view > [role="separator"]',
+      targetMode: "union",
+      description: "分隔条可拖动或用方向键调整，并持续暴露当前面板比例。",
+    },
+    {
+      selector: ".demo-split-view > section",
+      targetMode: "union",
+      description: "详情面板展示当前项目的内容，并随主面板选择即时更新。",
+    },
+  ],
+  button: parts(
+    ".demo-centered > .demo-primary",
+    ".demo-centered > .demo-primary .demo-button-label",
+    ".demo-centered > .demo-primary .demo-icon",
+  ),
+  "icon-button": parts(
+    ".demo-centered > .demo-icon-button",
+    ".demo-centered > .demo-icon-button > span",
+    ".demo-centered > .demo-accessible-name",
+  ),
+  "button-group": parts(
+    ".demo-button-group",
+    '.demo-button-group button:not([aria-pressed="true"])',
+    '.demo-button-group button[aria-pressed="true"]',
+  ),
+  "split-button": parts(
+    ".demo-split-button > button:first-child",
+    ".demo-split-button > button:last-child",
+    ".demo-popup-wrap > .demo-menu",
+  ),
+  toolbar: parts(
+    ".demo-toolbar",
+    ".demo-toolbar > button",
+    ".demo-toolbar > span:not(.demo-status)",
+  ),
+  "dropdown-menu": parts(
+    ".demo-popup-wrap > .demo-primary",
+    ".demo-popup-wrap > .demo-menu",
+    '.demo-popup-wrap [role="menuitem"]',
+  ),
+  "context-menu": parts(
+    ".demo-context-target",
+    ".demo-context-wrap > .demo-menu",
+    '.demo-context-wrap [role="menuitem"]',
+  ),
+  "overflow-menu": parts(
+    ".demo-record-row > .demo-icon-button",
+    ".demo-popup-wrap > .demo-menu",
+    '.demo-popup-wrap [role="menuitem"]',
+  ),
+  "command-palette": parts(
+    ".demo-command-scene > .demo-secondary",
+    ".demo-command-input",
+    '.demo-command-dialog [role="listbox"]',
+  ),
+  "text-field": parts(
+    ".demo-field > span",
+    ".demo-field > input",
+    ".demo-form > .demo-status",
+  ),
+  textarea: parts(
+    ".demo-field > span",
+    ".demo-field > textarea",
+    ".demo-field > small",
+  ),
+  "password-field": parts(
+    ".demo-field > label",
+    ".demo-input-action > input",
+    ".demo-input-action > button",
+  ),
+  "search-field": parts(
+    ".demo-search-box",
+    ".demo-search-box > input",
+    ".demo-search-box > button",
+  ),
+  spinbutton: parts(
+    ".demo-spinbutton > input",
+    ".demo-spinbutton > button",
+    ".demo-field > small",
+  ),
+  "masked-input": parts(
+    ".demo-field > span",
+    ".demo-field > input",
+    ".demo-field > small",
+  ),
+  "otp-input": parts(
+    ".demo-otp > legend",
+    ".demo-otp input",
+    ".demo-otp > .demo-status",
+  ),
+  "tags-input": parts(
+    ".demo-tags-box > .demo-tag",
+    ".demo-tags-box > input",
+    ".demo-tag > button",
+  ),
+  "file-upload": parts(
+    ".demo-dropzone > .demo-secondary",
+    ".demo-dropzone > small",
+    ".demo-dropzone > strong",
+  ),
+  checkbox: parts(
+    ".demo-check-box",
+    ".demo-check-mark",
+    ".demo-check-label",
+  ),
+  "radio-group": parts(
+    ".demo-radio > legend",
+    ".demo-radio input",
+    ".demo-radio label > span",
+  ),
+  switch: parts(
+    ".demo-setting-row > .demo-switch",
+    ".demo-setting-row > .demo-switch > span",
+    ".demo-setting-row > span:first-child",
+  ),
+  select: parts(
+    ".demo-field > span",
+    ".demo-field > select",
+    ".demo-field > small",
+  ),
+  combobox: parts(
+    ".demo-combobox input",
+    ".demo-combobox > .demo-combobox-trigger",
+    '.demo-combobox [role="listbox"]',
+  ),
+  "segmented-control": parts(
+    ".demo-segments",
+    '.demo-segments > button:not([aria-pressed="true"])',
+    '.demo-segments > button[aria-pressed="true"]',
+  ),
+  slider: parts(
+    ".demo-slider-track",
+    ".demo-slider-fill",
+    ".demo-slider-thumb",
+  ),
+  "range-slider": parts(
+    ".demo-dual-range-track",
+    ".demo-dual-range-thumb.is-low",
+    ".demo-dual-range-thumb.is-high",
+  ),
+  "date-picker": [
+    {
+      selector: '[data-demo-part="1"]',
+      targetMode: "union",
+      placement: "left",
+      description: "日期输入显示当前值，也保留直接键入日期的路径。",
+    },
+    {
+      selector: '[data-demo-part="2"]',
+      targetMode: "union",
+      description: "日历触发器负责展开选择面板，并向辅助技术同步展开状态。",
+    },
+    {
+      selector: '[data-demo-part="3"]',
+      targetMode: "union",
+      description: "日期网格按周组织日期，并应支持方向键移动与清楚的选中状态。",
+    },
+  ],
+  "color-picker": parts(
+    ".demo-color-swatch",
+    '.demo-color-picker input[type="color"]',
+    ".demo-color-picker > div > strong",
+  ),
+  alert: parts(
+    ".demo-alert > .demo-icon",
+    ".demo-alert > span:not(.demo-icon)",
+    ".demo-alert > button",
+  ),
+  toast: parts(
+    ".demo-toast",
+    ".demo-toast > span:not(.demo-icon)",
+    ".demo-toast > button",
+  ),
+  snackbar: parts(
+    ".demo-snackbar > span",
+    ".demo-snackbar > button",
+    ".demo-snackbar",
+  ),
+  "inline-validation": parts(
+    ".demo-field > input",
+    ".demo-field > small",
+    ".demo-field > span",
+  ),
+  "progress-bar": parts(
+    ".demo-progress-track",
+    ".demo-progress-fill",
+    ".demo-progress-demo output",
+  ),
+  spinner: parts(
+    ".demo-spinner",
+    ".demo-spinner-label",
+    ".demo-centered",
+  ),
+  "skeleton-screen": parts(
+    ".demo-skeleton > span i",
+    ".demo-skeleton > i",
+    ".demo-skeleton",
+  ),
+  badge: parts(
+    ".demo-badge",
+    ".demo-badge-value",
+    ".demo-bell",
+  ),
+  "empty-state": parts(
+    ".demo-empty > strong",
+    ".demo-empty > small",
+    ".demo-empty > button",
+  ),
   "focus-ring": [
     {
       selector: ".demo-focus-surface button",
@@ -243,49 +511,41 @@ const annotationDefinitions: Readonly<
     },
     {
       selector: ".demo-focus-outline",
+      targetMode: "union",
       description: "外侧轮廓贴合当前控件但不改变布局，清楚标示键盘位置。",
     },
     {
       selector: ".demo-focus-surface",
+      targetMode: "union",
       description: "对比背景让焦点轮廓在明暗界面中都保持足够可见。",
     },
   ],
-  tabs: [
+  "progress-ring": [
     {
-      selector: '.demo-tabs [role="tablist"]',
-      description: "标签列表把一组同级视图组织在同一个键盘导航范围内。",
+      selector: ".demo-progress-ring circle:first-of-type",
+      targetMode: "union",
+      description: "圆环轨道给出完整范围，作为当前进度弧线的视觉基准。",
     },
     {
-      selector: '.demo-tabs [role="tab"]',
-      targetMode: "all",
-      description: "标签按钮切换当前项目，并通过选中状态说明哪个面板正在显示。",
+      selector: ".demo-progress-ring circle:nth-of-type(2)",
+      targetMode: "union",
+      description: "进度弧线按完成比例填充，让变化方向和剩余量一眼可见。",
     },
     {
-      selector: '.demo-tabs [role="tabpanel"]',
-      description: "内容面板承载当前标签对应的信息，并与活动标签保持关联。",
-    },
-  ],
-  "split-view": [
-    {
-      selector: ".demo-split-view > nav",
-      description: "主面板保留列表或导航上下文，让用户不必离开当前工作区。",
-    },
-    {
-      selector: '.demo-split-view > [role="separator"]',
-      description: "分隔条可拖动或用方向键调整，并持续暴露当前面板比例。",
-    },
-    {
-      selector: ".demo-split-view > section",
-      description: "详情面板展示当前项目的内容，并随主面板选择即时更新。",
+      selector: ".demo-progress-ring output",
+      targetMode: "union",
+      description: "数值标签提供精确结果，避免只依赖颜色或弧线长度传达进度。",
     },
   ],
   dialog: [
     {
       selector: ".demo-backdrop",
+      targetMode: "union",
       description: "遮罩弱化背景内容，帮助用户把注意力留在当前任务。",
     },
     {
       selector: '.demo-dialog[role="dialog"]',
+      targetMode: "union",
       description: "对话框容器建立独立任务边界，并在打开期间管理内部焦点。",
     },
     {
@@ -294,27 +554,165 @@ const annotationDefinitions: Readonly<
       description: "标题、内容和操作共同说明任务、收集输入，并提供明确的完成或取消路径。",
     },
   ],
-  "progress-ring": [
-    {
-      selector: ".demo-progress-ring circle:first-of-type",
-      description: "圆环轨道给出完整范围，作为当前进度弧线的视觉基准。",
-    },
-    {
-      selector: ".demo-progress-ring circle:nth-of-type(2)",
-      description: "进度弧线按完成比例填充，让变化方向和剩余量一眼可见。",
-    },
-    {
-      selector: ".demo-progress-ring output",
-      description: "数值标签提供精确结果，避免只依赖颜色或弧线长度传达进度。",
-    },
-  ],
+  "alert-dialog": parts(
+    ".demo-dialog.is-alert > strong",
+    ".demo-dialog.is-alert > small",
+    ".demo-dialog.is-alert > .demo-dialog-actions",
+  ),
+  popover: parts(
+    ".demo-popup-wrap > .demo-primary",
+    ".demo-popup-wrap",
+    ".demo-popup-wrap > .demo-popover",
+  ),
+  tooltip: parts(
+    ".demo-hover-region > .demo-icon-button",
+    ".demo-hover-region > .demo-tooltip",
+    ".demo-tooltip-arrow",
+  ),
+  "hover-card": parts(
+    ".demo-hover-region > .demo-text-link",
+    ".demo-hover-region > .demo-hover-card",
+    ".demo-hover-card > span:last-child",
+  ),
+  "side-sheet": parts(
+    ".demo-side-sheet",
+    ".demo-side-sheet > div:first-child",
+    ".demo-side-sheet > label, .demo-side-sheet > .demo-primary",
+  ),
+  accordion: parts(
+    ".demo-accordion h3 button",
+    ".demo-accordion h3 button > span:last-child",
+    ".demo-accordion-panel",
+  ),
+  disclosure: parts(
+    ".demo-disclosure > button",
+    ".demo-disclosure .demo-chevron",
+    ".demo-disclosure > div",
+  ),
+  lightbox: parts(
+    ".demo-lightbox",
+    ".demo-lightbox > figure",
+    ".demo-lightbox > button",
+  ),
+  scrim: parts(
+    ".demo-scrim-layer",
+    ".demo-overlay-scene > .demo-primary",
+    ".demo-scrim-card",
+  ),
+  card: parts(
+    ".demo-content-card",
+    ".demo-content-card > .demo-card-art, .demo-content-card strong",
+    ".demo-content-card p, .demo-content-card > button",
+  ),
+  "list-item": parts(
+    ".demo-list",
+    ".demo-list button > span:nth-child(2)",
+    ".demo-list button > span:first-child, .demo-list button > span:last-child",
+  ),
+  avatar: parts(
+    ".demo-avatar-initials",
+    ".demo-avatar-large",
+    ".demo-avatar-status",
+  ),
+  chip: parts(
+    ".demo-chip",
+    ".demo-chip-label",
+    ".demo-chip-icon",
+  ),
+  carousel: parts(
+    ".demo-carousel > .demo-slide",
+    ".demo-carousel > button",
+    ".demo-carousel > .demo-dots",
+  ),
+  "image-gallery": parts(
+    ".demo-gallery",
+    ".demo-gallery > div:last-child > button",
+    ".demo-gallery-caption",
+  ),
+  "truncated-text": parts(
+    ".demo-truncated > p",
+    ".demo-truncation-cue",
+    ".demo-truncated > button",
+  ),
+  divider: parts(
+    ".demo-divider-rule",
+    ".demo-divider-example > span:first-child",
+    ".demo-divider-example > span:last-child",
+  ),
+  "data-table": parts(
+    ".demo-table-title",
+    ".demo-table-scroll thead",
+    ".demo-table-scroll tbody",
+  ),
+  "data-grid": parts(
+    ".demo-data-grid-title",
+    ".demo-data-grid-row.is-active-row",
+    '.demo-data-grid [role="gridcell"][tabindex="0"]',
+  ),
+  "tree-view": parts(
+    ".demo-tree",
+    ".demo-tree > [role=treeitem]",
+    '.demo-tree > [role="group"]',
+  ),
+  timeline: parts(
+    ".demo-timeline-marker",
+    ".demo-timeline-connector",
+    ".demo-timeline-content",
+  ),
+  "calendar-view": parts(
+    ".demo-calendar > div:first-child",
+    ".demo-calendar-grid",
+    ".demo-calendar-grid .has-event",
+  ),
+  chart: parts(
+    ".demo-chart-heading",
+    ".demo-bars",
+    ".demo-bars > button, .demo-chart-heading .demo-status",
+  ),
+  "drag-and-drop": parts(
+    ".demo-sortable > div",
+    ".demo-sortable > div > span:first-child",
+    ".demo-sortable > .demo-drop-hint",
+  ),
+  "infinite-scroll": parts(
+    ".demo-feed > div",
+    ".demo-feed > button",
+    ".demo-feed > .demo-status",
+  ),
+  "lazy-loading": parts(
+    ".demo-lazy-slot",
+    ".demo-lazy > button",
+    ".demo-lazy-content",
+  ),
+  marquee: parts(
+    ".demo-marquee",
+    ".demo-marquee > div",
+    ".demo-motion-control > button",
+  ),
+  "parallax-scrolling": parts(
+    ".demo-parallax-scroll",
+    ".demo-parallax-scene > strong, .demo-parallax-scene > .orb-one",
+    ".demo-parallax-scene > .orb-two, .demo-parallax-space",
+  ),
+  "scroll-snap": parts(
+    ".demo-snap > div:first-child",
+    ".demo-snap [data-snap-index]",
+    ".demo-snap > .demo-dots",
+  ),
+  "pan-and-zoom": parts(
+    ".demo-panzoom > div:first-child",
+    ".demo-panzoom > div:first-child > span",
+    '.demo-panzoom > [role="group"]',
+  ),
   "before-after-slider": [
     {
       selector: ".demo-before",
+      targetMode: "union",
       description: "前图与后图严格对齐，作为拖动比较时的一侧视觉基准。",
     },
     {
       selector: ".demo-after",
+      targetMode: "union",
       description: "后图层随揭示位置显露，让同一区域的变化可以连续比较。",
     },
     {
@@ -323,74 +721,29 @@ const annotationDefinitions: Readonly<
       description: "分隔把手同时支持拖动和键盘调整，并清楚标示当前揭示位置。",
     },
   ],
-};
+} satisfies Record<DemoSlug, AnnotationTriplet>;
 
 function genericDescription(label: string): string {
   return `“${label}”是这个组件的关键组成部分；观察它的位置、状态以及与相邻元素的关系。`;
-}
-
-function semanticSelector(label: string): string | null {
-  if (/遮罩/.test(label)) {
-    return ".demo-backdrop, .demo-drawer-scrim, .demo-command-backdrop, .demo-scrim-layer";
-  }
-  if (/分隔|连接线|轮廓/.test(label)) {
-    return "[role='separator'], hr, .demo-divider-rule, .demo-split-divider, .demo-compare-line";
-  }
-  if (/轨道|填充条|弧线|旋转图形|滑块|把手/.test(label)) {
-    return "input[type='range'], [role='slider'], [role='progressbar'], progress, .demo-progress-ring, .demo-spinner, .demo-compare-handle";
-  }
-  if (/输入|编辑区|搜索框|查询|字符输入|数值输入|遮蔽输入/.test(label)) {
-    return "input, textarea, [role='combobox'], .demo-otp";
-  }
-  if (/菜单项|选项标签|导航项|祖先链接|页码链接|章节链接/.test(label)) {
-    return "[role='menuitem'], [role='option'], [role='tab'], nav a, nav button, option";
-  }
-  if (/按钮|操作|控制|触发器|触发元素|触发链接|更多按钮|上一页|下一页/.test(label)) {
-    return "button, [role='button'], a[href]";
-  }
-  if (/图标|标记|徽标|色样|图片|媒体|缩略图|前图|后图|图例/.test(label)) {
-    return ".demo-icon, .demo-color-swatch, img, figure, svg, .demo-before, .demo-after, .demo-photo-thumb";
-  }
-  if (/状态|错误|帮助|说明|提示|数值|当前位置|位置指示|字数/.test(label)) {
-    return "[role='status'], [role='alert'], output, .demo-status, small, p";
-  }
-  if (/标题|文字标签|短标签|可见标签|组标题/.test(label)) {
-    return "h1, h2, h3, strong, label, [role='tab'], button";
-  }
-  if (/菜单/.test(label)) {
-    return "[role='menu'], [role='listbox'], .demo-menu, .demo-popover";
-  }
-  if (/网格|表格|单元格|数据行|时间网格/.test(label)) {
-    return "[role='grid'], table, [role='gridcell'], .demo-calendar-grid, .demo-data-grid";
-  }
-  if (/列表|节点|项目|内容流|选项/.test(label)) {
-    return "[role='list'], [role='tree'], [role='treeitem'], [role='listbox'], ul, ol, .demo-list, .demo-feed";
-  }
-  if (/内容面板|详情面板|导航面板|边缘面板|弹出内容|内容区域|任务内容/.test(label)) {
-    return "[role='tabpanel'], [role='dialog'], section, article, .demo-side-sheet, .demo-drawer, .demo-popover";
-  }
-  if (/容器|面板|视口|区域|画布|主内容|正文|内容|对象|背景层|前景层/.test(label)) {
-    return ":scope > .demo-canvas > *";
-  }
-  return null;
 }
 
 export function getAnnotationGuides(
   slug: string,
   anatomy: readonly string[],
 ): readonly AnnotationGuide[] {
-  const definitions = annotationDefinitions[slug];
+  const definitions = annotationDefinitions[slug as DemoSlug];
+  if (!definitions) return [];
   return [0, 1, 2].map((index) => {
     const id = index + 1;
     const label = anatomy[index] ?? `组成部分 ${id}`;
-    const definition = definitions?.[index];
+    const definition = definitions[index];
     return {
       id,
       label,
-      description: definition?.description ?? genericDescription(label),
-      selector: definition?.selector ?? semanticSelector(label),
-      ...(definition?.placement ? { placement: definition.placement } : {}),
-      ...(definition?.targetMode ? { targetMode: definition.targetMode } : {}),
+      description: definition.description ?? genericDescription(label),
+      selector: definition.selector,
+      ...(definition.placement ? { placement: definition.placement } : {}),
+      ...(definition.targetMode ? { targetMode: definition.targetMode } : {}),
     };
   });
 }

@@ -179,11 +179,11 @@ function buildPromptText(input: OpenAIIdentificationInput): string {
   return sections.join("\n\n");
 }
 
-function readInputScreenshot(options: ProviderIdentificationOptions): {
+async function readInputScreenshot(options: ProviderIdentificationOptions): Promise<{
   dataUrl: string;
   mediaType: string;
   base64: string;
-} {
+}> {
   const candidate = options.input.mode === "screenshot"
     ? options.input.imageDataUrl
     : options.input.snapshot?.screenshotDataUrl;
@@ -194,7 +194,7 @@ function readInputScreenshot(options: ProviderIdentificationOptions): {
       "This provider requires a browser screenshot for webpage analysis.",
     );
   }
-  const screenshot = validateScreenshotDataUrl(candidate);
+  const screenshot = await validateScreenshotDataUrl(candidate);
   if (
     options.provider.allowedImageMediaTypes
     && !options.provider.allowedImageMediaTypes.includes(screenshot.mediaType)
@@ -222,10 +222,10 @@ function readInputScreenshot(options: ProviderIdentificationOptions): {
   };
 }
 
-export function createOpenAIChatIdentificationRequest(
+export async function createOpenAIChatIdentificationRequest(
   options: ProviderIdentificationOptions,
-): Record<string, unknown> {
-  const screenshot = readInputScreenshot(options);
+): Promise<Record<string, unknown>> {
+  const screenshot = await readInputScreenshot(options);
   const imageUrl = options.provider.imageUrlShape === "string"
     ? screenshot.dataUrl
     : { url: screenshot.dataUrl, detail: "high" };
@@ -265,10 +265,10 @@ export function createOpenAIChatIdentificationRequest(
   };
 }
 
-export function createAnthropicIdentificationRequest(
+export async function createAnthropicIdentificationRequest(
   options: ProviderIdentificationOptions,
-): Record<string, unknown> {
-  const screenshot = readInputScreenshot(options);
+): Promise<Record<string, unknown>> {
+  const screenshot = await readInputScreenshot(options);
   const schema = createIdentificationResultJsonSchema(options.allowedSlugs);
   return {
     model: options.provider.model,
@@ -459,8 +459,8 @@ async function requestCompatibleProvider(
   const fetchImpl = options.fetchImpl ?? fetch;
   const isAnthropic = options.provider.protocol === "anthropic-messages";
   const request = isAnthropic
-    ? createAnthropicIdentificationRequest(options)
-    : createOpenAIChatIdentificationRequest(options);
+    ? await createAnthropicIdentificationRequest(options)
+    : await createOpenAIChatIdentificationRequest(options);
   const headers: Record<string, string> = {
     "content-type": "application/json",
   };

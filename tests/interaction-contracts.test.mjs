@@ -5,6 +5,7 @@ import ts from "typescript";
 
 const demoUrl = new URL("../app/ui/DemoStage.tsx", import.meta.url);
 const cssUrl = new URL("../app/ui/demo-stage.css", import.meta.url);
+const configUrl = new URL("../app/ui/demo-config.ts", import.meta.url);
 
 function attributeNames(node) {
   return new Set(
@@ -121,6 +122,8 @@ test("tooltip, sortable, and narrow demos keep accessible interaction contracts"
     source.indexOf('case "hover-card"'),
   );
   assert.match(tooltip, /aria-label="查看术语解释"/);
+  assert.match(tooltip, /setTooltipHovered/);
+  assert.match(tooltip, /setTooltipFocusWithin/);
 
   const sortable = source.slice(
     source.indexOf('case "drag-and-drop"'),
@@ -134,6 +137,58 @@ test("tooltip, sortable, and narrow demos keep accessible interaction contracts"
   assert.match(narrow, /\.demo-color-presets\s*\{[\s\S]*?flex-basis:\s*100%;/);
   assert.match(css, /\.demo-calendar-grid\s*\{[^}]*overflow-x:\s*auto;/);
   assert.match(css, /\.demo-calendar-row\s*\{[^}]*minmax\(44px,\s*1fr\)[^}]*min-width:\s*326px;/);
+});
+
+test("annotation guides use a complete explicit registry without semantic guessing", async () => {
+  const config = await readFile(configUrl, "utf8");
+  assert.match(config, /satisfies Record<DemoSlug,/);
+  assert.doesNotMatch(config, /function semanticSelector/);
+  assert.doesNotMatch(config, /semanticSelector\(label\)/);
+});
+
+test("annotation targets describe real semantic parts instead of proxy geometry", async () => {
+  const [config, demo, styles] = await Promise.all([
+    readFile(configUrl, "utf8"),
+    readFile(demoUrl, "utf8"),
+    readFile(cssUrl, "utf8"),
+  ]);
+
+  assert.match(config, /checkbox: parts\(\s*"\.demo-check-box",\s*"\.demo-check-mark",\s*"\.demo-check-label"/s);
+  assert.match(demo, /className="demo-check-box"[\s\S]*className="demo-check-mark"[\s\S]*className="demo-check-label"/);
+  assert.doesNotMatch(styles, /\.demo-check-mark\s*\{[^}]*margin-left:\s*-30px/s);
+
+  assert.match(config, /"range-slider": parts\(\s*"\.demo-dual-range-track",\s*"\.demo-dual-range-thumb\.is-low",\s*"\.demo-dual-range-thumb\.is-high"/s);
+  assert.match(demo, /className="demo-dual-range-thumb is-low"[\s\S]*className="demo-dual-range-thumb is-high"/);
+
+  assert.match(config, /scrim: parts\(\s*"\.demo-scrim-layer",\s*"\.demo-overlay-scene > \.demo-primary",\s*"\.demo-scrim-card"/s);
+  assert.match(config, /"data-grid": parts\(\s*"\.demo-data-grid-title",\s*"\.demo-data-grid-row\.is-active-row",\s*'\.demo-data-grid \[role="gridcell"\]\[tabindex="0"\]'/s);
+  assert.match(demo, /className="demo-data-grid-title"[\s\S]*aria-labelledby=\{gridTitleId\}/);
+
+  assert.match(config, /"image-gallery": parts\(\s*"\.demo-gallery",\s*"\.demo-gallery > div:last-child > button",\s*"\.demo-gallery-caption"/s);
+  assert.match(demo, /<figcaption className="demo-gallery-caption">/);
+
+  assert.match(config, /"bottom-navigation": parts\(\s*"\.demo-bottom-nav",\s*"\.demo-bottom-nav \.demo-icon",\s*"\.demo-bottom-nav \.demo-nav-label"/s);
+  assert.match(config, /"navigation-bar": parts\(\s*"\.demo-navbar > strong",\s*"\.demo-navbar > \.demo-nav-list > button"/s);
+  assert.match(config, /"sidebar-navigation": parts\([\s\S]*"\.demo-sidebar-layout \.demo-nav-list > button"/);
+  assert.match(config, /"search-field": parts\(\s*"\.demo-search-box",\s*"\.demo-search-box > input",\s*"\.demo-search-box > button"/s);
+  assert.match(config, /"tags-input": parts\(\s*"\.demo-tags-box > \.demo-tag",\s*"\.demo-tags-box > input",\s*"\.demo-tag > button"/s);
+  assert.match(config, /avatar: parts\(\s*"\.demo-avatar-initials",\s*"\.demo-avatar-large",\s*"\.demo-avatar-status"/s);
+  assert.match(demo, /className="demo-tag"[\s\S]*className="demo-tag-label"[\s\S]*aria-label=\{`移除 \$\{tag\}`\}/);
+  assert.match(config, /timeline: parts\(\s*"\.demo-timeline-marker",\s*"\.demo-timeline-connector",\s*"\.demo-timeline-content"/s);
+  assert.match(config, /toolbar: parts\([\s\S]*"\.demo-toolbar > span:not\(\.demo-status\)"/);
+  assert.match(config, /"lazy-loading": parts\(\s*"\.demo-lazy-slot",\s*"\.demo-lazy > button",\s*"\.demo-lazy-content"/s);
+});
+
+test("marquee separates its accessible copy and pauses for pointer or focus", async () => {
+  const source = await readFile(demoUrl, "utf8");
+  const marquee = source.slice(
+    source.indexOf('case "marquee"'),
+    source.indexOf('case "parallax-scrolling"'),
+  );
+  assert.match(marquee, /aria-hidden="true"/);
+  assert.match(marquee, /setMarqueeHovered/);
+  assert.match(marquee, /setMarqueeFocusWithin/);
+  assert.match(source, /paused \|\| marqueeHovered \|\| marqueeFocusWithin/);
 });
 
 test("six added demos are registered, routed explicitly, and keyboard accessible", async () => {
@@ -166,7 +221,7 @@ test("six added demos are registered, routed explicitly, and keyboard accessible
   assert.match(progressRing, /role="progressbar"/);
   assert.match(progressRing, /aria-valuenow=\{progress\}/);
   assert.match(source, /case "focus-ring"[\s\S]*?aria-pressed=\{focusTarget === index\}/);
-  assert.match(source, /case "scrim"[\s\S]*?aria-modal=\{density === "detail" \? true : undefined\}[\s\S]*?role="dialog"/);
+  assert.match(source, /case "scrim"[\s\S]*?aria-modal=\{density === "detail" && modalEngaged \? true : undefined\}[\s\S]*?role="dialog"/);
   assert.match(source, /case "divider"[\s\S]*?aria-orientation=\{vertical \? "vertical" : "horizontal"\}[\s\S]*?role="separator"/);
 
   for (const selector of ["demo-split-view", "demo-command-dialog", "demo-focus-ring", "demo-progress-ring", "demo-scrim-layer", "demo-divider-example"]) {
@@ -187,9 +242,13 @@ test("audited demos expose complete content and interaction behavior", async () 
   assert.doesNotMatch(navigationBar, /setActive\("(?:全局搜索|账户)"\)/);
   const drawer = source.slice(source.indexOf('case "navigation-drawer"'), source.indexOf('case "bottom-navigation"'));
   assert.match(drawer, /className="demo-drawer-scrim"/);
-  assert.match(drawer, /onClick=\{\(\) => setDrawerOpen\(false\)\}/);
+  assert.match(drawer, /onClick=\{closeDrawer\}/);
   assert.match(drawer, /tabIndex=\{-1\}/);
   assert.match(drawer, /onKeyDown=\{handleDrawerKeyDown\}/);
+  const drawerControls = source.slice(source.indexOf("const closeDrawer"), source.indexOf("const handleDrawerKeyDown"));
+  assert.match(drawerControls, /const closeDrawer = \(\) =>/);
+  assert.match(drawerControls, /drawerOpened\.current = true/);
+  assert.match(drawerControls, /setDrawerOpen\(false\)/);
   const drawerKeyboard = source.slice(source.indexOf("const handleDrawerKeyDown"), source.indexOf("switch (slug)", source.indexOf("const handleDrawerKeyDown")));
   assert.match(drawerKeyboard, /event\.key !== "Tab"/);
   assert.match(drawerKeyboard, /drawerRef\.current\.contains\(activeElement\)/);
@@ -229,7 +288,7 @@ test("audited demos expose complete content and interaction behavior", async () 
     source.slice(source.indexOf('case "alert-dialog"'), source.indexOf('case "popover"')),
     lightbox,
   ]) {
-    assert.match(section, /aria-modal=\{density === "detail" \? true : undefined\}/);
+    assert.match(section, /aria-modal=\{density === "detail" && modalEngaged \? true : undefined\}/);
     assert.doesNotMatch(section, /aria-modal="true"/);
   }
 
@@ -388,7 +447,7 @@ test("detail lab links anatomy markers, explanations, and live controls", async 
   assert.doesNotMatch(source, /data-backdrop=/);
   assert.match(source, /resolveMarkerCollisions/);
   assert.doesNotMatch(source, /fallbackTargets/);
-  assert.match(config, /function semanticSelector\(label: string\)/);
+  assert.doesNotMatch(config, /function semanticSelector\(label: string\)/);
   assert.doesNotMatch(config, /universalControls/);
   assert.doesNotMatch(config, /key: "backdrop"/);
   assert.doesNotMatch(config, /key: "accent"/);

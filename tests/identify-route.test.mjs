@@ -3,7 +3,7 @@ import test from "node:test";
 
 const baseUrl = process.env.WHAT_UI_TEST_BASE_URL;
 if (!baseUrl) throw new Error("WHAT_UI_TEST_BASE_URL is required for production HTTP tests.");
-const validPngScreenshot = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB";
+const validPngScreenshot = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
 
 async function requestApi(path, init = {}) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -27,12 +27,7 @@ test("identify capability probe is private-by-default and cache-safe", async () 
   assert.equal(payload.managedAi, false);
   assert.equal(payload.visualWebpageCapture, false);
   assert.equal(payload.maxImageBytes, 8 * 1024 * 1024);
-  assert.deepEqual(payload.acceptedImageTypes, [
-    "image/png",
-    "image/jpeg",
-    "image/webp",
-    "image/gif",
-  ]);
+  assert.deepEqual(payload.acceptedImageTypes, ["image/png"]);
 });
 
 test("identify endpoint rejects unsupported bodies before any upstream call", async () => {
@@ -65,6 +60,31 @@ test("identify endpoint validates screenshot bytes and public URLs", async () =>
   }
   assert.equal(screenshot.status, 400, screenshotText);
   assert.equal(screenshotPayload.error.code, "invalid_screenshot");
+
+  const unnormalizedScreenshot = await requestApi("/api/identify", {
+    body: JSON.stringify({
+      mode: "screenshot",
+      imageDataUrl: "data:image/jpeg;base64,/9j/wAALCAABAAEBAREA/9oACAEBAAA/AAD/2Q==",
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  assert.equal(unnormalizedScreenshot.status, 400);
+  assert.equal((await unnormalizedScreenshot.json()).error.code, "invalid_screenshot");
+
+  const oversizedNormalizedScreenshot = await requestApi("/api/identify", {
+    body: JSON.stringify({
+      mode: "screenshot",
+      imageDataUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABVEAAAABCAYAAADXVu6DAAAAHElEQVR42u3BgQAAAADDoPlTn+AGVQEAAAAAcA0VRQAB34+k0gAAAABJRU5ErkJggg==",
+    }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+  assert.equal(oversizedNormalizedScreenshot.status, 413);
+  assert.equal(
+    (await oversizedNormalizedScreenshot.json()).error.code,
+    "screenshot_too_large",
+  );
 
   const webpage = await requestApi("/api/identify", {
     body: JSON.stringify({ mode: "webpage", url: "http://localhost/admin" }),

@@ -42,12 +42,14 @@ export async function loadIdentificationModules() {
         captureSource,
         providerConfigSource,
         providerIdentificationSource,
+        boundedProviderFetchSource,
       ] = await Promise.all([
         readTypeScript("../lib/identification-contract.ts"),
         readTypeScript("../lib/openai-identification.ts"),
         readTypeScript("../lib/webpage-capture.ts"),
         readTypeScript("../lib/ai-provider-config.ts"),
         readTypeScript("../lib/provider-identification.ts"),
+        readTypeScript("../lib/client/bounded-provider-fetch.ts"),
       ]);
       const contractUrl = dataUrl(
         transpile(contractSource, "identification-contract.ts"),
@@ -65,6 +67,9 @@ export async function loadIdentificationModules() {
       const providerConfigUrl = dataUrl(
         transpile(providerConfigSource, "ai-provider-config.ts"),
       );
+      const boundedProviderFetchUrl = dataUrl(
+        transpile(boundedProviderFetchSource, "bounded-provider-fetch.ts"),
+      );
       const providerIdentificationUrl = dataUrl(
         transpile(providerIdentificationSource, "provider-identification.ts")
           .replace(
@@ -81,14 +86,29 @@ export async function loadIdentificationModules() {
           ),
       );
 
-      const [contract, openai, capture, providerConfig, providerIdentification] = await Promise.all([
+      const [
+        contract,
+        openai,
+        capture,
+        providerConfig,
+        providerIdentification,
+        boundedProviderFetch,
+      ] = await Promise.all([
         import(contractUrl),
         import(openaiUrl),
         import(captureUrl),
         import(providerConfigUrl),
         import(providerIdentificationUrl),
+        import(boundedProviderFetchUrl),
       ]);
-      return { contract, openai, capture, providerConfig, providerIdentification };
+      return {
+        contract,
+        openai,
+        capture,
+        providerConfig,
+        providerIdentification,
+        boundedProviderFetch,
+      };
     })();
   }
   return modulesPromise;

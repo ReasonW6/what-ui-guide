@@ -12,6 +12,7 @@ import {
   type AiProviderProtocol,
   type AiProviderSelection,
 } from "@/lib/ai-provider-config";
+import { fetchBoundedProviderJson } from "@/lib/client/bounded-provider-fetch";
 
 type AiProviderSettingsSummaryProps = {
   disabled: boolean;
@@ -144,6 +145,7 @@ export function AiProviderSettingsPanel({
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ProviderConnectionStatus>("idle");
   const [connectionMessage, setConnectionMessage] = useState("");
+  const connectionAbortRef = useRef<AbortController | null>(null);
   const providerTriggerRef = useRef<HTMLButtonElement>(null);
   const providerOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const preset = selection.providerId === "custom"
@@ -160,6 +162,10 @@ export function AiProviderSettingsPanel({
 
   useEffect(() => {
     providerTriggerRef.current?.focus();
+    return () => {
+      connectionAbortRef.current?.abort();
+      connectionAbortRef.current = null;
+    };
   }, []);
 
   const endpointPreview = useMemo(() => {
@@ -262,22 +268,29 @@ export function AiProviderSettingsPanel({
 
   const testConnection = async () => {
     if (!hasApiKey || endpointPreview.error) return;
+    connectionAbortRef.current?.abort();
+    const controller = new AbortController();
+    connectionAbortRef.current = controller;
     setShowKey(false);
     setConnectionStatus("testing");
     setConnectionMessage("正在验证服务地址、API Key 与模型…");
     try {
       const browserDirect = selection.providerId === "siliconflow";
-      const response = browserDirect
-        ? await fetch(providerConnectionEndpoint(resolveAiProvider(
+      const { payload, response } = browserDirect
+        ? await fetchBoundedProviderJson(
+          providerConnectionEndpoint(resolveAiProvider(
             selection.providerId,
             selection.model,
             selection.customBaseUrl,
             selection.customProtocol,
-          )), {
+          )),
+          {
             headers: { authorization: `Bearer ${selection.apiKey.trim()}` },
             method: "GET",
-          })
-        : await fetch("/api/identify", {
+          },
+          { signal: controller.signal },
+        )
+        : await fetchBoundedProviderJson("/api/identify", {
             method: "POST",
             headers: {
               "content-type": "application/json",
@@ -290,8 +303,11 @@ export function AiProviderSettingsPanel({
               customBaseUrl: selection.customBaseUrl,
               customProtocol: selection.customProtocol,
             }),
-          });
-      const payload: unknown = await response.json().catch(() => null);
+          }, { signal: controller.signal });
+      if (
+        controller.signal.aborted
+        || connectionAbortRef.current !== controller
+      ) return;
       if (!response.ok) {
         throw new Error(payloadErrorMessage(
           payload,
@@ -325,9 +341,23 @@ export function AiProviderSettingsPanel({
           : "连接成功：服务地址与 API Key 已通过验证。该服务未返回可比对的模型列表。");
       }
     } catch (error) {
+      if (connectionAbortRef.current !== controller) return;
+      if (controller.signal.aborted) {
+        setConnectionStatus("idle");
+        setConnectionMessage("连接检查已取消。");
+        return;
+      }
       setConnectionStatus("error");
       setConnectionMessage(error instanceof Error ? error.message : "连接检查失败，请稍后重试。");
+    } finally {
+      if (connectionAbortRef.current === controller) {
+        connectionAbortRef.current = null;
+      }
     }
+  };
+
+  const cancelConnection = () => {
+    connectionAbortRef.current?.abort(new Error("连接检查已取消。"));
   };
 
   return (
@@ -582,11 +612,13 @@ export function AiProviderSettingsPanel({
           <div className="provider-settings-actions">
             <button
               className="analyzer-secondary-action provider-connect-action"
-              disabled={settingsBusy || !hasApiKey || Boolean(endpointPreview.error)}
-              onClick={testConnection}
+              disabled={connectionStatus === "testing"
+                ? disabled || status === "loading" || status === "saving"
+                : settingsBusy || !hasApiKey || Boolean(endpointPreview.error)}
+              onClick={connectionStatus === "testing" ? cancelConnection : testConnection}
               type="button"
             >
-              {connectionStatus === "testing" ? "连接中…" : "连接"}
+              {connectionStatus === "testing" ? "取消连接" : "连接"}
             </button>
             <button
               className="analyzer-primary-action"

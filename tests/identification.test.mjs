@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { deflateSync } from "node:zlib";
 import { loadIdentificationModules } from "./identification-loader.mjs";
 
 const { contract, openai, capture } = await loadIdentificationModules();
@@ -10,57 +11,142 @@ function imageDataUrl(mediaType, bytes) {
   return `data:${mediaType};base64,${Buffer.from(bytes).toString("base64")}`;
 }
 
+const validImageBytes = {
+  png: Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+    "base64",
+  ),
+  jpeg: Buffer.from(
+    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EB//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EB//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EB//2Q==",
+    "base64",
+  ),
+  webpVp8: Buffer.from(
+    "UklGRjwAAABXRUJQVlA4IDAAAADQAQCdASoBAAEAAUAmJaACdLoB+AADsAD+8ut//NgVzXPv9//S4P0uD9Lg/9KQAAA=",
+    "base64",
+  ),
+  webpVp8l: Buffer.from(
+    "UklGRhwAAABXRUJQVlA4TA8AAAAvAAAAAAcQ/Y/+ByKi/wEA",
+    "base64",
+  ),
+  webpVp8x: Buffer.from(
+    "UklGRl4AAABXRUJQVlA4WAoAAAAQAAAAAQAAAAAAQUxQSAMAAAAAgP8AVlA4IDQAAAAwAgCdASoCAAEAAUAmJaACdLoB+AADIQb7gADOP1oXdYgj//Xo/no/no/yUf/FnIxHZeAA",
+    "base64",
+  ),
+};
+
+const crc32Table = Uint32Array.from({ length: 256 }, (_, value) => {
+  let crc = value;
+  for (let bit = 0; bit < 8; bit += 1) {
+    crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb8_8320 : 0);
+  }
+  return crc >>> 0;
+});
+
+function crc32(bytes) {
+  let crc = 0xffff_ffff;
+  for (const byte of bytes) {
+    crc = crc32Table[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffff_ffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+  const chunk = Buffer.alloc(12 + data.length);
+  chunk.writeUInt32BE(data.length, 0);
+  chunk.write(type, 4, "ascii");
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(crc32(chunk.subarray(4, 8 + data.length)), 8 + data.length);
+  return chunk;
+}
+
+function encodedRgbaPng(
+  width,
+  height,
+  level,
+  scanlines = Buffer.alloc(height * (1 + width * 4)),
+) {
+  return encodedRgbaPngFromData(
+    width,
+    height,
+    deflateSync(scanlines, { level }),
+  );
+}
+
+function encodedRgbaPngFromData(width, height, compressed) {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 6;
+  return Buffer.concat([
+    validImageBytes.png.subarray(0, 8),
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", compressed),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
 function pngBytes(width, height) {
-  const bytes = Buffer.alloc(24);
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(bytes);
-  bytes.writeUInt32BE(13, 8);
-  bytes.write("IHDR", 12, "ascii");
+  const bytes = Buffer.from(validImageBytes.png);
   bytes.writeUInt32BE(width, 16);
   bytes.writeUInt32BE(height, 20);
+  bytes.writeUInt32BE(crc32(bytes.subarray(12, 29)), 29);
   return bytes;
 }
 
 function jpegBytes(width, height) {
-  const bytes = Buffer.alloc(17);
-  Buffer.from([0xff, 0xd8, 0xff, 0xc0]).copy(bytes);
-  bytes.writeUInt16BE(11, 4);
-  bytes[6] = 8;
-  bytes.writeUInt16BE(height, 7);
-  bytes.writeUInt16BE(width, 9);
-  bytes[11] = 1;
-  Buffer.from([1, 0x11, 0, 0xff, 0xd9]).copy(bytes, 12);
+  const bytes = Buffer.from(validImageBytes.jpeg);
+  const startOfFrame = bytes.indexOf(Buffer.from([0xff, 0xc0]));
+  assert.notEqual(startOfFrame, -1);
+  bytes.writeUInt16BE(height, startOfFrame + 5);
+  bytes.writeUInt16BE(width, startOfFrame + 7);
   return bytes;
 }
 
-function webpBytes(format, width, height) {
-  const payload = Buffer.alloc(format === "VP8L" ? 5 : 10);
-  if (format === "VP8X") {
-    payload.writeUIntLE(width - 1, 4, 3);
-    payload.writeUIntLE(height - 1, 7, 3);
-  } else if (format === "VP8 ") {
-    Buffer.from([0x9d, 0x01, 0x2a]).copy(payload, 3);
-    payload.writeUInt16LE(width, 6);
-    payload.writeUInt16LE(height, 8);
-  } else {
-    payload[0] = 0x2f;
-    payload.writeUInt32LE((width - 1) + (height - 1) * (2 ** 14), 1);
+function findWebpChunk(bytes, format) {
+  let offset = 12;
+  while (offset + 8 <= bytes.length) {
+    const chunkFormat = bytes.toString("ascii", offset, offset + 4);
+    const length = bytes.readUInt32LE(offset + 4);
+    if (chunkFormat === format) return offset + 8;
+    offset += 8 + length + (length % 2);
   }
+  return -1;
+}
 
-  const padding = payload.length % 2;
-  const bytes = Buffer.alloc(20 + payload.length + padding);
-  bytes.write("RIFF", 0, "ascii");
-  bytes.writeUInt32LE(bytes.length - 8, 4);
-  bytes.write("WEBP", 8, "ascii");
-  bytes.write(format, 12, "ascii");
-  bytes.writeUInt32LE(payload.length, 16);
-  payload.copy(bytes, 20);
+function webpBytes(format, width, height) {
+  const source = format === "VP8 "
+    ? validImageBytes.webpVp8
+    : format === "VP8L"
+      ? validImageBytes.webpVp8l
+      : validImageBytes.webpVp8x;
+  const bytes = Buffer.from(source);
+  if (format === "VP8X") {
+    const extended = findWebpChunk(bytes, "VP8X");
+    assert.notEqual(extended, -1);
+    bytes.writeUIntLE(width - 1, extended + 4, 3);
+    bytes.writeUIntLE(height - 1, extended + 7, 3);
+    const vp8 = findWebpChunk(bytes, "VP8 ");
+    assert.notEqual(vp8, -1);
+    bytes.writeUInt16LE(width, vp8 + 6);
+    bytes.writeUInt16LE(height, vp8 + 8);
+  } else if (format === "VP8 ") {
+    const vp8 = findWebpChunk(bytes, "VP8 ");
+    assert.notEqual(vp8, -1);
+    bytes.writeUInt16LE(width, vp8 + 6);
+    bytes.writeUInt16LE(height, vp8 + 8);
+  } else {
+    const vp8l = findWebpChunk(bytes, "VP8L");
+    assert.notEqual(vp8l, -1);
+    bytes.writeUInt32LE((width - 1) + (height - 1) * (2 ** 14), vp8l + 1);
+  }
   return bytes;
 }
 
 const screenshots = {
   png: imageDataUrl("image/png", pngBytes(1, 1)),
   jpeg: imageDataUrl("image/jpeg", jpegBytes(1, 1)),
-  webp: imageDataUrl("image/webp", webpBytes("VP8X", 1, 1)),
+  webp: imageDataUrl("image/webp", webpBytes("VP8 ", 1, 1)),
   gif: `data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==`,
 };
 
@@ -88,18 +174,20 @@ function makeResult(overrides = {}) {
   };
 }
 
-test("screenshot data URLs accept supported signatures and enforce 8 MiB", () => {
+test("screenshot data URLs accept supported signatures and enforce 8 MiB", async () => {
   for (const [name, dataUrl] of Object.entries(screenshots)) {
-    const result = contract.validateScreenshotDataUrl(dataUrl);
+    const result = await contract.validateScreenshotDataUrl(dataUrl);
     assert.match(result.mediaType, /^image\/(png|jpeg|webp|gif)$/);
     assert.ok(result.byteLength > 0, name);
+    assert.equal(result.width, 1, name);
+    assert.equal(result.height, 1, name);
   }
 
-  assert.throws(
+  await assert.rejects(
     () => contract.validateScreenshotDataUrl("data:image/svg+xml;base64,PHN2Zz4="),
     (error) => error.code === "invalid_screenshot",
   );
-  assert.throws(
+  await assert.rejects(
     () => contract.validateScreenshotDataUrl(
       imageDataUrl("image/png", Uint8Array.from([0xff, 0xd8, 0xff, 0xe0])),
     ),
@@ -113,9 +201,18 @@ test("screenshot data URLs accept supported signatures and enforce 8 MiB", () =>
     staticGif.subarray(imageDescriptor, staticGif.length - 1),
     Buffer.from([0x3b]),
   ]);
-  assert.throws(
+  await assert.rejects(
     () => contract.validateScreenshotDataUrl(imageDataUrl("image/gif", animatedGif)),
     /Animated GIF/i,
+  );
+
+  const animatedWebp = Buffer.from(
+    "UklGRsIAAABXRUJQVlA4WAoAAAACAAAAAAAAAAAAQU5JTQYAAAD/////AABBTk1GSAAAAAAAAAAAAAAAAAAAAGQAAAJWUDggMAAAANABAJ0BKgEAAQABQCYloAJ0ugH4AAOwAP7y63/82BXNc+/3/9Lg/S4P0uD/0pAAAEFOTUZGAAAAAAAAAAAAAAAAAAAAZAAAAFZQOCAuAAAAlAEAnQEqAQABAAAAJiWgAnS6AAOYAP77VeP/pcH/0uD/6XB/6XB/G7LOG6QAAA==",
+    "base64",
+  );
+  await assert.rejects(
+    () => contract.validateScreenshotDataUrl(imageDataUrl("image/webp", animatedWebp)),
+    /Animated WebP/i,
   );
 
   const oversizedFrameGif = Buffer.from(staticGif);
@@ -123,17 +220,124 @@ test("screenshot data URLs accept supported signatures and enforce 8 MiB", () =>
   oversizedFrameGif.writeUInt16LE(1, 8);
   oversizedFrameGif.writeUInt16LE(8_193, imageDescriptor + 5);
   oversizedFrameGif.writeUInt16LE(1, imageDescriptor + 7);
-  assert.throws(
+  await assert.rejects(
     () => contract.validateScreenshotDataUrl(imageDataUrl("image/gif", oversizedFrameGif)),
     (error) => error.code === "screenshot_too_large",
   );
 
   const oversized = Buffer.alloc(contract.MAX_SCREENSHOT_BYTES + 1);
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(oversized);
-  assert.throws(
+  await assert.rejects(
     () => contract.validateScreenshotDataUrl(imageDataUrl("image/png", oversized)),
     (error) => error.code === "screenshot_too_large",
   );
+});
+
+test("screenshot validation rejects structurally truncated or trailing image data", async () => {
+  const cases = [
+    ["PNG", "image/png", validImageBytes.png],
+    ["JPEG", "image/jpeg", validImageBytes.jpeg],
+    ["WebP", "image/webp", validImageBytes.webpVp8],
+    ["GIF", "image/gif", Buffer.from(screenshots.gif.split(",")[1], "base64")],
+  ];
+
+  for (const [name, mediaType, bytes] of cases) {
+    for (const truncated of [
+      bytes.subarray(0, Math.max(1, Math.floor(bytes.length / 2))),
+      bytes.subarray(0, bytes.length - 1),
+    ]) {
+      await assert.rejects(
+        () => contract.validateScreenshotDataUrl(imageDataUrl(mediaType, truncated)),
+        (error) => error.code === "invalid_screenshot",
+        `${name} truncation`,
+      );
+    }
+    await assert.rejects(
+      () => contract.validateScreenshotDataUrl(
+        imageDataUrl(mediaType, Buffer.concat([bytes, Buffer.from([0])])),
+      ),
+      (error) => error.code === "invalid_screenshot",
+      `${name} trailing bytes`,
+    );
+  }
+
+  await assert.rejects(
+    () => contract.validateScreenshotDataUrl(
+      imageDataUrl("image/png", validImageBytes.png.subarray(0, 24)),
+    ),
+    (error) => error.code === "invalid_screenshot",
+  );
+});
+
+test("PNG validation rejects a complete container with undecodable image data", async () => {
+  const malformed = Buffer.concat([
+    validImageBytes.png.subarray(0, 8),
+    validImageBytes.png.subarray(8, 33),
+    pngChunk("IDAT", Buffer.from([0])),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+
+  await assert.rejects(
+    () => contract.validateScreenshotDataUrl(imageDataUrl("image/png", malformed)),
+    (error) => error.code === "invalid_screenshot",
+  );
+});
+
+test("PNG validation streams DEFLATE and rejects truncated, trailing, oversized, checksum, and filter errors", async () => {
+  for (const [level, expectedBlockType] of [[0, 0], [6, 2]]) {
+    const png = encodedRgbaPng(64, 64, level);
+    const imageDataType = png.indexOf(Buffer.from("IDAT"));
+    assert.notEqual(imageDataType, -1);
+    assert.equal((png[imageDataType + 6] >> 1) & 0x03, expectedBlockType);
+    await assert.doesNotReject(() => contract.validateScreenshotDataUrl(
+      imageDataUrl("image/png", png),
+    ));
+  }
+
+  const scanline = Buffer.alloc(5);
+  const compressed = deflateSync(scanline);
+  const corruptChecksum = Buffer.from(compressed);
+  corruptChecksum[corruptChecksum.length - 1] ^= 0xff;
+  const malformedStreams = [
+    compressed.subarray(0, compressed.length - 1),
+    Buffer.concat([compressed, Buffer.from([0])]),
+    deflateSync(Buffer.alloc(6)),
+    corruptChecksum,
+  ];
+  for (const malformed of malformedStreams) {
+    await assert.rejects(
+      () => contract.validateScreenshotDataUrl(imageDataUrl(
+        "image/png",
+        encodedRgbaPngFromData(1, 1, malformed),
+      )),
+      (error) => error.code === "invalid_screenshot",
+    );
+  }
+
+  const invalidFilterScanline = Buffer.from([5, 0, 0, 0, 0]);
+  const invalidFilter = encodedRgbaPng(1, 1, 6, invalidFilterScanline);
+  await assert.rejects(
+    () => contract.validateScreenshotDataUrl(imageDataUrl("image/png", invalidFilter)),
+    (error) => error.code === "invalid_screenshot",
+  );
+});
+
+test("PNG structural validation handles a complete image near the byte budget", async () => {
+  const metadataLength = contract.MAX_SCREENSHOT_BYTES
+    - validImageBytes.png.length
+    - 12;
+  const metadata = Buffer.alloc(metadataLength, 0x61);
+  Buffer.from("note\0", "ascii").copy(metadata);
+  const nearLimit = Buffer.concat([
+    validImageBytes.png.subarray(0, 33),
+    pngChunk("tEXt", metadata),
+    validImageBytes.png.subarray(33),
+  ]);
+
+  assert.equal(nearLimit.length, contract.MAX_SCREENSHOT_BYTES);
+  await assert.doesNotReject(() => contract.validateScreenshotDataUrl(
+    imageDataUrl("image/png", nearLimit),
+  ));
 });
 
 test("public webpage URL normalization rejects unsafe destinations", () => {
@@ -326,12 +530,12 @@ test("OpenAI screenshot request uses Responses, high image detail, and strict sc
   ]);
 });
 
-test("catalog prompts preserve complete JSON entries and reject oversized catalogs", () => {
+test("catalog prompts preserve complete JSON entries and reject oversized catalogs", async () => {
   const catalogEntries = [
     { slug: "combobox", summary: "editable input plus listbox" },
     { slug: "dialog", summary: "modal surface", marker: "tail-entry" },
   ];
-  const request = openai.createOpenAIIdentificationRequest({
+  const request = await openai.createOpenAIIdentificationRequest({
     ...baseOpenAIOptions(fetch, {
       mode: "screenshot",
       imageDataUrl: screenshots.png,
@@ -341,7 +545,7 @@ test("catalog prompts preserve complete JSON entries and reject oversized catalo
   const embeddedCatalog = request.instructions.split("Catalog knowledge:\n").at(-1);
   assert.deepEqual(JSON.parse(embeddedCatalog), catalogEntries);
 
-  assert.throws(
+  await assert.rejects(
     () => openai.createOpenAIIdentificationRequest({
       ...baseOpenAIOptions(fetch, {
         mode: "screenshot",
@@ -356,24 +560,24 @@ test("catalog prompts preserve complete JSON entries and reject oversized catalo
   );
 });
 
-test("server screenshot validation enforces dimensions for PNG, JPEG, and WebP", () => {
+test("server screenshot validation enforces dimensions for PNG, JPEG, and WebP", async () => {
   const cases = [
-    ["PNG", "image/png", pngBytes],
-    ["JPEG", "image/jpeg", jpegBytes],
-    ["WebP VP8", "image/webp", (width, height) => webpBytes("VP8 ", width, height)],
-    ["WebP VP8L", "image/webp", (width, height) => webpBytes("VP8L", width, height)],
-    ["WebP VP8X", "image/webp", (width, height) => webpBytes("VP8X", width, height)],
+    ["PNG", "image/png", pngBytes, [1, 1]],
+    ["JPEG", "image/jpeg", jpegBytes, [4_000, 4_000]],
+    ["WebP VP8", "image/webp", (width, height) => webpBytes("VP8 ", width, height), [4_000, 4_000]],
+    ["WebP VP8L", "image/webp", (width, height) => webpBytes("VP8L", width, height), [4_000, 4_000]],
+    ["WebP VP8X", "image/webp", (width, height) => webpBytes("VP8X", width, height), [4_000, 4_000]],
   ];
 
-  for (const [name, mediaType, createBytes] of cases) {
-    assert.doesNotThrow(
+  for (const [name, mediaType, createBytes, validDimensions] of cases) {
+    await assert.doesNotReject(
       () => contract.validateScreenshotDataUrl(
-        imageDataUrl(mediaType, createBytes(4_000, 4_000)),
+        imageDataUrl(mediaType, createBytes(...validDimensions)),
       ),
       name,
     );
     for (const [width, height] of [[8_193, 1], [5_000, 4_000]]) {
-      assert.throws(
+      await assert.rejects(
         () => contract.validateScreenshotDataUrl(
           imageDataUrl(mediaType, createBytes(width, height)),
         ),
@@ -384,14 +588,14 @@ test("server screenshot validation enforces dimensions for PNG, JPEG, and WebP",
   }
 });
 
-test("server GIF validation checks logical-screen and image-descriptor dimensions", () => {
+test("server GIF validation checks logical-screen and image-descriptor dimensions", async () => {
   const staticGif = Buffer.from(screenshots.gif.split(",")[1], "base64");
   const imageDescriptor = staticGif.indexOf(0x2c);
 
   const oversizedLogicalScreen = Buffer.from(staticGif);
   oversizedLogicalScreen.writeUInt16LE(5_000, 6);
   oversizedLogicalScreen.writeUInt16LE(4_000, 8);
-  assert.throws(
+  await assert.rejects(
     () => contract.validateScreenshotDataUrl(
       imageDataUrl("image/gif", oversizedLogicalScreen),
     ),
@@ -403,7 +607,7 @@ test("server GIF validation checks logical-screen and image-descriptor dimension
   smallScreenLargeFrame.writeUInt16LE(1, 8);
   smallScreenLargeFrame.writeUInt16LE(8_193, imageDescriptor + 5);
   smallScreenLargeFrame.writeUInt16LE(1, imageDescriptor + 7);
-  assert.throws(
+  await assert.rejects(
     () => contract.validateScreenshotDataUrl(
       imageDataUrl("image/gif", smallScreenLargeFrame),
     ),
@@ -532,9 +736,13 @@ test("Browser binding snapshot is allowlisted and uses bounded multi-format payl
 
   assert.equal(action, "snapshot");
   assert.deepEqual(payload.formats, ["screenshot", "markdown", "accessibilityTree"]);
-  assert.deepEqual(payload.viewport, { width: 1920, height: 240 });
+  assert.deepEqual(payload.viewport, { width: 1360, height: 240 });
   assert.equal(payload.actionTimeout, 30_000);
   assert.equal(payload.cacheTTL, 0);
+  assert.deepEqual(payload.screenshotOptions, {
+    type: "png",
+    fullPage: false,
+  });
   assert.deepEqual(payload.allowRequestPattern, [
     "^https://example\\.com(?:/|$)",
   ]);
@@ -654,4 +862,62 @@ test("Browser capture blocks non-exact hosts and degrades without providers", as
   assert.equal(oversized.ok, false);
   assert.equal(oversized.warning.code, "binding_failed");
   assert.match(oversized.warning.message, /allowed size/i);
+});
+
+async function settleWithin(promise, timeoutMs) {
+  let timer;
+  const timedOut = Symbol("timed-out");
+  const result = await Promise.race([
+    promise,
+    new Promise((resolve) => {
+      timer = setTimeout(() => resolve(timedOut), timeoutMs);
+    }),
+  ]);
+  clearTimeout(timer);
+  assert.notEqual(result, timedOut, `operation did not settle within ${timeoutMs} ms`);
+  return result;
+}
+
+test("Browser binding snapshot stops waiting when the caller aborts", async () => {
+  const controller = new AbortController();
+  const resultPromise = capture.captureWebpageSnapshot({
+    url: "https://example.com/",
+    env: {
+      BROWSER_ALLOWED_HOSTS: "example.com",
+      BROWSER: {
+        async quickAction() {
+          return new Promise(() => {});
+        },
+      },
+    },
+    signal: controller.signal,
+  });
+
+  controller.abort();
+  const result = await settleWithin(resultPromise, 250);
+  assert.equal(result.ok, false);
+  assert.equal(result.warning.code, "binding_failed");
+});
+
+test("Browser REST timeout remains active while a response body is streaming", async () => {
+  let bodyCancelled = false;
+  const resultPromise = capture.captureWebpageSnapshot({
+    url: "https://example.com/",
+    env: {
+      BROWSER_ALLOWED_HOSTS: "example.com",
+      BROWSER_ACCOUNT_ID: "account-id",
+      BROWSER_API_TOKEN: "browser-token",
+    },
+    fetchImpl: async () => new Response(new ReadableStream({
+      cancel() {
+        bodyCancelled = true;
+      },
+    })),
+    timeoutMs: 1_000,
+  });
+
+  const result = await settleWithin(resultPromise, 3_500);
+  assert.equal(result.ok, false);
+  assert.equal(result.warning.code, "rest_failed");
+  assert.equal(bodyCancelled, true);
 });

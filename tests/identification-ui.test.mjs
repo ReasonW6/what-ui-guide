@@ -10,6 +10,7 @@ const vaultUrl = new URL("../lib/client/credential-vault.ts", import.meta.url);
 const providerConfigUrl = new URL("../lib/ai-provider-config.ts", import.meta.url);
 const resultUrl = new URL("../app/ui/AnalysisResults.tsx", import.meta.url);
 const regionUrl = new URL("../app/ui/RegionSelector.tsx", import.meta.url);
+const contractUrl = new URL("../lib/identification-contract.ts", import.meta.url);
 const workspaceCssUrl = new URL("../app/ui/identification-workspace.css", import.meta.url);
 
 test("identification workspace exposes both input modes and accessible progress", async () => {
@@ -21,7 +22,7 @@ test("identification workspace exposes both input modes and accessible progress"
   assert.match(source, /type="file"/);
   assert.match(source, /onDrop=/);
   assert.match(source, /addEventListener\("paste"/);
-  assert.match(source, /validateScreenshotDataUrl\(await readFileDataUrl\(file\)\)/);
+  assert.match(source, /await validateScreenshotDataUrl\(await readFileDataUrl\(file\)\)/);
   assert.match(source, /AbortController/);
   assert.match(source, /role="status"/);
   assert.match(source, /role="alert"/);
@@ -37,7 +38,9 @@ test("BYOK supports session-only use and encrypted browser storage", async () =>
   assert.match(workspace, /x-ai-api-key/);
   assert.match(workspace, /action: "prepare-direct"/);
   assert.match(workspace, /action: "finalize-direct"/);
-  assert.match(workspace, /resolvedProvider\.id === "xai" \? "image\/jpeg"/);
+  assert.match(workspace, /fetchBoundedProviderJson/);
+  assert.match(workspace, /cropScreenshot\(screenshotUrl, selection\)/);
+  assert.doesNotMatch(workspace, /resolvedProvider\.id === "xai" \? "image\/jpeg"/);
   assert.doesNotMatch(`${workspace}\n${settings}`, /localStorage|sessionStorage/i);
   assert.match(vault, /AES-GCM/);
   assert.match(vault, /extractable/);
@@ -85,7 +88,9 @@ test("provider settings include mainstream presets and bounded custom endpoints"
   assert.match(settings, /最终请求地址/);
   assert.match(settings, /action: "connect"/);
   assert.match(settings, /providerConnectionEndpoint/);
-  assert.match(settings, /connectionStatus === "testing" \? "连接中…" : "连接"/);
+  assert.match(settings, /fetchBoundedProviderJson/);
+  assert.match(settings, /connectionAbortRef\.current\?\.abort/);
+  assert.match(settings, /connectionStatus === "testing" \? "取消连接" : "连接"/);
   assert.match(settings, /在此浏览器加密保存/);
   assert.match(settings, /apiKey: ""/);
   assert.match(settings, /OpenAI Chat Completions/);
@@ -143,7 +148,10 @@ test("source revisions prevent stale analyses and candidate implementations are 
 });
 
 test("screenshot headers are budgeted before preview and crops encode asynchronously", async () => {
-  const source = await readFile(regionUrl, "utf8");
+  const [source, contract] = await Promise.all([
+    readFile(regionUrl, "utf8"),
+    readFile(contractUrl, "utf8"),
+  ]);
   assert.match(source, /MAX_SCREENSHOT_SIDE = 8_192/);
   assert.match(source, /MAX_SCREENSHOT_PIXELS = 16_000_000/);
   for (const mediaType of ["image/png", "image/jpeg", "image/webp", "image/gif"]) {
@@ -154,6 +162,9 @@ test("screenshot headers are budgeted before preview and crops encode asynchrono
   assert.match(source, /readUint16\(index \+ 4\)/);
   assert.match(source, /readUint16\(index \+ 6\)/);
   assert.match(source, /canvas\.toBlob\(/);
+  assert.match(source, /"image\/png"/);
+  assert.match(source, /import \{ MAX_NORMALIZED_SCREENSHOT_SIDE \}/);
+  assert.match(contract, /MAX_NORMALIZED_SCREENSHOT_SIDE = 1_360/);
   assert.doesNotMatch(source, /canvas\.toDataURL\(/);
 });
 

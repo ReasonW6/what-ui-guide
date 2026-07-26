@@ -1,5 +1,6 @@
 import {
   IdentificationValidationError,
+  MAX_NORMALIZED_SCREENSHOT_SIDE,
   normalizePublicWebpageUrl,
   validateScreenshotDataUrl,
 } from "./identification-contract";
@@ -25,8 +26,7 @@ export interface BrowserSnapshotPayload {
   readonly actionTimeout: number;
   readonly cacheTTL: 0;
   readonly screenshotOptions: {
-    readonly type: "jpeg";
-    readonly quality: number;
+    readonly type: "png";
     readonly fullPage: false;
   };
 }
@@ -96,7 +96,7 @@ export type WebpageCaptureResult =
 const CLOUDFLARE_API_ORIGIN = "https://api.cloudflare.com";
 const MAX_CAPTURE_TEXT_CHARS = 50_000;
 const MAX_CAPTURE_RESPONSE_BYTES = 12 * 1024 * 1024;
-const DEFAULT_WIDTH = 1_440;
+const DEFAULT_WIDTH = MAX_NORMALIZED_SCREENSHOT_SIDE;
 const DEFAULT_HEIGHT = 900;
 const DEFAULT_TIMEOUT_MS = 20_000;
 
@@ -144,8 +144,18 @@ function makePayload(
   url: string,
   options: WebpageCaptureOptions,
 ): BrowserSnapshotPayload {
-  const width = boundedInteger(options.viewport?.width, DEFAULT_WIDTH, 320, 1_920);
-  const height = boundedInteger(options.viewport?.height, DEFAULT_HEIGHT, 240, 1_200);
+  const width = boundedInteger(
+    options.viewport?.width,
+    DEFAULT_WIDTH,
+    320,
+    MAX_NORMALIZED_SCREENSHOT_SIDE,
+  );
+  const height = boundedInteger(
+    options.viewport?.height,
+    DEFAULT_HEIGHT,
+    240,
+    MAX_NORMALIZED_SCREENSHOT_SIDE,
+  );
   const timeout = boundedInteger(
     options.timeoutMs,
     DEFAULT_TIMEOUT_MS,
@@ -161,19 +171,43 @@ function makePayload(
     actionTimeout: timeout,
     cacheTTL: 0,
     screenshotOptions: {
-      type: "jpeg",
-      quality: 82,
+      type: "png",
       fullPage: false,
     },
   };
 }
 
-async function readBody(response: Response): Promise<unknown> {
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("Browser capture was aborted.", "AbortError");
+}
+
+function waitForSignal<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(abortReason(signal));
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(resolve, reject).finally(() => {
+      signal.removeEventListener("abort", onAbort);
+    });
+  });
+}
+
+async function readBody(
+  response: Response,
+  signal?: AbortSignal,
+): Promise<unknown> {
   const declaredLength = response.headers.get("content-length");
   if (
     declaredLength !== null
     && Number(declaredLength) > MAX_CAPTURE_RESPONSE_BYTES
   ) {
+    await response.body?.cancel().catch(() => {});
     throw new Error("Snapshot response exceeded the allowed size.");
   }
   if (!response.body) return null;
@@ -182,17 +216,21 @@ async function readBody(response: Response): Promise<unknown> {
   const decoder = new TextDecoder("utf-8", { fatal: true });
   let received = 0;
   let text = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    if (received > MAX_CAPTURE_RESPONSE_BYTES) {
-      await reader.cancel();
-      throw new Error("Snapshot response exceeded the allowed size.");
+  try {
+    while (true) {
+      const { done, value } = await waitForSignal(reader.read(), signal);
+      if (done) break;
+      received += value.byteLength;
+      if (received > MAX_CAPTURE_RESPONSE_BYTES) {
+        throw new Error("Snapshot response exceeded the allowed size.");
+      }
+      text += decoder.decode(value, { stream: true });
     }
-    text += decoder.decode(value, { stream: true });
+    text += decoder.decode();
+  } catch (error) {
+    await reader.cancel(error).catch(() => {});
+    throw error;
   }
-  text += decoder.decode();
   if (!text) return null;
   try {
     return JSON.parse(text);
@@ -217,12 +255,12 @@ function errorMessage(value: unknown, fallback: string): string {
   return fallback;
 }
 
-function screenshotDataUrl(value: string): string {
-  if (value.startsWith("data:")) return validateScreenshotDataUrl(value).dataUrl;
+async function screenshotDataUrl(value: string): Promise<string> {
+  if (value.startsWith("data:")) return (await validateScreenshotDataUrl(value)).dataUrl;
   for (const mediaType of ["image/jpeg", "image/png", "image/webp", "image/gif"] as const) {
     const candidate = `data:${mediaType};base64,${value}`;
     try {
-      return validateScreenshotDataUrl(candidate).dataUrl;
+      return (await validateScreenshotDataUrl(candidate)).dataUrl;
     } catch {
       // Try the next supported signature.
     }
@@ -230,12 +268,12 @@ function screenshotDataUrl(value: string): string {
   throw new Error("Snapshot screenshot is not a supported base64 image.");
 }
 
-function extractSnapshot(
+async function extractSnapshot(
   value: unknown,
   url: string,
   source: CapturedWebpageSnapshot["source"],
   browserMsUsed: number | null,
-): CapturedWebpageSnapshot {
+): Promise<CapturedWebpageSnapshot> {
   if (!isRecord(value)) throw new Error("Snapshot response was not an object.");
   if (value.success === false) {
     throw new Error(errorMessage(value, "Snapshot request was unsuccessful."));
@@ -263,7 +301,7 @@ function extractSnapshot(
 
   return {
     url,
-    screenshotDataUrl: screenshotDataUrl(result.screenshot.trim()),
+    screenshotDataUrl: await screenshotDataUrl(result.screenshot.trim()),
     markdown: clipText(result.markdown),
     accessibilityTree: clipText(accessibilityTree),
     source,
@@ -289,10 +327,14 @@ function readBrowserMsUsed(response: Response): number | null {
 async function captureWithBinding(
   binding: BrowserRunBinding,
   payload: BrowserSnapshotPayload,
+  signal?: AbortSignal,
 ): Promise<CapturedWebpageSnapshot> {
-  const response = await binding.quickAction("snapshot", payload);
+  const response = await waitForSignal(
+    binding.quickAction("snapshot", payload),
+    signal,
+  );
   if (response instanceof Response) {
-    const body = await readBody(response);
+    const body = await readBody(response, signal);
     if (!response.ok) {
       throw new Error(
         errorMessage(body, `Browser binding failed with HTTP ${response.status}.`),
@@ -327,35 +369,35 @@ async function captureWithRest(
   );
   const { cacheTTL, ...restPayload } = payload;
   void cacheTTL;
-  let response: Response;
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, controller.signal])
+    : controller.signal;
   try {
-    response = await (options.fetchImpl ?? fetch)(endpoint, {
+    const response = await (options.fetchImpl ?? fetch)(endpoint, {
       method: "POST",
       headers: {
         authorization: `Bearer ${apiToken}`,
         "content-type": "application/json",
       },
       body: JSON.stringify(restPayload),
-      signal: options.signal
-        ? AbortSignal.any([options.signal, controller.signal])
-        : controller.signal,
+      signal,
     });
+
+    const body = await readBody(response, signal);
+    if (!response.ok) {
+      throw new Error(
+        errorMessage(body, `Browser REST API failed with HTTP ${response.status}.`),
+      );
+    }
+    return extractSnapshot(
+      body,
+      payload.url,
+      "rest",
+      readBrowserMsUsed(response),
+    );
   } finally {
     clearTimeout(timeout);
   }
-
-  const body = await readBody(response);
-  if (!response.ok) {
-    throw new Error(
-      errorMessage(body, `Browser REST API failed with HTTP ${response.status}.`),
-    );
-  }
-  return extractSnapshot(
-    body,
-    payload.url,
-    "rest",
-    readBrowserMsUsed(response),
-  );
 }
 
 export async function captureWebpageSnapshot(
@@ -384,12 +426,19 @@ export async function captureWebpageSnapshot(
   let bindingFailure: Error | null = null;
   if (options.env.BROWSER) {
     try {
-      const snapshot = await captureWithBinding(options.env.BROWSER, payload);
+      const snapshot = await captureWithBinding(
+        options.env.BROWSER,
+        payload,
+        options.signal,
+      );
       return { ok: true, snapshot };
     } catch (error) {
       bindingFailure = error instanceof Error
         ? error
         : new Error("Browser binding failed.");
+    }
+    if (options.signal?.aborted) {
+      return warning("binding_failed", bindingFailure.message, true);
     }
   }
 

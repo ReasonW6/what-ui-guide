@@ -114,6 +114,22 @@ test("every snippet is present and syntactically parseable", async () => {
   }
 });
 
+test("copyable React samples keep icon buttons named and radio groups instance-scoped", async () => {
+  const { catalog } = await loadCatalogModule();
+  const iconButton = catalog.find((item) => item.slug === "icon-button");
+  const radioGroup = catalog.find((item) => item.slug === "radio-group");
+  assert.ok(iconButton);
+  assert.ok(radioGroup);
+
+  const iconButtonReact = iconButton.code.react.map((file) => file.code).join("\n");
+  assert.match(iconButtonReact, /aria-label="收藏"/);
+
+  const radioGroupReact = radioGroup.code.react.map((file) => file.code).join("\n");
+  assert.match(radioGroupReact, /useId/);
+  assert.match(radioGroupReact, /name=\{groupName\}/);
+  assert.doesNotMatch(radioGroupReact, /name="choice"/);
+});
+
 test("long code examples contain real formatting line breaks", async () => {
   const { catalog } = await loadCatalogModule();
   for (const item of catalog) {

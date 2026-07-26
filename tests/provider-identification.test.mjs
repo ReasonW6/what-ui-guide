@@ -8,7 +8,7 @@ const {
 } = await loadIdentificationModules();
 
 const allowedSlugs = ["dialog", "popover"];
-const screenshot = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB";
+const screenshot = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
 
 function makeResult() {
   return {
@@ -149,9 +149,9 @@ test("direct chat responses still pass the shared schema validator", () => {
   assert.equal(parsed.candidates[0].slug, "dialog");
 });
 
-test("OpenAI-compatible chat requests honor structured and image-shape capabilities", () => {
+test("OpenAI-compatible chat requests honor structured and image-shape capabilities", async () => {
   const kimi = providerConfig.resolveAiProvider("kimi", "kimi-k2.6");
-  const kimiRequest = providerIdentification.createOpenAIChatIdentificationRequest(
+  const kimiRequest = await providerIdentification.createOpenAIChatIdentificationRequest(
     options(kimi, fetch),
   );
   assert.equal(kimiRequest.response_format.type, "json_schema");
@@ -160,7 +160,7 @@ test("OpenAI-compatible chat requests honor structured and image-shape capabilit
   assert.equal(kimiRequest.temperature, 1);
 
   const gemini = providerConfig.resolveAiProvider("gemini", "gemini-3.5-flash");
-  const geminiRequest = providerIdentification.createOpenAIChatIdentificationRequest(
+  const geminiRequest = await providerIdentification.createOpenAIChatIdentificationRequest(
     options(gemini, fetch),
   );
   assert.equal(geminiRequest.temperature, 1);
@@ -169,22 +169,22 @@ test("OpenAI-compatible chat requests honor structured and image-shape capabilit
     "openrouter",
     "google/gemini-3.5-flash",
   );
-  const openrouterRequest = providerIdentification.createOpenAIChatIdentificationRequest(
+  const openrouterRequest = await providerIdentification.createOpenAIChatIdentificationRequest(
     options(openrouter, fetch),
   );
   assert.equal(openrouterRequest.provider.require_parameters, true);
 
   const xai = providerConfig.resolveAiProvider("xai", "grok-4.5");
   assert.deepEqual(xai.allowedImageMediaTypes, ["image/jpeg", "image/png"]);
-  assert.throws(() => providerIdentification.createOpenAIChatIdentificationRequest({
+  await assert.rejects(() => providerIdentification.createOpenAIChatIdentificationRequest({
     ...options(xai, fetch),
     input: {
       mode: "screenshot",
-      imageDataUrl: "data:image/webp;base64,UklGRhYAAABXRUJQVlA4WAoAAAAAAAAAAAAAAAAA",
+      imageDataUrl: "data:image/webp;base64,UklGRjwAAABXRUJQVlA4IDAAAADQAQCdASoBAAEAAUAmJaACdLoB+AADsAD+8ut//NgVzXPv9//S4P0uD9Lg/9KQAAA=",
     },
   }), /does not support image\/webp/);
 
-  assert.throws(
+  await assert.rejects(
     () => providerIdentification.createOpenAIChatIdentificationRequest({
       ...options(kimi, fetch),
       catalogKnowledge: JSON.stringify([{

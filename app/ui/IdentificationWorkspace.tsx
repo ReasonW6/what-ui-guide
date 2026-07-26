@@ -28,6 +28,7 @@ import {
   setProviderSession,
   subscribeProviderSession,
 } from "@/lib/client/provider-session";
+import { fetchBoundedProviderJson } from "@/lib/client/bounded-provider-fetch";
 import { AnalysisResults } from "./AnalysisResults";
 import {
   AiProviderSettingsPanel,
@@ -116,13 +117,18 @@ async function identifyDirectlyWithSiliconFlow(
   expectedEndpoint: string,
   signal: AbortSignal,
 ): Promise<unknown> {
-  const preparationResponse = await fetch("/api/identify", {
-    body: JSON.stringify({ ...body, action: "prepare-direct" }),
-    headers: { "content-type": "application/json" },
-    method: "POST",
-    signal,
-  });
-  const preparation: unknown = await preparationResponse.json().catch(() => null);
+  const {
+    payload: preparation,
+    response: preparationResponse,
+  } = await fetchBoundedProviderJson(
+    "/api/identify",
+    {
+      body: JSON.stringify({ ...body, action: "prepare-direct" }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    },
+    { signal },
+  );
   if (!preparationResponse.ok) {
     throw new Error(responseError(preparation, "无法准备硅基流动直连请求。"));
   }
@@ -138,16 +144,21 @@ async function identifyDirectlyWithSiliconFlow(
     throw new Error("本站返回的硅基流动直连配置无效。");
   }
 
-  const upstreamResponse = await fetch(preparation.endpoint, {
-    body: JSON.stringify(preparation.request),
-    headers: {
-      authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
+  const {
+    payload: upstreamPayload,
+    response: upstreamResponse,
+  } = await fetchBoundedProviderJson(
+    preparation.endpoint,
+    {
+      body: JSON.stringify(preparation.request),
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      method: "POST",
     },
-    method: "POST",
-    signal,
-  });
-  const upstreamPayload: unknown = await upstreamResponse.json().catch(() => null);
+    { signal },
+  );
   if (!upstreamResponse.ok) {
     throw new Error(responseError(
       upstreamPayload,
@@ -155,18 +166,23 @@ async function identifyDirectlyWithSiliconFlow(
     ));
   }
 
-  const finalResponse = await fetch("/api/identify", {
-    body: JSON.stringify({
-      action: "finalize-direct",
-      providerId: body.providerId,
-      model: body.model,
-      upstreamResponse: upstreamPayload,
-    }),
-    headers: { "content-type": "application/json" },
-    method: "POST",
-    signal,
-  });
-  const finalPayload: unknown = await finalResponse.json().catch(() => null);
+  const {
+    payload: finalPayload,
+    response: finalResponse,
+  } = await fetchBoundedProviderJson(
+    "/api/identify",
+    {
+      body: JSON.stringify({
+        action: "finalize-direct",
+        providerId: body.providerId,
+        model: body.model,
+        upstreamResponse: upstreamPayload,
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    },
+    { signal },
+  );
   if (!finalResponse.ok) {
     throw new Error(responseError(finalPayload, "无法校验硅基流动识别结果。"));
   }
@@ -325,9 +341,8 @@ export function IdentificationWorkspace() {
 
   const acceptScreenshot = async (file: File) => {
     const acceptanceRevision = ++fileAcceptanceRevisionRef.current;
-    const allowedTypes = capabilities?.acceptedImageTypes ?? ACCEPTED_IMAGE_TYPES;
     const maxBytes = capabilities?.maxImageBytes ?? MAX_IMAGE_BYTES;
-    if (!allowedTypes.includes(file.type)) {
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
       setIsAcceptingScreenshot(false);
       setError("请选择 PNG、JPEG、WebP 或非动画 GIF 截图。");
       setPhase("error");
@@ -353,7 +368,7 @@ export function IdentificationWorkspace() {
     if (acceptanceRevision !== fileAcceptanceRevisionRef.current) return;
     if (file.type === "image/gif") {
       try {
-        validateScreenshotDataUrl(await readFileDataUrl(file));
+        await validateScreenshotDataUrl(await readFileDataUrl(file));
       } catch {
         if (acceptanceRevision !== fileAcceptanceRevisionRef.current) return;
         setIsAcceptingScreenshot(false);
@@ -461,11 +476,7 @@ export function IdentificationWorkspace() {
       let body: Record<string, string>;
       if (mode === "screenshot") {
         if (!screenshotUrl) throw new Error("请先上传、粘贴或拖入一张截图。");
-        const imageDataUrl = await cropScreenshot(
-          screenshotUrl,
-          selection,
-          resolvedProvider.id === "xai" ? "image/jpeg" : "image/webp",
-        );
+        const imageDataUrl = await cropScreenshot(screenshotUrl, selection);
         if (sourceRevisionRef.current !== requestRevision) return;
         if (controller.signal.aborted) throw new Error("分析已取消。");
         if (

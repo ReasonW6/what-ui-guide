@@ -161,10 +161,10 @@ function buildSystemInstructions(options: OpenAIIdentificationOptions): string {
   ].join("\n\n");
 }
 
-function buildScreenshotContent(
+async function buildScreenshotContent(
   input: ScreenshotIdentificationInput,
-): Array<Record<string, unknown>> {
-  const screenshot = validateScreenshotDataUrl(input.imageDataUrl);
+): Promise<Array<Record<string, unknown>>> {
+  const screenshot = await validateScreenshotDataUrl(input.imageDataUrl);
   const description = input.description?.trim();
   return [
     {
@@ -181,12 +181,12 @@ function buildScreenshotContent(
   ];
 }
 
-function buildSemanticUrlContent(
+async function buildSemanticUrlContent(
   input: SemanticUrlIdentificationInput,
-): {
+): Promise<{
   content: Array<Record<string, unknown>>;
   hostname: string;
-} {
+}> {
   const normalizedUrl = normalizePublicWebpageUrl(input.url);
   const hostname = new URL(normalizedUrl).hostname;
   const sections = [
@@ -209,7 +209,7 @@ function buildSemanticUrlContent(
     { type: "input_text", text: sections.join("\n\n") },
   ];
   if (input.snapshot?.screenshotDataUrl) {
-    const screenshot = validateScreenshotDataUrl(input.snapshot.screenshotDataUrl);
+    const screenshot = await validateScreenshotDataUrl(input.snapshot.screenshotDataUrl);
     content.push({
       type: "input_image",
       image_url: screenshot.dataUrl,
@@ -219,17 +219,17 @@ function buildSemanticUrlContent(
   return { content, hostname };
 }
 
-export function createOpenAIIdentificationRequest(
+export async function createOpenAIIdentificationRequest(
   options: OpenAIIdentificationOptions,
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const model = options.model?.trim() || DEFAULT_IDENTIFICATION_MODEL;
   const schema = createIdentificationResultJsonSchema(options.allowedSlugs);
   const semantic = options.input.mode === "semantic-url"
-    ? buildSemanticUrlContent(options.input)
+    ? await buildSemanticUrlContent(options.input)
     : null;
   const content = semantic
     ? semantic.content
-    : buildScreenshotContent(options.input as ScreenshotIdentificationInput);
+    : await buildScreenshotContent(options.input as ScreenshotIdentificationInput);
 
   return {
     model,
@@ -460,7 +460,7 @@ export async function identifyWithOpenAI(
   options: OpenAIIdentificationOptions,
 ): Promise<OpenAIIdentificationResponse> {
   const apiKey = requireNonEmpty(options.apiKey, "apiKey");
-  const request = createOpenAIIdentificationRequest(options);
+  const request = await createOpenAIIdentificationRequest(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
   let response: Response;

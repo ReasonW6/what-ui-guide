@@ -1,6 +1,7 @@
 export const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
 export const MAX_SCREENSHOT_SIDE = 8_192;
 export const MAX_SCREENSHOT_PIXELS = 16_000_000;
+export const MAX_NORMALIZED_SCREENSHOT_SIDE = 1_360;
 export const MAX_WEBPAGE_URL_LENGTH = 2048;
 
 export const screenshotMediaTypes = [
@@ -41,6 +42,8 @@ export interface ValidatedScreenshotDataUrl {
   readonly dataUrl: string;
   readonly mediaType: ScreenshotMediaType;
   readonly byteLength: number;
+  readonly width: number;
+  readonly height: number;
 }
 
 export type IdentificationValidationCode =
@@ -143,7 +146,7 @@ function hasImageSignature(mediaType: ScreenshotMediaType, bytes: Uint8Array): b
   }
 }
 
-interface ScreenshotDimensions {
+export interface ScreenshotDimensions {
   readonly width: number;
   readonly height: number;
 }
@@ -178,17 +181,263 @@ function readUint32LittleEndian(bytes: Uint8Array, offset: number): number {
     + bytes[offset + 3] * 0x1_000000;
 }
 
-function inspectPngDimensions(bytes: Uint8Array): ScreenshotDimensions | null {
-  if (
-    bytes.length < 24
-    || readUint32BigEndian(bytes, 8) !== 13
-    || readAscii(bytes, 12, 4) !== "IHDR"
-  ) {
-    return null;
+const pngCrc32Table = Uint32Array.from({ length: 256 }, (_, value) => {
+  let crc = value;
+  for (let bit = 0; bit < 8; bit += 1) {
+    crc = (crc >>> 1) ^ ((crc & 1) !== 0 ? 0xedb8_8320 : 0);
   }
-  const width = readUint32BigEndian(bytes, 16);
-  const height = readUint32BigEndian(bytes, 20);
-  return width > 0 && height > 0 ? { width, height } : null;
+  return crc >>> 0;
+});
+
+function pngCrc32(bytes: Uint8Array, start: number, end: number): number {
+  let crc = 0xffff_ffff;
+  for (let index = start; index < end; index += 1) {
+    crc = pngCrc32Table[(crc ^ bytes[index]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffff_ffff) >>> 0;
+}
+
+function pngExpectedRowBytes(
+  width: number,
+  height: number,
+  bitDepth: number,
+  colorType: number,
+  interlace: number,
+): number[] {
+  const channelsByColorType: Readonly<Record<number, number>> = {
+    0: 1,
+    2: 3,
+    3: 1,
+    4: 2,
+    6: 4,
+  };
+  const bitsPerPixel = bitDepth * channelsByColorType[colorType];
+  const rows: number[] = [];
+  const addPass = (
+    startX: number,
+    startY: number,
+    stepX: number,
+    stepY: number,
+  ) => {
+    if (width <= startX || height <= startY) return;
+    const passWidth = Math.ceil((width - startX) / stepX);
+    const passHeight = Math.ceil((height - startY) / stepY);
+    const rowBytes = Math.ceil((passWidth * bitsPerPixel) / 8);
+    for (let row = 0; row < passHeight; row += 1) rows.push(rowBytes);
+  };
+
+  if (interlace === 0) {
+    addPass(0, 0, 1, 1);
+  } else {
+    addPass(0, 0, 8, 8);
+    addPass(4, 0, 8, 8);
+    addPass(0, 4, 4, 8);
+    addPass(2, 0, 4, 4);
+    addPass(0, 2, 2, 4);
+    addPass(1, 0, 2, 2);
+    addPass(0, 1, 1, 2);
+  }
+  return rows;
+}
+
+async function validatePngImageData(
+  compressed: Uint8Array<ArrayBuffer>,
+  dimensions: ScreenshotDimensions,
+  bitDepth: number,
+  colorType: number,
+  interlace: number,
+): Promise<boolean> {
+  const expectedRowBytes = pngExpectedRowBytes(
+    dimensions.width,
+    dimensions.height,
+    bitDepth,
+    colorType,
+    interlace,
+  );
+  const expectedBytes = expectedRowBytes.reduce(
+    (total, rowBytes) => total + rowBytes + 1,
+    0,
+  );
+  const compressedStream = new ReadableStream<BufferSource>({
+    start(controller) {
+      controller.enqueue(compressed);
+      controller.close();
+    },
+  });
+  const reader = compressedStream
+    .pipeThrough(new DecompressionStream("deflate"))
+    .getReader();
+
+  try {
+    let outputBytes = 0;
+    let rowIndex = 0;
+    let nextFilterOffset = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunkEnd = outputBytes + value.byteLength;
+      if (chunkEnd > expectedBytes) {
+        await reader.cancel();
+        return false;
+      }
+
+      while (
+        rowIndex < expectedRowBytes.length
+        && nextFilterOffset < chunkEnd
+      ) {
+        if (value[nextFilterOffset - outputBytes] > 4) {
+          await reader.cancel();
+          return false;
+        }
+        nextFilterOffset += expectedRowBytes[rowIndex] + 1;
+        rowIndex += 1;
+      }
+      outputBytes = chunkEnd;
+    }
+    return (
+      outputBytes === expectedBytes
+      && rowIndex === expectedRowBytes.length
+      && nextFilterOffset === expectedBytes
+    );
+  } catch {
+    return false;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function validPngHeader(bytes: Uint8Array, dataOffset: number): boolean {
+  const bitDepth = bytes[dataOffset + 8];
+  const colorType = bytes[dataOffset + 9];
+  const allowedBitDepths: Readonly<Record<number, readonly number[]>> = {
+    0: [1, 2, 4, 8, 16],
+    2: [8, 16],
+    3: [1, 2, 4, 8],
+    4: [8, 16],
+    6: [8, 16],
+  };
+  return (
+    allowedBitDepths[colorType]?.includes(bitDepth) === true
+    && bytes[dataOffset + 10] === 0
+    && bytes[dataOffset + 11] === 0
+    && (bytes[dataOffset + 12] === 0 || bytes[dataOffset + 12] === 1)
+  );
+}
+
+async function inspectPngDimensions(
+  bytes: Uint8Array,
+): Promise<ScreenshotDimensions | null> {
+  let offset = 8;
+  let dimensions: ScreenshotDimensions | null = null;
+  let sawImageData = false;
+  let endedImageData = false;
+  let sawPalette = false;
+  let paletteEntries = 0;
+  let colorType = -1;
+  let bitDepth = -1;
+  let interlace = -1;
+  const imageDataChunks: Uint8Array[] = [];
+  let imageDataBytes = 0;
+
+  while (offset + 12 <= bytes.length) {
+    const chunkLength = readUint32BigEndian(bytes, offset);
+    const typeOffset = offset + 4;
+    const dataOffset = offset + 8;
+    const dataEnd = dataOffset + chunkLength;
+    const chunkEnd = dataEnd + 4;
+    if (dataEnd < dataOffset || chunkEnd > bytes.length) return null;
+
+    const chunkType = readAscii(bytes, typeOffset, 4);
+    if (!/^[A-Za-z]{4}$/.test(chunkType)) return null;
+    if (
+      pngCrc32(bytes, typeOffset, dataEnd)
+      !== readUint32BigEndian(bytes, dataEnd)
+    ) {
+      return null;
+    }
+
+    if (dimensions === null) {
+      if (
+        chunkType !== "IHDR"
+        || chunkLength !== 13
+        || !validPngHeader(bytes, dataOffset)
+      ) {
+        return null;
+      }
+      const width = readUint32BigEndian(bytes, dataOffset);
+      const height = readUint32BigEndian(bytes, dataOffset + 4);
+      if (width === 0 || height === 0) return null;
+      dimensions = { width, height };
+      bitDepth = bytes[dataOffset + 8];
+      colorType = bytes[dataOffset + 9];
+      interlace = bytes[dataOffset + 12];
+    } else if (chunkType === "IHDR") {
+      return null;
+    }
+
+    if (chunkType === "PLTE") {
+      if (
+        sawPalette
+        || sawImageData
+        || chunkLength === 0
+        || chunkLength > 768
+        || chunkLength % 3 !== 0
+      ) {
+        return null;
+      }
+      sawPalette = true;
+      paletteEntries = chunkLength / 3;
+    } else if (chunkType === "IDAT") {
+      if (endedImageData) return null;
+      sawImageData = true;
+      imageDataChunks.push(bytes.subarray(dataOffset, dataEnd));
+      imageDataBytes += chunkLength;
+    } else if (sawImageData && chunkType !== "IEND") {
+      endedImageData = true;
+    }
+
+    if (
+      chunkType !== "IHDR"
+      && chunkType !== "PLTE"
+      && chunkType !== "IDAT"
+      && chunkType !== "IEND"
+      && chunkType[0] === chunkType[0].toUpperCase()
+    ) {
+      return null;
+    }
+    if (chunkType === "IEND") {
+      if (
+        chunkLength !== 0
+        || !sawImageData
+        || (colorType === 3 && !sawPalette)
+        || ((colorType === 0 || colorType === 4) && sawPalette)
+        || chunkEnd !== bytes.length
+      ) {
+        return null;
+      }
+      if (colorType === 3 && paletteEntries > 2 ** bitDepth) return null;
+      if (screenshotDimensionsWithinBudget(dimensions.width, dimensions.height)) {
+        const compressed = new Uint8Array(imageDataBytes);
+        let compressedOffset = 0;
+        for (const chunk of imageDataChunks) {
+          compressed.set(chunk, compressedOffset);
+          compressedOffset += chunk.length;
+        }
+        if (!(await validatePngImageData(
+          compressed,
+          dimensions,
+          bitDepth,
+          colorType,
+          interlace,
+        ))) {
+          return null;
+        }
+      }
+      return dimensions;
+    }
+    offset = chunkEnd;
+  }
+  return null;
 }
 
 const jpegStartOfFrameMarkers = new Set([
@@ -197,16 +446,57 @@ const jpegStartOfFrameMarkers = new Set([
 ]);
 
 function inspectJpegDimensions(bytes: Uint8Array): ScreenshotDimensions | null {
+  if (
+    bytes.length < 4
+    || bytes[0] !== 0xff
+    || bytes[1] !== 0xd8
+  ) {
+    return null;
+  }
+
   let offset = 2;
+  let dimensions: ScreenshotDimensions | null = null;
+  let insideScan = false;
+  let sawScan = false;
+  let sawEntropyData = false;
   while (offset < bytes.length) {
+    if (insideScan) {
+      if (bytes[offset] !== 0xff) {
+        sawEntropyData = true;
+        offset += 1;
+        continue;
+      }
+      const markerStart = offset;
+      while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
+      if (offset >= bytes.length) return null;
+      const scanMarker = bytes[offset];
+      offset += 1;
+      if (scanMarker === 0x00) {
+        sawEntropyData = true;
+        continue;
+      }
+      if (scanMarker >= 0xd0 && scanMarker <= 0xd7) continue;
+      insideScan = false;
+      offset = markerStart;
+      continue;
+    }
+
     if (bytes[offset] !== 0xff) return null;
     while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
     if (offset >= bytes.length) return null;
 
     const marker = bytes[offset];
     offset += 1;
-    if (marker === 0xd9 || marker === 0xda || marker === 0x00) return null;
-    if (marker === 0x01 || marker === 0xd8 || (marker >= 0xd0 && marker <= 0xd7)) {
+    if (marker === 0xd9) {
+      return (
+        dimensions !== null
+        && sawScan
+        && sawEntropyData
+        && offset === bytes.length
+      ) ? dimensions : null;
+    }
+    if (marker === 0x00 || marker === 0xd8) return null;
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
       continue;
     }
     if (offset + 2 > bytes.length) return null;
@@ -214,51 +504,113 @@ function inspectJpegDimensions(bytes: Uint8Array): ScreenshotDimensions | null {
     const segmentLength = readUint16BigEndian(bytes, offset);
     if (segmentLength < 2 || offset + segmentLength > bytes.length) return null;
     if (jpegStartOfFrameMarkers.has(marker)) {
-      if (segmentLength < 8) return null;
+      const components = bytes[offset + 7];
+      if (
+        dimensions !== null
+        || components === 0
+        || segmentLength !== 8 + 3 * components
+      ) {
+        return null;
+      }
       const height = readUint16BigEndian(bytes, offset + 3);
       const width = readUint16BigEndian(bytes, offset + 5);
-      return width > 0 && height > 0 ? { width, height } : null;
+      if (width === 0 || height === 0) return null;
+      dimensions = { width, height };
+    } else if (marker === 0xda) {
+      const components = bytes[offset + 2];
+      if (
+        dimensions === null
+        || components === 0
+        || segmentLength !== 6 + 2 * components
+      ) {
+        return null;
+      }
+      sawScan = true;
+      insideScan = true;
     }
     offset += segmentLength;
   }
   return null;
 }
 
-function inspectWebpDimensions(bytes: Uint8Array): readonly ScreenshotDimensions[] | null {
+interface WebpScreenshotInspection {
+  readonly animated: boolean;
+  readonly dimensions: readonly ScreenshotDimensions[];
+}
+
+function inspectWebpScreenshot(bytes: Uint8Array): WebpScreenshotInspection | null {
   if (bytes.length < 20) return null;
   const declaredEnd = 8 + readUint32LittleEndian(bytes, 4);
-  if (declaredEnd < 20 || declaredEnd > bytes.length) return null;
+  if (declaredEnd < 20 || declaredEnd !== bytes.length) return null;
 
   const dimensions: ScreenshotDimensions[] = [];
+  let extendedDimensions: ScreenshotDimensions | null = null;
+  let animated = false;
+  let chunkCount = 0;
+  let imageChunks = 0;
   let offset = 12;
   while (offset + 8 <= declaredEnd) {
     const format = readAscii(bytes, offset, 4);
     const chunkLength = readUint32LittleEndian(bytes, offset + 4);
     const dataOffset = offset + 8;
     const chunkEnd = dataOffset + chunkLength;
-    if (chunkEnd > declaredEnd) return null;
+    const paddedEnd = chunkEnd + (chunkLength % 2);
+    if (
+      chunkEnd < dataOffset
+      || paddedEnd > declaredEnd
+      || (chunkLength % 2 !== 0 && bytes[chunkEnd] !== 0)
+    ) {
+      return null;
+    }
+    chunkCount += 1;
 
     if (format === "VP8X") {
-      if (chunkLength < 10) return null;
-      dimensions.push({
+      if (
+        chunkCount !== 1
+        || extendedDimensions !== null
+        || chunkLength !== 10
+        || (bytes[dataOffset] & 0xc1) !== 0
+      ) {
+        return null;
+      }
+      extendedDimensions = {
         width: 1 + readUint24LittleEndian(bytes, dataOffset + 4),
         height: 1 + readUint24LittleEndian(bytes, dataOffset + 7),
-      });
+      };
+      animated ||= (bytes[dataOffset] & 0x02) !== 0;
     } else if (format === "VP8 ") {
+      const frameTag = bytes[dataOffset]
+        + bytes[dataOffset + 1] * 0x100
+        + bytes[dataOffset + 2] * 0x1_0000;
       if (
         chunkLength < 10
+        || (frameTag & 1) !== 0
+        || ((frameTag >> 1) & 0x07) > 3
+        || (frameTag & 0x10) === 0
+        || (frameTag >>> 5) === 0
+        || 10 + (frameTag >>> 5) > chunkLength
         || bytes[dataOffset + 3] !== 0x9d
         || bytes[dataOffset + 4] !== 0x01
         || bytes[dataOffset + 5] !== 0x2a
       ) {
         return null;
       }
-      dimensions.push({
+      imageChunks += 1;
+      const imageDimensions = {
         width: readUint16LittleEndian(bytes, dataOffset + 6) & 0x3fff,
         height: readUint16LittleEndian(bytes, dataOffset + 8) & 0x3fff,
-      });
+      };
+      if (imageDimensions.width === 0 || imageDimensions.height === 0) return null;
+      dimensions.push(imageDimensions);
     } else if (format === "VP8L") {
-      if (chunkLength < 5 || bytes[dataOffset] !== 0x2f) return null;
+      if (
+        chunkLength <= 5
+        || bytes[dataOffset] !== 0x2f
+        || (bytes[dataOffset + 4] & 0xe0) !== 0
+      ) {
+        return null;
+      }
+      imageChunks += 1;
       dimensions.push({
         width: 1 + bytes[dataOffset + 1] + ((bytes[dataOffset + 2] & 0x3f) << 8),
         height: 1
@@ -266,20 +618,43 @@ function inspectWebpDimensions(bytes: Uint8Array): readonly ScreenshotDimensions
           + (bytes[dataOffset + 3] << 2)
           + ((bytes[dataOffset + 4] & 0x0f) << 10),
       });
+    } else if (format === "ANIM") {
+      if (chunkLength !== 6) return null;
+      animated = true;
+    } else if (format === "ANMF") {
+      if (chunkLength < 16) return null;
+      animated = true;
     }
 
-    offset = chunkEnd + (chunkLength % 2);
+    offset = paddedEnd;
   }
-  return dimensions.length > 0 ? dimensions : null;
+  if (offset !== declaredEnd) return null;
+  if (animated) {
+    return extendedDimensions === null
+      ? null
+      : { animated: true, dimensions: [extendedDimensions] };
+  }
+  if (imageChunks !== 1 || dimensions.length !== 1) return null;
+  if (extendedDimensions === null) {
+    if (chunkCount !== 1) return null;
+  } else if (
+    dimensions[0].width !== extendedDimensions.width
+    || dimensions[0].height !== extendedDimensions.height
+  ) {
+    return null;
+  }
+  return {
+    animated: false,
+    dimensions: extendedDimensions === null ? dimensions : [extendedDimensions],
+  };
 }
 
-function inspectStillScreenshotDimensions(
-  mediaType: Exclude<ScreenshotMediaType, "image/gif">,
+async function inspectStillScreenshotDimensions(
+  mediaType: Exclude<ScreenshotMediaType, "image/gif" | "image/webp">,
   bytes: Uint8Array,
-): readonly ScreenshotDimensions[] | null {
-  if (mediaType === "image/webp") return inspectWebpDimensions(bytes);
+): Promise<readonly ScreenshotDimensions[] | null> {
   const dimensions = mediaType === "image/png"
-    ? inspectPngDimensions(bytes)
+    ? await inspectPngDimensions(bytes)
     : inspectJpegDimensions(bytes);
   return dimensions === null ? null : [dimensions];
 }
@@ -308,6 +683,7 @@ export function screenshotDimensionsWithinBudget(width: number, height: number):
 
 export interface GifScreenshotInspection {
   readonly dimensionsWithinBudget: boolean;
+  readonly dimensions: readonly ScreenshotDimensions[];
   readonly frameCount: number;
 }
 
@@ -319,6 +695,10 @@ export function inspectGifScreenshot(bytes: Uint8Array): GifScreenshotInspection
   const logicalWidth = readUint16(6);
   const logicalHeight = readUint16(8);
   if (logicalWidth === 0 || logicalHeight === 0) return null;
+  const dimensions: ScreenshotDimensions[] = [{
+    width: logicalWidth,
+    height: logicalHeight,
+  }];
 
   let index = 13;
   const globalColorTablePacked = bytes[10];
@@ -335,7 +715,9 @@ export function inspectGifScreenshot(bytes: Uint8Array): GifScreenshotInspection
     const marker = bytes[index];
     index += 1;
     if (marker === 0x3b) {
-      return { dimensionsWithinBudget, frameCount: frames };
+      return index === bytes.length
+        ? { dimensions, dimensionsWithinBudget, frameCount: frames }
+        : null;
     }
 
     if (marker === 0x21) {
@@ -352,6 +734,7 @@ export function inspectGifScreenshot(bytes: Uint8Array): GifScreenshotInspection
     const frameWidth = readUint16(index + 4);
     const frameHeight = readUint16(index + 6);
     if (frameWidth === 0 || frameHeight === 0) return null;
+    dimensions.push({ width: frameWidth, height: frameHeight });
     dimensionsWithinBudget &&= screenshotDimensionsWithinBudget(
       frameWidth,
       frameHeight,
@@ -371,9 +754,9 @@ export function inspectGifScreenshot(bytes: Uint8Array): GifScreenshotInspection
   return null;
 }
 
-export function validateScreenshotDataUrl(
+export async function validateScreenshotDataUrl(
   value: unknown,
-): ValidatedScreenshotDataUrl {
+): Promise<ValidatedScreenshotDataUrl> {
   if (typeof value !== "string") {
     throw new IdentificationValidationError(
       "invalid_screenshot",
@@ -429,6 +812,7 @@ export function validateScreenshotDataUrl(
     );
   }
 
+  let dimensions: readonly ScreenshotDimensions[];
   if (mediaType === "image/gif") {
     const inspection = inspectGifScreenshot(bytes);
     if (inspection === null || inspection.frameCount === 0) {
@@ -449,15 +833,22 @@ export function validateScreenshotDataUrl(
         "Animated GIF screenshots are not supported.",
       );
     }
-  } else {
-    const dimensions = inspectStillScreenshotDimensions(mediaType, bytes);
-    if (dimensions === null) {
+    dimensions = inspection.dimensions;
+  } else if (mediaType === "image/webp") {
+    const inspection = inspectWebpScreenshot(bytes);
+    if (inspection === null) {
       throw new IdentificationValidationError(
         "invalid_screenshot",
-        "Screenshot dimensions are incomplete or malformed.",
+        "WebP screenshot data is incomplete or malformed.",
       );
     }
-    if (dimensions.some(
+    if (inspection.animated) {
+      throw new IdentificationValidationError(
+        "invalid_screenshot",
+        "Animated WebP screenshots are not supported.",
+      );
+    }
+    if (inspection.dimensions.some(
       (item) => !screenshotDimensionsWithinBudget(item.width, item.height),
     )) {
       throw new IdentificationValidationError(
@@ -465,9 +856,33 @@ export function validateScreenshotDataUrl(
         `Screenshot dimensions must not exceed ${MAX_SCREENSHOT_SIDE} px per side or ${MAX_SCREENSHOT_PIXELS} total pixels.`,
       );
     }
+    dimensions = inspection.dimensions;
+  } else {
+    const inspectedDimensions = await inspectStillScreenshotDimensions(mediaType, bytes);
+    if (inspectedDimensions === null) {
+      throw new IdentificationValidationError(
+        "invalid_screenshot",
+        "Screenshot dimensions are incomplete or malformed.",
+      );
+    }
+    if (inspectedDimensions.some(
+      (item) => !screenshotDimensionsWithinBudget(item.width, item.height),
+    )) {
+      throw new IdentificationValidationError(
+        "screenshot_too_large",
+        `Screenshot dimensions must not exceed ${MAX_SCREENSHOT_SIDE} px per side or ${MAX_SCREENSHOT_PIXELS} total pixels.`,
+      );
+    }
+    dimensions = inspectedDimensions;
   }
 
-  return { dataUrl: value, mediaType, byteLength };
+  return {
+    dataUrl: value,
+    mediaType,
+    byteLength,
+    width: Math.max(...dimensions.map((item) => item.width)),
+    height: Math.max(...dimensions.map((item) => item.height)),
+  };
 }
 
 function hasExplicitPort(value: string): boolean {

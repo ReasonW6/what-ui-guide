@@ -1,10 +1,15 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 3173);
 const projectRoot = fileURLToPath(new URL("../../", import.meta.url));
 const productionServer = fileURLToPath(new URL("../../scripts/start-production.mjs", import.meta.url));
+const testResultsDirectory = fileURLToPath(new URL("../../test-results/", import.meta.url));
+const productionServerLog = fileURLToPath(
+  new URL("../../test-results/production-preview.log", import.meta.url),
+);
 
 async function stopProcessTree(child: ChildProcess) {
   if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
@@ -31,9 +36,12 @@ async function stopProcessTree(child: ChildProcess) {
 }
 
 export default async function globalSetup() {
+  mkdirSync(testResultsDirectory, { recursive: true });
+  writeFileSync(productionServerLog, "");
+
   const child = spawn(
     process.execPath,
-    [productionServer, "--port", String(port)],
+    [productionServer, "--local", "--port", String(port)],
     {
       cwd: projectRoot,
       env: process.env,
@@ -44,6 +52,7 @@ export default async function globalSetup() {
 
   let output = "";
   const collect = (chunk: Buffer) => {
+    appendFileSync(productionServerLog, chunk);
     output = `${output}${chunk.toString()}`.slice(-16_000);
   };
   child.stdout?.on("data", collect);

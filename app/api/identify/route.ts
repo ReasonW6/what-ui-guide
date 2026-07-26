@@ -4,11 +4,12 @@ import { catalog, getCatalogItem } from "@/lib/catalog";
 import { getConfusionGuide } from "@/lib/confusion-guides";
 import {
   IdentificationValidationError,
+  MAX_NORMALIZED_SCREENSHOT_SIDE,
   MAX_SCREENSHOT_BYTES,
   normalizePublicWebpageUrl,
-  screenshotMediaTypes,
   validateScreenshotDataUrl,
   type IdentificationResult,
+  type ValidatedScreenshotDataUrl,
 } from "@/lib/identification-contract";
 import type {
   AnalysisBasis,
@@ -34,6 +35,12 @@ import {
   parseOpenAIChatIdentificationResponse,
   verifyProviderConnection,
 } from "@/lib/provider-identification";
+import {
+  boundedBudgetInteger,
+  consumeRequestBudget,
+  hashedRateLimitKey,
+  type RequestBudgetStore,
+} from "@/lib/request-budget";
 import { captureWebpageSnapshot } from "@/lib/webpage-capture";
 
 export const runtime = "edge";
@@ -41,13 +48,10 @@ export const runtime = "edge";
 const MAX_REQUEST_BODY_BYTES = 12 * 1024 * 1024;
 const MAX_CONTEXT_LENGTH = 500;
 const MAX_CATALOG_KNOWLEDGE_CHARS = 64_000;
-const LOCAL_RATE_WINDOW_MS = 60 * 1_000;
-const MAX_LOCAL_RATE_BUCKETS = 2_000;
-
-interface LocalRateBucket {
-  count: number;
-  resetAt: number;
-}
+const acceptedApiImageTypes = ["image/png"] as const;
+const RATE_LIMIT_WINDOW_MS = 60 * 1_000;
+const MANAGED_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1_000;
+const MAX_MANAGED_DAILY_REQUESTS = 10_000;
 
 interface RateLimitBinding {
   limit(options: { readonly key: string }): Promise<{ readonly success: boolean }>;
@@ -63,7 +67,7 @@ type RateLimitPolicyName = "api" | "capture" | "managed" | "custom";
 
 interface RateLimitPolicy {
   readonly bindingName: RateLimitBindingName;
-  readonly localLimit: number;
+  readonly limit: number;
   readonly code: string;
   readonly message: string;
 }
@@ -98,32 +102,34 @@ class ApiRouteError extends Error {
 const rateLimitEnvironment = env as typeof env & Record<
   RateLimitBindingName,
   RateLimitBinding | undefined
-> & { readonly CUSTOM_PROVIDER_ALLOWED_HOSTS?: string };
-const localRateBuckets = new Map<string, LocalRateBucket>();
-let nextLocalRateBucketPrune = 0;
+> & {
+  readonly CUSTOM_PROVIDER_ALLOWED_HOSTS?: string;
+  readonly DB?: RequestBudgetStore;
+  readonly MANAGED_AI_DAILY_LIMIT?: string;
+};
 
 const rateLimitPolicies: Record<RateLimitPolicyName, RateLimitPolicy> = {
   api: {
     bindingName: "API_RATE_LIMITER",
-    localLimit: 30,
+    limit: 30,
     code: "rate_limited",
     message: "识别接口使用过于频繁，请稍后再试。",
   },
   capture: {
     bindingName: "CAPTURE_RATE_LIMITER",
-    localLimit: 4,
+    limit: 4,
     code: "capture_rate_limited",
     message: "网页视觉快照使用过于频繁，请稍后再试，或改为上传截图。",
   },
   managed: {
     bindingName: "MANAGED_RATE_LIMITER",
-    localLimit: 8,
+    limit: 8,
     code: "managed_rate_limited",
     message: "公共识别额度使用过于频繁，请稍后再试，或使用自己的 OpenAI API Key。",
   },
   custom: {
     bindingName: "CUSTOM_PROVIDER_RATE_LIMITER",
-    localLimit: 10,
+    limit: 10,
     code: "custom_provider_rate_limited",
     message: "自定义 API 请求过于频繁，请稍后再试。",
   },
@@ -169,6 +175,20 @@ function readEnvText(value: string | undefined): string | null {
   return normalized ? normalized : null;
 }
 
+function readManagedAiConfiguration(): {
+  readonly apiKey: string;
+  readonly dailyLimit: number;
+  readonly store: RequestBudgetStore;
+} | null {
+  const apiKey = readEnvText(env.OPENAI_API_KEY);
+  const dailyLimit = boundedBudgetInteger(
+    rateLimitEnvironment.MANAGED_AI_DAILY_LIMIT,
+    MAX_MANAGED_DAILY_REQUESTS,
+  );
+  const store = rateLimitEnvironment.DB;
+  return apiKey && dailyLimit && store ? { apiKey, dailyLimit, store } : null;
+}
+
 function jsonResponse<T>(
   payload: T,
   status = 200,
@@ -208,11 +228,11 @@ function hasBrowserCaptureProvider(): boolean {
 
 function getCapabilities(): IdentificationCapabilities {
   return {
-    managedAi: Boolean(readEnvText(env.OPENAI_API_KEY)),
+    managedAi: readManagedAiConfiguration() !== null,
     visualWebpageCapture: hasBrowserCaptureProvider()
       && parseAllowedBrowserHosts(env.BROWSER_ALLOWED_HOSTS).size > 0,
     maxImageBytes: MAX_SCREENSHOT_BYTES,
-    acceptedImageTypes: screenshotMediaTypes,
+    acceptedImageTypes: acceptedApiImageTypes,
   };
 }
 
@@ -363,8 +383,31 @@ function assertProviderImageLimit(
   }
 }
 
-function clientRateLimitKey(request: Request): string {
-  return request.headers.get("cf-connecting-ip")?.trim() || "unidentified-client";
+function assertNormalizedScreenshot(
+  screenshot: ValidatedScreenshotDataUrl,
+): void {
+  if (screenshot.mediaType !== "image/png") {
+    throw new ApiRouteError(
+      400,
+      "invalid_screenshot",
+      "识别接口只接受已标准化的 PNG 图片；请通过页面上传，或先将图片转换为 PNG。",
+    );
+  }
+  if (
+    screenshot.width > MAX_NORMALIZED_SCREENSHOT_SIDE
+    || screenshot.height > MAX_NORMALIZED_SCREENSHOT_SIDE
+  ) {
+    throw new ApiRouteError(
+      413,
+      "screenshot_too_large",
+      `标准化 PNG 的任一边不得超过 ${MAX_NORMALIZED_SCREENSHOT_SIDE} 像素。`,
+    );
+  }
+}
+
+async function clientRateLimitKey(request: Request): Promise<string> {
+  const identity = request.headers.get("cf-connecting-ip")?.trim() || "unidentified-client";
+  return hashedRateLimitKey(identity);
 }
 
 function assertCustomProviderAllowed(provider: ResolvedAiProvider): void {
@@ -382,64 +425,67 @@ function assertCustomProviderAllowed(provider: ResolvedAiProvider): void {
   }
 }
 
-function rateLimitError(policy: RateLimitPolicy, retryAfter = 60): ApiRouteError {
+function rateLimitError(
+  policy: RateLimitPolicy,
+  retryAfter = 60,
+  scope?: "binding" | "durable-d1",
+): ApiRouteError {
   return new ApiRouteError(
     429,
     policy.code,
     policy.message,
-    { "retry-after": String(retryAfter) },
+    {
+      "retry-after": String(retryAfter),
+      ...(scope ? { "x-rate-limit-scope": scope } : {}),
+    },
   );
-}
-
-function enforceLocalIsolateRateLimit(
-  request: Request,
-  policyName: RateLimitPolicyName,
-): void {
-  const policy = rateLimitPolicies[policyName];
-  const now = Date.now();
-  if (now >= nextLocalRateBucketPrune) {
-    for (const [key, bucket] of localRateBuckets) {
-      if (bucket.resetAt <= now) localRateBuckets.delete(key);
-    }
-    nextLocalRateBucketPrune = now + LOCAL_RATE_WINDOW_MS;
-  }
-
-  const bucketKey = `${policy.bindingName}:${clientRateLimitKey(request)}`;
-  const existing = localRateBuckets.get(bucketKey);
-  if (!existing && localRateBuckets.size >= MAX_LOCAL_RATE_BUCKETS) {
-    throw new ApiRouteError(
-      503,
-      "rate_limit_unavailable",
-      "本地请求保护容量已满，请稍后重试。",
-      { "retry-after": "5" },
-    );
-  }
-  const bucket = existing && existing.resetAt > now
-    ? existing
-    : { count: 0, resetAt: now + LOCAL_RATE_WINDOW_MS };
-  if (bucket.count >= policy.localLimit) {
-    const retryAfter = Math.max(1, Math.ceil((bucket.resetAt - now) / 1_000));
-    throw rateLimitError(policy, retryAfter);
-  }
-  bucket.count += 1;
-  localRateBuckets.set(bucketKey, bucket);
 }
 
 async function enforceRateLimit(
   request: Request,
   policyName: RateLimitPolicyName,
-): Promise<void> {
+): Promise<"binding" | "durable"> {
   const policy = rateLimitPolicies[policyName];
   const binding = rateLimitEnvironment[policy.bindingName];
-  if (!binding) {
-    enforceLocalIsolateRateLimit(request, policyName);
-    return;
+  const clientKey = await clientRateLimitKey(request);
+  if (binding) {
+    let outcome: { readonly success: boolean };
+    try {
+      outcome = await binding.limit({ key: clientKey });
+    } catch {
+      throw new ApiRouteError(
+        503,
+        "rate_limit_unavailable",
+        "请求保护服务暂时不可用，请稍后重试。",
+        { "retry-after": "5" },
+      );
+    }
+    if (!outcome.success) throw rateLimitError(policy, 60, "binding");
+    return "binding";
   }
 
-  let outcome: { readonly success: boolean };
+  const store = rateLimitEnvironment.DB;
+  if (!store) {
+    throw new ApiRouteError(
+      503,
+      "rate_limit_unavailable",
+      "请求保护服务尚未配置，本站已拒绝继续处理以避免无保护运行。",
+      { "retry-after": "60" },
+    );
+  }
   try {
-    outcome = await binding.limit({ key: clientRateLimitKey(request) });
-  } catch {
+    const decision = await consumeRequestBudget(store, {
+      bucket: `${policyName}:${clientKey}`,
+      limit: policy.limit,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+    });
+    if (!decision.allowed) {
+      const retryAfter = Math.max(1, Math.ceil((decision.resetAt - Date.now()) / 1_000));
+      throw rateLimitError(policy, retryAfter, "durable-d1");
+    }
+    return "durable";
+  } catch (error) {
+    if (error instanceof ApiRouteError) throw error;
     throw new ApiRouteError(
       503,
       "rate_limit_unavailable",
@@ -447,7 +493,35 @@ async function enforceRateLimit(
       { "retry-after": "5" },
     );
   }
-  if (!outcome.success) throw rateLimitError(policy);
+}
+
+async function enforceManagedGlobalBudget(
+  configuration: NonNullable<ReturnType<typeof readManagedAiConfiguration>>,
+): Promise<void> {
+  try {
+    const decision = await consumeRequestBudget(configuration.store, {
+      bucket: "managed:global",
+      limit: configuration.dailyLimit,
+      windowMs: MANAGED_BUDGET_WINDOW_MS,
+    });
+    if (!decision.allowed) {
+      const retryAfter = Math.max(1, Math.ceil((decision.resetAt - Date.now()) / 1_000));
+      throw new ApiRouteError(
+        429,
+        "managed_budget_exhausted",
+        "今日公共识别额度已用完，请使用自己的 OpenAI API Key 或明日再试。",
+        { "retry-after": String(retryAfter) },
+      );
+    }
+  } catch (error) {
+    if (error instanceof ApiRouteError) throw error;
+    throw new ApiRouteError(
+      503,
+      "managed_budget_unavailable",
+      "公共识别额度保护服务暂时不可用，本站已停止使用托管 Key。",
+      { "retry-after": "60" },
+    );
+  }
 }
 
 function enrichCandidates(result: IdentificationResult): AnalysisCandidate[] {
@@ -654,7 +728,7 @@ export async function POST(request: Request): Promise<Response> {
   const requestId = crypto.randomUUID();
   let usingManagedKey = false;
   let testingConnection = false;
-  let usedLocalRateLimitFallback = false;
+  let usedDurableRateLimitFallback = false;
   const respond = <T>(
     payload: T,
     status = 200,
@@ -662,17 +736,14 @@ export async function POST(request: Request): Promise<Response> {
   ): Response => {
     const headers = new Headers(extraHeaders);
     headers.set("x-request-id", requestId);
-    if (usedLocalRateLimitFallback) {
-      headers.set("x-rate-limit-scope", "local-isolate-fallback");
+    if (usedDurableRateLimitFallback) {
+      headers.set("x-rate-limit-scope", "durable-d1");
     }
     return jsonResponse(payload, status, headers);
   };
   const applyRateLimit = async (policyName: RateLimitPolicyName): Promise<void> => {
-    const policy = rateLimitPolicies[policyName];
-    if (!rateLimitEnvironment[policy.bindingName]) {
-      usedLocalRateLimitFallback = true;
-    }
-    await enforceRateLimit(request, policyName);
+    const scope = await enforceRateLimit(request, policyName);
+    if (scope === "durable") usedDurableRateLimitFallback = true;
   };
 
   try {
@@ -708,9 +779,10 @@ export async function POST(request: Request): Promise<Response> {
         );
       }
       const context = readOptionalContext(body.context);
-      const screenshot = validateScreenshotDataUrl(body.imageDataUrl);
+      const screenshot = await validateScreenshotDataUrl(body.imageDataUrl);
+      assertNormalizedScreenshot(screenshot);
       assertProviderImageLimit(provider, screenshot.dataUrl, screenshot.mediaType);
-      const directRequest = createOpenAIChatIdentificationRequest({
+      const directRequest = await createOpenAIChatIdentificationRequest({
         apiKey: "browser-direct",
         provider,
         allowedSlugs,
@@ -817,7 +889,8 @@ export async function POST(request: Request): Promise<Response> {
           `${provider.label} 当前模型不支持图片输入，请选择其他服务商。`,
         );
       }
-      const screenshot = validateScreenshotDataUrl(body.imageDataUrl);
+      const screenshot = await validateScreenshotDataUrl(body.imageDataUrl);
+      assertNormalizedScreenshot(screenshot);
       assertProviderImageLimit(provider, screenshot.dataUrl, screenshot.mediaType);
       input = {
         mode: "screenshot",
@@ -853,10 +926,10 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const byokApiKey = readByokApiKey(request);
-    const managedApiKey = provider.id === "openai"
-      ? readEnvText(env.OPENAI_API_KEY)
+    const managedConfiguration = provider.id === "openai"
+      ? readManagedAiConfiguration()
       : null;
-    const apiKey = byokApiKey ?? managedApiKey;
+    const apiKey = byokApiKey ?? managedConfiguration?.apiKey ?? null;
     if (!apiKey) {
       throw new ApiRouteError(
         503,
@@ -870,6 +943,7 @@ export async function POST(request: Request): Promise<Response> {
     if (usingManagedKey) {
       provider = resolveAiProvider("openai", readConfiguredModel());
       await applyRateLimit("managed");
+      await enforceManagedGlobalBudget(managedConfiguration!);
     }
     if (provider.id === "custom") {
       await applyRateLimit("custom");
@@ -904,9 +978,10 @@ export async function POST(request: Request): Promise<Response> {
       }
 
       if (snapshotAttempt?.ok) {
-        const snapshotScreenshot = validateScreenshotDataUrl(
+        const snapshotScreenshot = await validateScreenshotDataUrl(
           snapshotAttempt.snapshot.screenshotDataUrl,
         );
+        assertNormalizedScreenshot(snapshotScreenshot);
         assertProviderImageLimit(
           provider,
           snapshotScreenshot.dataUrl,

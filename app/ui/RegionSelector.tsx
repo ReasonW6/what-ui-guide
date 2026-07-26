@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { MAX_NORMALIZED_SCREENSHOT_SIDE } from "@/lib/identification-contract";
 
 export interface RegionSelection {
   readonly x: number;
@@ -364,7 +365,6 @@ export function RegionSelector({
 export async function cropScreenshot(
   imageUrl: string,
   selection: RegionSelection | null,
-  outputMediaType: "image/webp" | "image/jpeg" = "image/webp",
 ): Promise<string> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const next = new Image();
@@ -378,8 +378,10 @@ export async function cropScreenshot(
   const sourceY = Math.round((region.y / 100) * image.naturalHeight);
   const sourceWidth = Math.max(1, Math.round((region.width / 100) * image.naturalWidth));
   const sourceHeight = Math.max(1, Math.round((region.height / 100) * image.naturalHeight));
-  const maxSide = 2048;
-  const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+  const scale = Math.min(
+    1,
+    MAX_NORMALIZED_SCREENSHOT_SIDE / Math.max(sourceWidth, sourceHeight),
+  );
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(sourceWidth * scale));
   canvas.height = Math.max(1, Math.round(sourceHeight * scale));
@@ -402,8 +404,7 @@ export async function cropScreenshot(
         (value) => value
           ? resolve(value)
           : reject(new Error("浏览器无法编码这张截图。")),
-        outputMediaType,
-        outputMediaType === "image/jpeg" ? 0.92 : 0.9,
+        "image/png",
       );
     });
     return await blobDataUrl(blob);

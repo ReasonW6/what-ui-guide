@@ -172,7 +172,12 @@ export function InteractiveDetail({
         }
         targets = targets.filter((target) => {
           const bounds = target.getBoundingClientRect();
-          return bounds.width > 0 && bounds.height > 0;
+          const style = window.getComputedStyle(target);
+          return bounds.width > 0
+            && bounds.height > 0
+            && style.display !== "none"
+            && style.visibility !== "hidden"
+            && Number(style.opacity) > 0;
         });
         if (!targets.length) return;
         if (guide.targetMode !== "all" && guide.targetMode !== "union") {
@@ -308,6 +313,7 @@ export function InteractiveDetail({
                 data-active={activePart === guide.id || undefined}
                 data-annotation-part={guide.id}
                 data-annotation-rail={marker.rail}
+                data-annotation-selector={guide.selector}
                 key={`marker-${guide.id}`}
                 onBlur={() => setFocusedPart((current) => current === guide.id ? null : current)}
                 onFocus={() => {

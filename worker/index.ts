@@ -8,22 +8,93 @@ import {
 import handler from "vinext/server/app-router-entry";
 
 const securityHeaders = {
-  "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.siliconflow.cn; worker-src 'self' blob:; frame-src 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'",
   "permissions-policy": "camera=(), geolocation=(), microphone=()",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-content-type-options": "nosniff",
   "x-frame-options": "DENY",
 } as const;
 
-function withSecurityHeaders(request: Request, response: Response): Response {
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 8_192) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 8_192));
+  }
+  return btoa(binary);
+}
+
+function inlineElementSources(html: string, tagName: "script" | "style"): string[] {
+  const expression = new RegExp(
+    `<${tagName}\\b([^>]*)>([\\s\\S]*?)<\\/${tagName}\\s*>`,
+    "gi",
+  );
+  return [...html.matchAll(expression)]
+    .filter((match) => (
+      tagName !== "script" || !/(?:^|\s)src\s*=/i.test(match[1])
+    ))
+    .map((match) => match[2])
+    .filter(Boolean);
+}
+
+async function inlineSourceHashes(
+  html: string,
+  tagName: "script" | "style",
+): Promise<string[]> {
+  const sources = [...new Set(inlineElementSources(html, tagName))];
+  return Promise.all(sources.map(async (source) => {
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(source),
+    );
+    return `'sha256-${bytesToBase64(new Uint8Array(digest))}'`;
+  }));
+}
+
+async function contentSecurityPolicy(html: string | null): Promise<string> {
+  const [scriptHashes, styleHashes] = html === null
+    ? [[], []]
+    : await Promise.all([
+        inlineSourceHashes(html, "script"),
+        inlineSourceHashes(html, "style"),
+      ]);
+  return [
+    "default-src 'self'",
+    ["script-src", "'self'", ...scriptHashes].join(" "),
+    ["style-src", "'self'", ...styleHashes].join(" "),
+    "style-src-attr 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    "connect-src 'self' https://api.siliconflow.cn",
+    "worker-src 'self' blob:",
+    "frame-src 'none'",
+    "form-action 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+async function withSecurityHeaders(
+  request: Request,
+  response: Response,
+): Promise<Response> {
   const headers = new Headers(response.headers);
+  const isHtml = /^text\/html\b/i.test(headers.get("content-type") ?? "");
+  const body = isHtml ? await response.text() : response.body;
+  headers.set(
+    "content-security-policy",
+    await contentSecurityPolicy(isHtml ? body as string : null),
+  );
   for (const [name, value] of Object.entries(securityHeaders)) {
     headers.set(name, value);
+  }
+  if (isHtml) {
+    headers.delete("content-encoding");
+    headers.delete("content-length");
   }
   if (new URL(request.url).protocol === "https:") {
     headers.set("strict-transport-security", "max-age=31536000; includeSubDomains");
   }
-  return new Response(response.body, {
+  return new Response(body, {
     headers,
     status: response.status,
     statusText: response.statusText,
@@ -75,11 +146,11 @@ const worker = {
         };
       }
       const response = await handleImageOptimization(request, imageHandlers, allowedWidths);
-      return withSecurityHeaders(request, response);
+      return await withSecurityHeaders(request, response);
     }
 
     const response = await handler.fetch(request, env, ctx);
-    return withSecurityHeaders(request, response);
+    return await withSecurityHeaders(request, response);
   },
 };
 

@@ -147,6 +147,9 @@ async function main() {
 
   const stateRoot = resolve(".wrangler", "production-preview");
   const forwardedArgs = [...args];
+  if (forwardedArgs.some((arg) => arg === "--persist-to" || arg.startsWith("--persist-to="))) {
+    throw new Error("--persist-to is managed by the production preview script");
+  }
   if (!hasOption("ip", "i")) forwardedArgs.push("--ip", host);
   if (!hasOption("port", "p")) forwardedArgs.push("--port", String(port));
   const child = spawn(process.execPath, [
@@ -155,6 +158,8 @@ async function main() {
     "--config",
     "dist/server/wrangler.json",
     "--show-interactive-dev-session=false",
+    "--persist-to",
+    resolve(stateRoot, "state"),
     ...forwardedArgs,
   ], {
     env: {

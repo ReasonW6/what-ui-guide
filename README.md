@@ -34,7 +34,7 @@ What UI? 把抽象术语变成可观察、可操作、可实现的视觉索引�
 
 | 能力 | 说明 |
 | --- | --- |
-| 截图与区域识别 | 支持 PNG、JPEG、WebP、GIF；分析前在浏览器中裁剪目标区域，减少无关画面。 |
+| 截图与区域识别 | 支持上传 PNG、JPEG、WebP、GIF；分析前在浏览器中裁剪并标准化为 PNG，减少无关画面并确保服务端可完整校验。 |
 | 多服务商 BYOK | 内置主流服务商预设，也支持自定义 OpenAI / Anthropic 兼容 API、地址和模型。 |
 | 可解释结果 | 只从本项目目录中选择候选，并说明证据、区别、不确定项和必要追问。 |
 | 公开网页分析 | 白名单网页可使用浏览器快照；否则仅在受支持条件下使用受限的公开网页语义分析。 |
@@ -136,15 +136,21 @@ AI 识别可以直接使用界面中的 BYOK 设置。部署方也可以复制 `
 
 | 变量 | 用途 |
 | --- | --- |
-| `OPENAI_API_KEY` | 部署方托管的 OpenAI Key；未设置时使用 BYOK |
+| `OPENAI_API_KEY` | 部署方托管的 OpenAI Key；必须同时配置每日额度与 D1，否则使用 BYOK |
 | `OPENAI_MODEL` | 托管识别模型 |
+| `MANAGED_AI_DAILY_LIMIT` | 托管 Key 的全站每日硬额度，正整数且不超过 10000 |
 | `BROWSER_ALLOWED_HOSTS` | 允许生成网页快照的精确主机名，不支持通配符 |
 | `CUSTOM_PROVIDER_ALLOWED_HOSTS` | 允许 Worker 代理的自定义 API 精确主机名；留空时关闭代理 |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Browser Rendering 账户 ID |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare Browser Rendering API Token |
-| `BROWSER` | Cloudflare Worker Browser Rendering binding |
+| `BROWSER` | Cloudflare Worker Browser Run binding；项目已在 `vite.config.ts` 声明 |
 
 </details>
+
+Browser Run 的 `quickAction()` 在本地模式尚不可用，因此配置使用
+`browser: { binding: "BROWSER", remote: true }`。本地启用网页快照前需先登录
+Cloudflare，并只在 `BROWSER_ALLOWED_HOSTS` 中加入确实需要抓取的公开主机名；
+未配置允许列表时不会发起浏览器任务。生产部署会沿用同名 `BROWSER` binding。
 
 ### 常用命令
 
@@ -161,13 +167,14 @@ AI 识别可以直接使用界面中的 BYOK 设置。部署方也可以复制 `
 
 ## 安全边界
 
-- 单张截图最大 8 MiB；上传后先校验文件签名，再在浏览器端裁剪。
+- 单张源截图最大 8 MiB；上传后先校验文件签名与尺寸，再由浏览器解码、裁剪并标准化为服务端完整校验的 PNG。
 - URL 仅接受公开 `https://` 页面；拒绝 localhost、私网 IP、凭据 URL 和非 Web 协议。
 - 浏览器快照只允许 `BROWSER_ALLOWED_HOSTS` 中的精确主机名，避免 SSRF 和开放代理风险。
 - 自定义 API 的 Worker 代理默认关闭；部署方只有在 `CUSTOM_PROVIDER_ALLOWED_HOSTS` 中显式信任精确 HTTPS 主机名后才能启用。
 - 未配置快照时，网页分析无法看到登录态、悬停态、弹层或滚动后才出现的界面，建议改用截图。
 - 自定义上游请求限时 45 秒，响应正文上限 1 MiB。
-- 生产环境使用 Cloudflare Rate Limiting binding：它可跨 isolate 生效，但按 Cloudflare 位置计数且最终一致，因此不是精确的账单硬上限；本地缺少 binding 时才退回有界的单实例限制。公开提供托管额度时，仍应配置供应商预算和用量告警。
+- 请求优先使用 Cloudflare Rate Limiting binding；缺少 binding 时改用 Sites D1 的原子持久计数，绝不退回单 isolate 内存计数。
+- 托管 OpenAI Key 只有在 `MANAGED_AI_DAILY_LIMIT` 与 D1 同时可用时才启用；全站每日额度由 D1 原子扣减。仍建议在供应商侧设置预算与用量告警。
 - 产品不提供账户、云端历史或持久化收藏；只有用户主动启用的加密凭据会保留在本机浏览器。
 
 ## 技术栈

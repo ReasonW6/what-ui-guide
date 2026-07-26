@@ -43,18 +43,18 @@ const identificationResult = {
 };
 
 const identificationCapabilities = {
-  acceptedImageTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+  acceptedImageTypes: ["image/png"],
   managedAi: true,
   maxImageBytes: 8 * 1024 * 1024,
   visualWebpageCapture: false,
 };
 
-async function mockIdentificationApi(page: Page) {
+async function mockIdentificationApi(page: Page, result = identificationResult) {
   await page.route("**/api/identify", async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify(
-        route.request().method() === "GET" ? identificationCapabilities : identificationResult,
+        route.request().method() === "GET" ? identificationCapabilities : result,
       ),
     });
   });
@@ -167,13 +167,51 @@ test("production start serves every linked build asset", async ({ page, request 
   }
 });
 
+test("hashed CSP preserves hydration and client-side navigation", async ({ page }) => {
+  const response = await page.goto("/");
+  expect(response?.status()).toBe(200);
+
+  const policy = response?.headers()["content-security-policy"] ?? "";
+  const scriptPolicy = policy.match(/(?:^|;\s*)script-src\s+([^;]+)/)?.[1] ?? "";
+  const stylePolicy = policy.match(/(?:^|;\s*)style-src\s+([^;]+)/)?.[1] ?? "";
+  expect(scriptPolicy).toContain("'sha256-");
+  expect(scriptPolicy).not.toContain("'unsafe-inline'");
+  expect(stylePolicy).not.toContain("'unsafe-inline'");
+
+  await page.locator('[data-hydrated="true"]').first().waitFor();
+  await page.evaluate(() => {
+    (window as typeof window & { __softNavigationSentinel?: string }).__softNavigationSentinel =
+      "preserved";
+  });
+
+  const detailLink = page.locator(".component-card h3 a").first();
+  const href = await detailLink.getAttribute("href");
+  expect(href).toMatch(/^\/components\/[^/]+$/);
+  await detailLink.click();
+  await expect(page).toHaveURL(new RegExp(`${href}$`));
+  await page.locator('[data-hydrated="true"]').first().waitFor();
+  expect(await page.evaluate(
+    () => (window as typeof window & { __softNavigationSentinel?: string }).__softNavigationSentinel,
+  )).toBe("preserved");
+});
+
 test("dialog and drawer constrain focus and restore it on close", async ({ page }) => {
   await gotoReady(page, "/components/dialog");
   const dialogDemo = page.locator(".detail-demo-canvas");
   const dialogTrigger = dialogDemo.getByRole("button", { name: "编辑资料" });
-
-  await dialogTrigger.click();
   const dialog = dialogDemo.getByRole("dialog", { name: "编辑资料" });
+
+  if (await dialog.isVisible()) {
+    await expect(dialog).not.toHaveAttribute("aria-modal", "true");
+    await dialog.getByRole("button", { name: "保存" }).focus();
+    await page.keyboard.press("Tab");
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(false);
+    await dialog.getByRole("button", { name: "取消" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(dialogTrigger).toBeFocused();
+  }
+  await dialogTrigger.click();
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(dialog.getByRole("textbox", { name: "显示名称" })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(dialog.getByRole("button", { name: "保存" })).toBeFocused();
@@ -184,9 +222,19 @@ test("dialog and drawer constrain focus and restore it on close", async ({ page 
   await gotoReady(page, "/components/navigation-drawer");
   const drawerDemo = page.locator(".detail-demo-canvas");
   const drawerTrigger = drawerDemo.getByRole("button", { name: "打开导航抽屉" });
-
-  await drawerTrigger.click();
   const drawer = drawerDemo.getByRole("dialog", { name: "浏览" });
+
+  if (await drawer.isVisible()) {
+    await expect(drawer).not.toHaveAttribute("aria-modal", "true");
+    await drawer.getByRole("button", { name: "资源" }).focus();
+    await page.keyboard.press("Tab");
+    expect(await drawer.evaluate((element) => element.contains(document.activeElement))).toBe(false);
+    await drawer.getByRole("button", { name: "关闭导航抽屉" }).click();
+    await expect(drawer).toBeHidden();
+    await expect(drawerTrigger).toBeFocused();
+  }
+  await drawerTrigger.click();
+  await expect(drawer).toHaveAttribute("aria-modal", "true");
   await expect(drawer.getByRole("button", { name: "关闭导航抽屉" })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(drawer.getByRole("button", { name: "资源" })).toBeFocused();
@@ -201,8 +249,12 @@ test("edge overlays use the full demo viewport", async ({ page }) => {
     await gotoReady(page, "/components/side-sheet");
     const stage = page.locator(".demo-stage--detail");
     const sheetTrigger = stage.getByRole("button", { name: "打开设置" });
-    await sheetTrigger.click();
     const sheet = stage.getByRole("dialog", { name: "页面设置" });
+    if (await sheet.isVisible()) {
+      await sheet.getByRole("button", { name: "关闭" }).click();
+      await expect(sheet).toBeHidden();
+    }
+    await sheetTrigger.click();
     await expect.poll(async () => {
       const sheetBox = await rect(sheet);
       const stageBox = await rect(stage);
@@ -218,8 +270,12 @@ test("edge overlays use the full demo viewport", async ({ page }) => {
 
     await gotoReady(page, "/components/navigation-drawer");
     const drawerStage = page.locator(".demo-stage--detail");
-    await drawerStage.getByRole("button", { name: "打开导航抽屉" }).click();
     const drawer = drawerStage.getByRole("dialog", { name: "浏览" });
+    if (await drawer.isVisible()) {
+      await drawer.getByRole("button", { name: "关闭导航抽屉" }).click();
+      await expect(drawer).toBeHidden();
+    }
+    await drawerStage.getByRole("button", { name: "打开导航抽屉" }).click();
     await expect.poll(async () => {
       const drawerBox = await rect(drawer);
       const stageBox = await rect(drawerStage);
@@ -240,6 +296,20 @@ test("edge overlays use the full demo viewport", async ({ page }) => {
   ]) {
     await gotoReady(page, overlay.path);
     const stage = page.locator(".demo-stage--detail");
+    const initialOverlay = stage.locator(overlay.selector);
+    if (await initialOverlay.isVisible()) {
+      if (overlay.path === "/components/command-palette") {
+        await stage.getByRole("option", { name: "新建词条" }).click();
+      } else {
+        const closeName = overlay.path === "/components/dialog"
+          ? "取消"
+          : overlay.path === "/components/lightbox"
+            ? "关闭灯箱"
+            : "继续";
+        await stage.getByRole("button", { name: closeName }).click();
+      }
+      await expect(initialOverlay).toBeHidden();
+    }
     await stage.getByRole("button", { name: overlay.trigger }).click();
     await expect.poll(async () => {
       const overlayBox = await rect(stage.locator(overlay.selector));
@@ -256,8 +326,13 @@ test("edge overlays use the full demo viewport", async ({ page }) => {
   await gotoReady(page, "/components/popover");
   const popoverStage = page.locator(".demo-stage--detail");
   const popoverTrigger = popoverStage.getByRole("button", { name: "查看详情" });
+  const popover = popoverStage.locator(".demo-popover");
+  if (await popover.isVisible()) {
+    await popover.getByRole("button", { name: "知道了" }).click();
+    await expect(popover).toBeHidden();
+  }
   await popoverTrigger.click();
-  const popoverBox = await rect(popoverStage.locator(".demo-popover"));
+  const popoverBox = await rect(popover);
   const popoverTriggerBox = await rect(popoverTrigger);
   expect(popoverBox.top - popoverTriggerBox.bottom).toBeGreaterThanOrEqual(8);
   expectContained(popoverBox, await rect(popoverStage));
@@ -282,19 +357,43 @@ test("edge overlays use the full demo viewport", async ({ page }) => {
 });
 
 test("command palette shortcut opens, navigates, executes, and restores focus", async ({ page }) => {
+  await gotoReady(page, "/");
+  await page.getByRole("searchbox", { name: "描述你看到的东西" }).fill("command palette");
+  const cardDemo = page.locator('.demo-stage--card[data-demo-slug="command-palette"]');
+  await cardDemo.getByRole("option", { name: "新建词条" }).click();
+  const cardTrigger = cardDemo.getByRole("button", { name: /打开命令面板/ });
+  await expect(cardTrigger).toBeFocused();
+  await cardTrigger.click();
+  await cardDemo.getByRole("option", { name: "新建词条" }).click();
+  await expect(cardTrigger).toBeFocused();
+
   await gotoReady(page, "/components/command-palette");
   const demo = page.locator(".detail-demo-canvas");
   const trigger = demo.getByRole("button", { name: /打开命令面板/ });
+  const dialog = demo.getByRole("dialog", { name: "快速操作" });
 
+  if (await dialog.isVisible()) {
+    await expect(dialog).not.toHaveAttribute("aria-modal", "true");
+    const previewInput = dialog.getByRole("combobox", { name: "搜索命令" });
+    await previewInput.focus();
+    await page.keyboard.press("Tab");
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(false);
+    await dialog.getByRole("option", { name: "新建词条" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+  }
   await trigger.focus();
   await page.keyboard.press("Control+K");
-  const dialog = demo.getByRole("dialog", { name: "快速操作" });
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
   const input = dialog.getByRole("combobox", { name: "搜索命令" });
   await expect(input).toBeFocused();
   const listbox = dialog.getByRole("listbox");
   const listboxId = await listbox.getAttribute("id");
   expect(listboxId).toBeTruthy();
   await expect(input).toHaveAttribute("aria-controls", listboxId!);
+  const firstOptionId = await dialog.getByRole("option", { name: "新建词条" }).getAttribute("id");
+  expect(firstOptionId).toBeTruthy();
+  await expect(input).toHaveAttribute("aria-activedescendant", firstOptionId!);
 
   await page.keyboard.press("ArrowDown");
   const activeOptionId = await dialog.getByRole("option", { name: "搜索组件" }).getAttribute("id");
@@ -455,8 +554,8 @@ test("detail lab links annotations and keeps customization bidirectional", async
   await gotoReady(page, "/components/button");
   await expect(page.getByRole("button", { name: "部件 1：容器" })).toBeVisible();
   await expect(page.getByRole("button", { name: "部件 2：文字标签" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "部件 3：可选图标" })).toHaveCount(0);
-  await expect(page.locator(".demo-anatomy-list").getByRole("button", { name: /3 可选图标/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "部件 3：可选图标" })).toBeVisible();
+  await expect(page.locator(".demo-anatomy-list").getByRole("button", { name: /3 可选图标/ })).toBeEnabled();
 });
 
 test("touch taps do not lock annotation highlights", async ({ browser }) => {
@@ -524,8 +623,11 @@ test("all detail annotation markers stay in dedicated rails", async ({ page }) =
       await gotoReady(page, path);
       const preview = page.locator(".detail-demo-preview");
       if (path === "/components/dialog") {
-        await preview.getByRole("button", { name: "编辑资料" }).click();
-        await expect(preview.getByRole("dialog", { name: "编辑资料" })).toBeVisible();
+        const dialog = preview.getByRole("dialog", { name: "编辑资料" });
+        if (!(await dialog.isVisible())) {
+          await preview.getByRole("button", { name: "编辑资料" }).click();
+        }
+        await expect(dialog).toBeVisible();
       }
       await expect(preview).toHaveAttribute("data-annotation-layout-ready", "true");
       await page.evaluate(async () => {
@@ -541,6 +643,18 @@ test("all detail annotation markers stay in dedicated rails", async ({ page }) =
         const stageRect = stage.getBoundingClientRect();
         const markerRects = markers.map((marker) => {
           const rect = marker.getBoundingClientRect();
+          const selector = marker.dataset.annotationSelector;
+          const targets = selector
+            ? Array.from(stage.querySelectorAll<HTMLElement>(selector)).filter((target) => {
+                const bounds = target.getBoundingClientRect();
+                const style = window.getComputedStyle(target);
+                return bounds.width > 0
+                  && bounds.height > 0
+                  && style.display !== "none"
+                  && style.visibility !== "hidden"
+                  && Number(style.opacity) > 0;
+              })
+            : [];
           return {
             hitRect: {
               bottom: rect.bottom + 9,
@@ -550,6 +664,7 @@ test("all detail annotation markers stay in dedicated rails", async ({ page }) =
             } as DOMRect,
             label: marker.getAttribute("aria-label") ?? "unlabelled marker",
             rect,
+            targets,
           };
         });
         const overlaps = (a: DOMRect, b: DOMRect) => (
@@ -567,6 +682,16 @@ test("all detail annotation markers stay in dedicated rails", async ({ page }) =
             || rect.bottom > previewRect.bottom + 1
           ) problems.push(`${label} leaves preview bounds`);
         });
+        markerRects.forEach(({ label, targets }) => {
+          if (!targets.length) problems.push(`${label} has no visible target`);
+        });
+        markerRects.forEach((marker, index) => {
+          markerRects.slice(index + 1).forEach((other) => {
+            if (marker.targets.some((target) => other.targets.includes(target))) {
+              problems.push(`${marker.label} reuses a target from ${other.label}`);
+            }
+          });
+        });
         markerRects.forEach((marker, index) => {
           markerRects.slice(index + 1).forEach((other) => {
             if (overlaps(marker.hitRect, other.hitRect)) {
@@ -579,12 +704,175 @@ test("all detail annotation markers stay in dedicated rails", async ({ page }) =
       if (layout.problems.length) {
         violations.push(`${viewport.label} ${path}: ${layout.problems.join("; ")}`);
       }
-      if (layout.markerCount === 0) violations.push(`${viewport.label} ${path}: has no annotations`);
-      expect(layout.markerCount, `${viewport.label} ${path}`).toBeLessThanOrEqual(3);
+      expect(layout.markerCount, `${viewport.label} ${path}`).toBe(3);
+      await expect(preview.locator(".demo-anatomy-list button:disabled"), `${viewport.label} ${path}`).toHaveCount(0);
+      expect(
+        await preview.locator(".demo-stage").evaluate((stage) => stage.contains(document.activeElement)),
+        `${viewport.label} ${path} must not steal focus on load`,
+      ).toBe(false);
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     }
   }
   expect(violations).toEqual([]);
+});
+
+test("semantic annotation targets have route-specific, distinguishable geometry", async ({ page }) => {
+  const cases = [
+    {
+      path: "/components/checkbox",
+      selectors: [".demo-check-box", ".demo-check-mark", ".demo-check-label"],
+    },
+    {
+      path: "/components/range-slider",
+      selectors: [".demo-dual-range-track", ".demo-dual-range-thumb.is-low", ".demo-dual-range-thumb.is-high"],
+    },
+    {
+      path: "/components/scrim",
+      selectors: [".demo-scrim-layer", ".demo-overlay-scene > .demo-primary", ".demo-scrim-card"],
+    },
+    {
+      path: "/components/data-grid",
+      selectors: [".demo-data-grid-title", ".demo-data-grid-row.is-active-row", '.demo-data-grid [role="gridcell"][tabindex="0"]'],
+    },
+    {
+      path: "/components/image-gallery",
+      selectors: [".demo-gallery", ".demo-gallery > div:last-child > button", ".demo-gallery-caption"],
+    },
+    {
+      path: "/components/bottom-navigation",
+      selectors: [".demo-bottom-nav", ".demo-bottom-nav .demo-icon", ".demo-bottom-nav .demo-nav-label"],
+    },
+    {
+      path: "/components/search-field",
+      selectors: [".demo-search-box", ".demo-search-box > input", ".demo-search-box > button"],
+    },
+    {
+      path: "/components/tags-input",
+      selectors: [".demo-tags-box > .demo-tag", ".demo-tags-box > input", ".demo-tag > button"],
+    },
+    {
+      path: "/components/avatar",
+      selectors: [".demo-avatar-initials", ".demo-avatar-large", ".demo-avatar-status"],
+    },
+    {
+      path: "/components/timeline",
+      selectors: [".demo-timeline-marker", ".demo-timeline-connector", ".demo-timeline-content"],
+    },
+    {
+      path: "/components/toolbar",
+      selectors: [".demo-toolbar", ".demo-toolbar > button", ".demo-toolbar > span:not(.demo-status)"],
+    },
+    {
+      path: "/components/lazy-loading",
+      selectors: [".demo-lazy-slot", ".demo-lazy > button", ".demo-lazy-content"],
+    },
+  ] as const;
+
+  for (const item of cases) {
+    await gotoReady(page, item.path);
+    const preview = page.locator(".detail-demo-preview");
+    await expect(preview).toHaveAttribute("data-annotation-layout-ready", "true");
+    const targets = await preview.evaluate((previewElement) => {
+      const stage = previewElement.querySelector<HTMLElement>(".demo-stage--detail");
+      if (!stage) return [];
+      return Array.from(previewElement.querySelectorAll<HTMLElement>(".demo-annotation-marker")).map((marker) => {
+        const selector = marker.dataset.annotationSelector ?? "";
+        const rects = Array.from(stage.querySelectorAll<HTMLElement>(selector))
+          .map((element) => element.getBoundingClientRect());
+        return {
+          selector,
+          rect: {
+            bottom: Math.max(...rects.map((rect) => rect.bottom)),
+            left: Math.min(...rects.map((rect) => rect.left)),
+            right: Math.max(...rects.map((rect) => rect.right)),
+            top: Math.min(...rects.map((rect) => rect.top)),
+          },
+        };
+      });
+    });
+
+    expect(targets.map((target) => target.selector), item.path).toEqual(item.selectors);
+    for (const [index, target] of targets.entries()) {
+      expect(target.rect.right - target.rect.left, `${item.path} target ${index + 1} width`).toBeGreaterThan(0);
+      expect(target.rect.bottom - target.rect.top, `${item.path} target ${index + 1} height`).toBeGreaterThan(0);
+      for (const other of targets.slice(index + 1)) {
+        const sameBounds = ["top", "right", "bottom", "left"].every(
+          (edge) => Math.abs(target.rect[edge as keyof typeof target.rect] - other.rect[edge as keyof typeof other.rect]) <= 1,
+        );
+        expect(sameBounds, `${item.path}: ${target.selector} must not proxy ${other.selector}`).toBe(false);
+      }
+    }
+  }
+});
+
+test("repeated radio-group demos keep native groups isolated", async ({ page }) => {
+  const radioResult = structuredClone(identificationResult);
+  radioResult.candidates[0].slug = "radio-group";
+  radioResult.candidates[0].name = { zh: "单选组", en: "Radio Group" };
+  await mockIdentificationApi(page, radioResult);
+  await gotoReady(page, "/?q=Radio%20Group");
+
+  const catalogDemo = page.locator('[data-deferred-demo="radio-group"]');
+  await catalogDemo.scrollIntoViewIfNeeded();
+  await expect(catalogDemo.locator('[data-demo-slug="radio-group"]')).toBeVisible();
+  await page.getByRole("button", { name: "AI 识别" }).click();
+  const dialog = page.getByRole("dialog", { name: "AI 视觉识别" });
+  await dialog.getByRole("tab", { name: "网页识别" }).click();
+  await dialog.getByRole("textbox", { name: "公开网页地址" }).fill("https://example.com/");
+  await dialog.getByRole("button", { name: "分析这个网页" }).click();
+  const resultDemo = dialog.locator(".analyzer-result-demo");
+  await expect(resultDemo.locator('[data-demo-slug="radio-group"]')).toBeVisible();
+
+  const names = await page.locator('input[type="radio"]').evaluateAll(
+    (inputs) => inputs.map((input) => (input as HTMLInputElement).name),
+  );
+  expect(new Set(names).size).toBe(2);
+  await resultDemo.getByRole("radio", { name: "Web" }).check();
+  await expect(resultDemo.getByRole("radio", { name: "Web" })).toBeChecked();
+  await expect(catalogDemo.getByRole("radio", { name: "自动" })).toBeChecked();
+});
+
+test("tooltip and hover card persist while focus remains", async ({ page }) => {
+  await gotoReady(page, "/components/tooltip");
+  const tooltipTrigger = page.getByRole("button", { name: "查看术语解释" });
+  await tooltipTrigger.hover();
+  await tooltipTrigger.focus();
+  await tooltipTrigger.click();
+  await page.mouse.move(0, 0);
+  await expect(page.getByRole("tooltip")).toBeVisible();
+  await expect(tooltipTrigger).toHaveAttribute("aria-describedby", /tooltip-content/);
+  await page.getByRole("button", { name: "重置 ↻" }).focus();
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+
+  await gotoReady(page, "/components/hover-card");
+  const hoverLink = page.getByRole("link", { name: "@design-system" });
+  await hoverLink.hover();
+  await hoverLink.focus();
+  await hoverLink.click();
+  await page.mouse.move(0, 0);
+  await expect(page.locator(".demo-hover-card")).toBeVisible();
+  await expect(hoverLink).toHaveAttribute("aria-describedby", /hover-card-content/);
+  await page.getByRole("button", { name: "重置 ↻" }).focus();
+  await expect(page.locator(".demo-hover-card")).toHaveCount(0);
+});
+
+test("marquee hides its duplicate and pauses for hover, focus, and manual control", async ({ page }) => {
+  await gotoReady(page, "/components/marquee");
+  const marquee = page.locator(".demo-marquee");
+  const track = marquee.locator("> div").first();
+  await expect(marquee.locator('[aria-hidden="true"]')).toHaveCount(1);
+
+  await marquee.hover();
+  await expect(track).toHaveCSS("animation-play-state", "paused");
+  await page.mouse.move(0, 0);
+  await expect(track).toHaveCSS("animation-play-state", "running");
+
+  const pause = page.getByRole("button", { name: "暂停滚动" });
+  await pause.focus();
+  await expect(track).toHaveCSS("animation-play-state", "paused");
+  await pause.click();
+  await page.getByRole("button", { name: "继续滚动" }).blur();
+  await expect(track).toHaveCSS("animation-play-state", "paused");
 });
 
 test("home defers card demos and loads the identification dialog on demand", async ({ page }) => {

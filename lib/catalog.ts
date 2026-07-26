@@ -388,7 +388,7 @@ export default function Component() {
         : `<div class="demo row"><button type="button">保存更改</button><button type="button">更多选项</button></div>`;
       js = `document.querySelector('.demo button').addEventListener('click', () => console.log('${item.name.en} activated'));`;
       jsx = `export default function Component() {
-  return <div className="demo row"><button type="button" onClick={() => alert("操作已触发")}>${iconOnly ? "☆" : "保存更改"}</button></div>;
+  return <div className="demo row"><button${iconOnly ? ' aria-label="收藏"' : ""} type="button" onClick={() => alert("操作已触发")}>${iconOnly ? "☆" : "保存更改"}</button></div>;
 }`;
       break;
     }
@@ -599,7 +599,14 @@ export default function Component() {
       } else {
         const type = item.slug === "radio-group" || item.slug === "segmented-control" ? "radio" : "checkbox";
         html = `<fieldset class="demo row"><legend>${item.name.zh}</legend><label><input type="${type}" name="choice"> 开启通知</label><label><input type="${type}" name="choice"> 每周摘要</label></fieldset>`;
-        jsx = `export default function Component() { return <fieldset className="demo row"><legend>${item.name.zh}</legend><label><input type="${type}" name="choice" /> 开启通知</label><label><input type="${type}" name="choice" /> 每周摘要</label></fieldset>; }`;
+        jsx = type === "radio"
+          ? `import { useId } from "react";
+
+export default function Component() {
+  const groupName = useId();
+  return <fieldset className="demo row"><legend>${item.name.zh}</legend><label><input type="radio" name={groupName} /> 开启通知</label><label><input type="radio" name={groupName} /> 每周摘要</label></fieldset>;
+}`
+          : `export default function Component() { return <fieldset className="demo row"><legend>${item.name.zh}</legend><label><input type="checkbox" /> 开启通知</label><label><input type="checkbox" /> 每周摘要</label></fieldset>; }`;
       }
       js = `document.querySelector('.demo').addEventListener('change', event => console.log(event.target.value));`;
       break;
