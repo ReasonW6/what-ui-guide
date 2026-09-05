@@ -62,7 +62,7 @@ test("homepage preserves its original layout and opens identification in a dialo
   assert.match(source, /id="component-search"/);
   assert.ok(source.indexOf("id=\"component-search\"") < source.indexOf("id=\"terms\""));
   assert.ok(source.indexOf("id=\"terms\"") < source.indexOf("id=\"catalog\""));
-  assert.match(source, /看见组件却不知道名称/);
+  assert.match(source, /找到准确的组件名称/);
   assert.match(source, /<GitHubLink/);
   assert.match(source, /import\("\.\/DemoStage"\)/);
   assert.match(source, /IntersectionObserver/);

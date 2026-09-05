@@ -3,7 +3,7 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
-  background: #090c10;
+  background: light-dark(#ffffff, #090c10);
 }
 
 .code-explorer-head {
@@ -39,7 +39,7 @@
 .bundle-tabs button[aria-selected="true"] {
   border-color: var(--line-strong);
   background: var(--surface-2);
-  color: white;
+  color: var(--ink);
 }
 
 .code-readonly {
@@ -96,9 +96,9 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   overflow: auto;
-  background: #070b11;
+  background: light-dark(#f5f7fa, #070b11);
   scrollbar-width: thin;
-  scrollbar-color: #334154 #070b11;
+  scrollbar-color: #334154 light-dark(#f5f7fa, #070b11);
 }
 
 .code-panel::-webkit-scrollbar {
@@ -108,11 +108,11 @@
 
 .code-panel::-webkit-scrollbar-track,
 .code-panel::-webkit-scrollbar-corner {
-  background: #070b11;
+  background: light-dark(#f5f7fa, #070b11);
 }
 
 .code-panel::-webkit-scrollbar-thumb {
-  border: 2px solid #070b11;
+  border: 2px solid light-dark(#f5f7fa, #070b11);
   border-radius: 999px;
   background: #334154;
 }
@@ -125,12 +125,12 @@
   position: sticky;
   left: 0;
   z-index: 2;
-  border-right: 1px solid #172232;
+  border-right: 1px solid light-dark(#dfe3ea, #172232);
   display: flex;
   flex-direction: column;
-  background: #0a0f17;
+  background: light-dark(#ecf0f5, #0a0f17);
   padding: 22px 12px;
-  color: #405069;
+  color: light-dark(#6b7788, #405069);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 12px;
   line-height: 1.7;
@@ -142,7 +142,7 @@
   min-width: max-content;
   margin: 0;
   padding: 22px;
-  color: #cfe1f5;
+  color: light-dark(#34465e, #cfe1f5);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 13px;
   line-height: 1.7;

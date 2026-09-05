@@ -5,10 +5,10 @@ import vm from "node:vm";
 import ts from "typescript";
 import { loadCatalogModule } from "./catalog-loader.mjs";
 
-test("catalog contains the planned 81 complete bilingual entries", async () => {
+test("catalog contains the planned 90 complete bilingual entries", async () => {
   const { catalog, categories, validateCatalog } = await loadCatalogModule();
-  assert.equal(catalog.length, 81);
-  assert.equal(new Set(catalog.map((item) => item.slug)).size, 81);
+  assert.equal(catalog.length, 90);
+  assert.equal(new Set(catalog.map((item) => item.slug)).size, 90);
   assert.equal(categories.length, 9);
   assert.deepEqual(validateCatalog(), []);
 
@@ -20,14 +20,14 @@ test("catalog contains the planned 81 complete bilingual entries", async () => {
   );
   assert.deepEqual(counts, {
     navigation: 10,
-    actions: 9,
-    inputs: 9,
-    selection: 10,
+    actions: 10,
+    inputs: 11,
+    selection: 13,
     feedback: 11,
     overlays: 10,
-    content: 8,
+    content: 10,
     data: 6,
-    motion: 8,
+    motion: 9,
   });
 });
 
@@ -281,7 +281,7 @@ test("new reference patterns have specific, runnable code samples", async () => 
   assert.match(code("tree-view", "react", "jsx"), /tabIndex[\s\S]*onKeyDown[\s\S]*aria-selected/);
 });
 
-test("DemoRegistry covers the same 81 slugs as the catalog", async () => {
+test("DemoRegistry covers the same 90 slugs as the catalog", async () => {
   const { catalog } = await loadCatalogModule();
   const source = await readFile(new URL("../app/ui/DemoStage.tsx", import.meta.url), "utf8");
   const start = source.indexOf("export const demoSlugs = [");
@@ -290,7 +290,7 @@ test("DemoRegistry covers the same 81 slugs as the catalog", async () => {
   const slugs = [...source.slice(start, end).matchAll(/"([a-z0-9-]+)"/g)].map(
     (match) => match[1],
   );
-  assert.equal(slugs.length, 81);
+  assert.equal(slugs.length, 90);
   assert.deepEqual(
     slugs.slice().sort(),
     catalog.map((item) => item.slug).slice().sort(),

@@ -329,25 +329,32 @@ async function captureWithBinding(
   payload: BrowserSnapshotPayload,
   signal?: AbortSignal,
 ): Promise<CapturedWebpageSnapshot> {
-  const response = await waitForSignal(
-    binding.quickAction("snapshot", payload),
-    signal,
-  );
-  if (response instanceof Response) {
-    const body = await readBody(response, signal);
-    if (!response.ok) {
-      throw new Error(
-        errorMessage(body, `Browser binding failed with HTTP ${response.status}.`),
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), payload.actionTimeout + 2_000);
+  const boundedSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
+  try {
+    const response = await waitForSignal(
+      binding.quickAction("snapshot", payload),
+      boundedSignal,
+    );
+    if (response instanceof Response) {
+      const body = await readBody(response, boundedSignal);
+      if (!response.ok) {
+        throw new Error(
+          errorMessage(body, `Browser binding failed with HTTP ${response.status}.`),
+        );
+      }
+      return extractSnapshot(
+        body,
+        payload.url,
+        "binding",
+        readBrowserMsUsed(response),
       );
     }
-    return extractSnapshot(
-      body,
-      payload.url,
-      "binding",
-      readBrowserMsUsed(response),
-    );
+    return extractSnapshot(response, payload.url, "binding", null);
+  } finally {
+    clearTimeout(timeout);
   }
-  return extractSnapshot(response, payload.url, "binding", null);
 }
 
 async function captureWithRest(

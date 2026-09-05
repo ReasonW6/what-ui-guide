@@ -236,7 +236,9 @@ export function IdentificationWorkspace() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/identify", { headers: { accept: "application/json" } })
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
+    fetch("/api/identify", { headers: { accept: "application/json" }, signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error();
         return response.json() as Promise<IdentificationCapabilities>;
@@ -253,9 +255,11 @@ export function IdentificationWorkspace() {
             visualWebpageCapture: false,
           });
         }
-      });
+      }).finally(() => window.clearTimeout(timeout));
     return () => {
       active = false;
+      window.clearTimeout(timeout);
+      controller.abort();
     };
   }, []);
 

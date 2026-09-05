@@ -921,3 +921,13 @@ test("Browser REST timeout remains active while a response body is streaming", a
   assert.equal(result.warning.code, "rest_failed");
   assert.equal(bodyCancelled, true);
 });
+
+test("Browser binding enforces its own deadline even without caller cancellation", async () => {
+  const result = await settleWithin(capture.captureWebpageSnapshot({
+    url: "https://example.com/",
+    env: { BROWSER_ALLOWED_HOSTS: "example.com", BROWSER: { quickAction: () => new Promise(() => {}) } },
+    timeoutMs: 1000,
+  }), 3500);
+  assert.equal(result.ok, false);
+  assert.equal(result.warning.code, "binding_failed");
+});

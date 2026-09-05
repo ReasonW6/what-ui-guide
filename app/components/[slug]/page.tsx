@@ -3,9 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CodeExplorer } from "@/app/ui/CodeExplorer";
 import { GitHubLink } from "@/app/ui/GitHubLink";
+import { ThemeSelect } from "@/app/ui/ThemeSelect";
 import { CopyPrompt, InteractiveDetail } from "@/app/ui/InteractiveDetail";
 import { catalog, categories, getCatalogItem } from "@/lib/catalog";
 import { getConfusionGuide } from "@/lib/confusion-guides";
+import { additionalSources } from "@/lib/catalog-additions";
 
 type ComponentPageProps = {
   params: Promise<{ slug: string }>;
@@ -54,6 +56,7 @@ export default async function ComponentPage({ params }: ComponentPageProps) {
     .filter((relatedItem) => relatedItem !== undefined)
     .slice(0, 3);
   const confusionGuide = getConfusionGuide(item.slug)?.text;
+  const reference = additionalSources[item.slug];
 
   return (
     <>
@@ -65,7 +68,7 @@ export default async function ComponentPage({ params }: ComponentPageProps) {
           </Link>
           <GitHubLink />
         </div>
-        <Link className="back-link" href="/#catalog">← 返回组件目录</Link>
+        <div className="header-actions"><ThemeSelect /><Link className="back-link" href="/#catalog">← 返回组件目录</Link></div>
       </header>
 
       <main className="detail-main" id="component-content">
@@ -142,6 +145,7 @@ export default async function ComponentPage({ params }: ComponentPageProps) {
                   <ul>{item.accessibility.map((line) => <li key={line}>{line}</li>)}</ul>
                 </div>
               </div>
+              {reference && <p className="component-reference">参考 <a href={reference.url} target="_blank" rel="noreferrer">{reference.title} ↗</a><span>核对于 2026-09-05</span></p>}
             </section>
 
             <section className="detail-section" id="prompt" aria-labelledby="prompt-heading">

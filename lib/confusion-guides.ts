@@ -4,6 +4,15 @@ export interface ConfusionGuide {
 }
 
 export const confusionGuides: readonly ConfusionGuide[] = [
+  { slugs: ["date-range-picker"], text: "Date Range Picker 选择起止区间；Date Picker 选择单个日期；Calendar View 展示日期与事件，通常不负责提交日期值。" },
+  { slugs: ["time-field"], text: "Time Field 输入一天内的时间；Date Picker 选择日期。需要全球一致的时间点时，还必须有日期和时区。" },
+  { slugs: ["multi-select"], text: "Multi-select 从固定候选中选择多个值；Tags Input 允许创建文本标签；Combobox 描述输入与候选选择的组合，不必然支持多选。" },
+  { slugs: ["rating"], text: "Rating 选择离散评价等级；Slider 选择范围内的数值。只读评分只展示结果，不应表现成可编辑控件。" },
+  { slugs: ["menubar"], text: "Menubar 展开应用命令菜单；Toolbar 直接提供常用工具；Navigation Bar 使用链接切换页面或区域。" },
+  { slugs: ["questionnaire"], text: "Questionnaire 收集回答并管理问题步骤；Progress Stepper 只表达阶段和进度，本身不负责表单验证。" },
+  { slugs: ["chat-message"], text: "Chat Message 表达发送者与对话内容；Bubble 是消息的视觉容器；Message Scroller 管理整段消息记录的阅读位置。" },
+  { slugs: ["message-scroller"], text: "Message Scroller 处理跟随最新消息与保留阅读位置；Infinite Scroll 在接近列表边界时加载更多内容，两者可以组合。" },
+  { slugs: ["attachment"], text: "Attachment 表示已关联的文件及操作；File Upload 负责选取和上传文件；Card 只是通用内容容器。" },
   {
     slugs: ["select", "dropdown-menu", "combobox", "command-palette"],
     text: "Select 从固定选项中选值；Dropdown Menu 执行少量命令；Combobox 输入筛选选值；Command Palette 搜索并执行全局命令。",

@@ -13,6 +13,7 @@ import {
   type ReactNode,
 } from "react";
 import { DatePickerDemo } from "./DatePickerDemo";
+import { modernDemoRegistry } from "./ModernDemos";
 import type { DemoSettings } from "./demo-config";
 import "./demo-stage.css";
 
@@ -34,6 +35,15 @@ export type DemoStageProps = DemoProps & {
 };
 
 export const demoSlugs = [
+  "date-range-picker",
+  "time-field",
+  "multi-select",
+  "rating",
+  "menubar",
+  "questionnaire",
+  "chat-message",
+  "message-scroller",
+  "attachment",
   "navigation-bar",
   "sidebar-navigation",
   "navigation-drawer",
@@ -1055,7 +1065,7 @@ function OverlayDemo({ slug, density }: DemoProps & { slug: DemoSlug }) {
     case "tooltip":
       return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlurCapture={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setTooltipFocusWithin(false); }} onFocusCapture={() => setTooltipFocusWithin(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); dismissHoverContent(triggerRef.current); } }} onMouseEnter={() => setTooltipHovered(true)} onMouseLeave={() => setTooltipHovered(false)}><button aria-describedby={hoverContentOpen ? id("tooltip-content") : undefined} aria-label="查看术语解释" className="demo-icon-button" onClick={() => setOpen((value) => !value)} ref={triggerRef} type="button">?</button>{hoverContentOpen && <div className="demo-tooltip" id={id("tooltip-content")} role="tooltip"><span aria-hidden="true" className="demo-tooltip-arrow" />查看术语解释</div>}</div></div>;
     case "hover-card":
-      return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlurCapture={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setTooltipFocusWithin(false); }} onFocusCapture={() => setTooltipFocusWithin(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); dismissHoverContent(hoverTriggerRef.current); } }} onMouseEnter={() => setTooltipHovered(true)} onMouseLeave={() => setTooltipHovered(false)}><a aria-describedby={hoverContentOpen ? id("hover-card-content") : undefined} className="demo-text-link" href="#design-system-profile" onClick={(event) => { event.preventDefault(); setOpen((value) => !value); }} ref={hoverTriggerRef}>@design-system</a>{hoverContentOpen && <div className="demo-hover-card" id={id("hover-card-content")}><span className="demo-avatar-small">DS</span><span><strong>Design System</strong><small>收录 81 个常用组件</small></span></div>}</div></div>;
+      return <div className="demo-overlay-scene"><div className="demo-hover-region" onBlurCapture={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setTooltipFocusWithin(false); }} onFocusCapture={() => setTooltipFocusWithin(true)} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); dismissHoverContent(hoverTriggerRef.current); } }} onMouseEnter={() => setTooltipHovered(true)} onMouseLeave={() => setTooltipHovered(false)}><a aria-describedby={hoverContentOpen ? id("hover-card-content") : undefined} className="demo-text-link" href="#design-system-profile" onClick={(event) => { event.preventDefault(); setOpen((value) => !value); }} ref={hoverTriggerRef}>@design-system</a>{hoverContentOpen && <div className="demo-hover-card" id={id("hover-card-content")}><span className="demo-avatar-small">DS</span><span><strong>Design System</strong><small>收录常用交互组件</small></span></div>}</div></div>;
     case "side-sheet":
       return <div className="demo-overlay-scene" onKeyDown={handleOverlayKeyDown}>{trigger("打开设置")}{open && <div className="demo-side-sheet-layer" onPointerDown={(event) => { if (event.target === event.currentTarget) closeOverlay(); }}><div aria-labelledby={id("sheet-title")} aria-modal={density === "detail" && modalEngaged ? true : undefined} className="demo-side-sheet" ref={panelRef} role="dialog" tabIndex={-1}><div><strong id={id("sheet-title")}>页面设置</strong><button aria-label="关闭" onClick={closeOverlay} type="button">×</button></div><label className="demo-check"><input defaultChecked type="checkbox" />显示网格</label><label className="demo-check"><input type="checkbox" />紧凑模式</label>{density === "detail" && <button className="demo-primary" onClick={closeOverlay} type="button">应用</button>}</div></div>}</div>;
     case "accordion":
@@ -1342,6 +1352,7 @@ const entry = (slug: DemoSlug): ComponentType<DemoProps> => function RegistryEnt
 };
 
 export const demoRegistry = {
+  ...modernDemoRegistry,
   "navigation-bar": entry("navigation-bar"),
   "sidebar-navigation": entry("sidebar-navigation"),
   "navigation-drawer": entry("navigation-drawer"),

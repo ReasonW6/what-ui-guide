@@ -28,7 +28,7 @@ test("home page renders the finished bilingual catalog", async () => {
   assert.doesNotMatch(html, /id="identification-dialog"|class="analyzer-shell"|class="analyzer-tabs"/);
   assert.match(html, /data-demo-placeholder="navigation-bar"/);
   assert.match(html, /href="\/components\/navigation-bar"/);
-  assert.match(html, /看见组件却不知道名称/);
+  assert.match(html, /找到准确的组件名称/);
   assert.ok(html.indexOf('id="component-search"') < html.indexOf('id="terms"'));
   assert.ok(html.indexOf('id="terms"') < html.indexOf('id="catalog"'));
   assert.match(html, /href="https:\/\/github\.com\/ReasonW6\/what-ui-guide"/);
@@ -43,7 +43,7 @@ test("home page renders the finished bilingual catalog", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
-test("all 81 component detail routes render and unknown slugs return 404", async () => {
+test("all 90 component detail routes render and unknown slugs return 404", async () => {
   const { catalog } = await loadCatalogModule();
   for (let index = 0; index < catalog.length; index += 10) {
     const batch = catalog.slice(index, index + 10);

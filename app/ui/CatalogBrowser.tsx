@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { filterCatalogSearchEntries } from "@/lib/catalog-search";
 import { GitHubLink } from "./GitHubLink";
+import { ThemeSelect } from "./ThemeSelect";
+const CatalogMotion = lazy(() => import("./catalog-motion"));
+const subscribeToClient = () => () => {};
 
 const DemoStage = lazy(async () => {
   const loaded = await import("./DemoStage");
@@ -142,6 +145,7 @@ export function CatalogBrowser({
   }, [items, query, category, platform]);
 
   const visible = filtered.slice(0, visibleCount);
+  const motionReady = useSyncExternalStore(subscribeToClient, () => true, () => false);
 
   const clearFilters = () => {
     setQuery("");
@@ -180,6 +184,7 @@ export function CatalogBrowser({
           <GitHubLink />
         </div>
         <nav aria-label="站点导航">
+          <ThemeSelect />
           <button
             aria-controls={isIdentificationOpen ? "identification-dialog" : undefined}
             aria-expanded={isIdentificationOpen}
@@ -198,12 +203,18 @@ export function CatalogBrowser({
       </header>
 
       <main id="main-content" ref={mainRef}>
+        {motionReady && <Suspense fallback={null}><CatalogMotion scope={mainRef} signature={visible.map(item => item.slug).join(",")} /></Suspense>}
         <section className="hero" id="top">
-        <p className="eyebrow">INTERACTIVE UI / UX DICTIONARY</p>
-        <h1>这个 UI，叫什么<span>？</span></h1>
+        <div className="hero-heading">
+        <div>
+        <p className="eyebrow">WHAT UI? / 交互式视觉词典</p>
+        <h1>看得见，也叫得出<span>。</span></h1>
         <p className="hero-intro">
-          看见组件却不知道名称？亲手试一试，再用中英文标准术语准确描述它。
+          找到准确的组件名称，亲手试一试，再把想法变成界面。
         </p>
+        </div>
+        <p className="catalog-edition"><strong>{items.length}</strong><span>个交互术语<br />中英双语 · 附实现代码</span></p>
+        </div>
 
         <div className="search-panel" id="search">
           <label className="sr-only" htmlFor="component-search">描述你看到的东西</label>
@@ -233,7 +244,7 @@ export function CatalogBrowser({
         </div>
         </section>
 
-        <section className="term-strip" id="terms" aria-labelledby="terms-title">
+        <section className="term-strip sr-only" id="terms" aria-labelledby="terms-title">
         <h2 id="terms-title">展示方式</h2>
         <div className="term-grid">
           <article>
@@ -300,7 +311,7 @@ export function CatalogBrowser({
         {visible.length ? (
           <div className="catalog-grid">
             {visible.map((item) => (
-              <article className="component-card" key={item.slug}>
+              <article className="component-card" data-card-slug={item.slug} key={item.slug}>
                 <div className="preview-shell">
                   <DeferredCardDemo item={item} />
                 </div>

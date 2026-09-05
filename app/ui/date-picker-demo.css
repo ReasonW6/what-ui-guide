@@ -39,7 +39,7 @@
   background: transparent;
   padding: 0 12px;
   color: var(--demo-text);
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 
 .demo-stage .date-picker-field-shell input::-webkit-calendar-picker-indicator {

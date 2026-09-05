@@ -1,25 +1,45 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: light;
+  --ink: #20242b;
+  --muted: #626976;
+  --muted-strong: #454d59;
+  --bg: #f8f9fb;
+  --surface: #ffffff;
+  --surface-2: #f0f2f6;
+  --surface-3: #e5e9f0;
+  --line: #dfe3ea;
+  --line-strong: #b6bfcc;
+  --blue: #2458d3;
+  --blue-strong: #2458d3;
+  --cyan: #2458d3;
+  --green: #147652;
+  --warning: #986013;
+  --danger: #bc3548;
+  --radius: 12px;
+  --shadow: 0 8px 24px rgb(32 48 75 / 0.06);
+  --page: min(1280px, calc(100% - 80px));
+}
+
+:root[data-theme="dark"] {
   color-scheme: dark;
   --ink: #f2f4f7;
   --muted: #a2a8b0;
   --muted-strong: #c8cdd4;
-  --bg: #0a0c0f;
-  --surface: #101317;
-  --surface-2: #15191e;
-  --surface-3: #1b2027;
-  --line: #242930;
-  --line-strong: #343b45;
-  --blue: #4a9eff;
-  --blue-strong: #1683ff;
-  --cyan: #83bfff;
+  --bg: #101216;
+  --surface: #181b21;
+  --surface-2: #20242c;
+  --surface-3: #292f3a;
+  --line: #303743;
+  --line-strong: #515e70;
+  --blue: #8aafff;
+  --blue-strong: #2458d3;
+  --cyan: #a7c6ff;
   --green: #63cf9d;
   --warning: #e8b85f;
   --danger: #ed7683;
-  --radius: 12px;
-  --shadow: none;
-  --page: min(1160px, calc(100% - 40px));
+  --shadow: 0 8px 28px rgb(0 0 0 / 0.15);
 }
 
 * {
@@ -58,7 +78,7 @@ body {
   overflow-x: hidden;
   background: var(--bg);
   color: var(--ink);
-  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+  font-family: "Segoe UI Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
     "PingFang SC", "Microsoft YaHei", sans-serif;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -140,7 +160,7 @@ a:focus-visible,
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  background: rgb(10 12 15 / 0.88);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(16px);
 }
 
@@ -437,7 +457,7 @@ a:focus-visible,
   display: flex;
   align-items: center;
   gap: 20px;
-  background: rgb(10 12 15 / 0.92);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
   padding: 8px 0;
   backdrop-filter: blur(16px);
 }
@@ -724,16 +744,10 @@ a:focus-visible,
 }
 
 @media (min-width: 981px) and (min-height: 980px) {
-.detail-visual-sticky {
-  position: static;
-}
-
-@media (min-width: 981px) and (min-height: 980px) {
   .detail-visual-sticky {
     position: sticky;
     top: 82px;
   }
-}
 }
 
 .detail-visual-heading {
@@ -869,7 +883,7 @@ a:focus-visible,
 
 .detail-summary {
   margin: 23px 0 0;
-  color: #d8dce1;
+  color: light-dark(#454d59, #d8dce1);
   font-size: 16px;
   line-height: 1.8;
 }
@@ -959,7 +973,7 @@ a:focus-visible,
 .prompt-box code {
   display: block;
   min-width: 0;
-  color: #d4e1ef;
+  color: light-dark(#37465c, #d4e1ef);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 13px;
   line-height: 1.7;
@@ -1236,4 +1250,94 @@ a:focus-visible,
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Shared editorial rhythm: compact introduction, generous component canvases. */
+.site-header, .detail-header { min-height: 72px; border-color: var(--line); }
+.brand { font-size: 18px; letter-spacing: -0.05em; }
+.site-header nav { font-size: 14px; }
+.header-actions { display: flex; align-items: center; gap: 12px; }
+.github-link img { filter: none; }
+:root[data-theme="dark"] .github-link img { filter: invert(1); }
+.theme-select { display: inline-flex; align-items: center; min-height: 44px; gap: 8px; padding-left: 10px; }
+.theme-swatch { width: 14px; height: 14px; border: 1px solid var(--muted); border-radius: 50%; background: linear-gradient(90deg, var(--ink) 50%, var(--surface) 50%); }
+.theme-select select { max-width: 100px; min-height: 44px; border: 0; background: transparent; color: var(--muted-strong); font-size: 14px; }
+.hero { max-width: none; padding: 52px 0 28px; text-align: left; }
+.hero-heading { display: flex; justify-content: space-between; align-items: center; gap: 28px; }
+.hero h1 { font-size: clamp(32px, 4.8vw, 60px); line-height: 1.2; letter-spacing: -0.065em; font-weight: 650; text-wrap: balance; }
+.hero .eyebrow { color: var(--muted); letter-spacing: 0.11em; margin-bottom: 18px; }
+.hero-intro { margin: 16px 0 0; font-size: 16px; }
+.catalog-edition { display: flex; align-items: center; gap: 20px; border-left: 1px solid var(--line); padding-left: 40px; }
+.catalog-edition strong { font-size: 64px; line-height: 1; letter-spacing: -0.08em; font-weight: 450; font-variant-numeric: tabular-nums; }
+.catalog-edition span { color: var(--muted); font-size: 13px; line-height: 1.9; white-space: nowrap; }
+.search-panel { max-width: none; margin: 30px 0 0; }
+.search-control { height: 64px; border-radius: 12px; padding-inline: 20px; box-shadow: var(--shadow); }
+.search-examples { justify-content: flex-start; margin-top: 6px; font-size: 14px; }
+.term-strip.sr-only { width: 1px; min-height: 0; }
+.catalog-section { padding: 20px 0 90px; }
+.section-heading { margin-bottom: 20px; }
+.section-heading .eyebrow { display: none; }
+.section-heading h2 { font-size: 24px; letter-spacing: -0.04em; }
+.result-count { font-size: 14px; font-variant-numeric: tabular-nums; }
+.filter-bar { top: 71px; padding-block: 10px; margin-bottom: 28px; gap: 24px; }
+.category-chips { gap: 7px; padding-block: 2px; }
+.category-chips button { min-height: 44px; border-radius: 7px; padding: 8px 12px; transition: color 180ms, background 180ms; }
+.category-chips button.active { color: var(--surface); background: var(--ink); }
+.category-chips button.active span { color: inherit; opacity: 0.75; }
+.category-chips button:hover:not(.active) { background: var(--surface-3); }
+.category-chips button::after { display: none; }
+.catalog-grid { gap: 36px 28px; }
+.preview-shell { box-shadow: 0 2px 4px rgb(32 48 75 / 0.025); transition: border-color 220ms, box-shadow 220ms; }
+.component-card:hover .preview-shell, .component-card:focus-within .preview-shell { border-color: var(--line-strong); box-shadow: var(--shadow); }
+.card-body { padding: 12px 2px 0; }
+.component-card h3 { font-size: 19px; font-weight: 650; }
+.english-name { font-size: 12px; letter-spacing: 0.02em; color: var(--muted); }
+.detail-link { border-radius: 50%; transition: transform 220ms, background 220ms; }
+.component-card:hover .detail-link { transform: translate(2px, -2px); background: var(--surface-3); }
+.card-summary { margin-top: 10px; font-size: 14px; line-height: 1.7; }
+.detail-main { padding-top: 32px; }
+.detail-layout { gap: 48px; }
+.detail-hero { padding-top: 32px; }
+.info-panel ul, .detail-summary-en, .prompt-box code { font-size: 14px; }
+.site-footer { font-size: 14px; }
+.component-reference { margin: 16px 0 0; font-size: 13px; color: var(--muted); }
+.component-reference a { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+.component-reference span { display: block; margin-top: 4px; font-size: 12px; }
+.site-header button:active, .load-more:active { transform: translateY(1px); }
+@media (max-width: 980px) {
+  :root { --page: min(100% - 40px, 1280px); }
+  .catalog-edition { padding-left: 22px; gap: 12px; }
+  .catalog-edition strong { font-size: 48px; }
+  .catalog-edition span { display: none; }
+  .detail-layout { gap: 24px; }
+}
+@media (max-width: 720px) {
+  :root { --page: calc(100% - 32px); }
+  .site-header, .detail-header { min-height: 64px; gap: 8px; }
+  .brand { font-size: 16px; }
+  .site-header nav { gap: 0; }
+  .site-header nav > button:last-child, .header-left .github-link, .theme-swatch { display: none; }
+  .theme-select { padding-left: 0; }
+  .theme-select select { max-width: 88px; }
+  .hero { padding: 34px 0 18px; }
+  .hero-heading { gap: 12px; }
+  .hero h1 { font-size: clamp(29px, 7vw, 44px); }
+  .hero .eyebrow { font-size: 12px; margin-bottom: 14px; }
+  .hero-intro { max-width: 29em; font-size: 14px; line-height: 1.8; margin-top: 12px; }
+  .catalog-edition { display: none; }
+  .search-panel { margin-top: 22px; }
+  .search-control { height: 58px; padding-inline: 14px; }
+  .search-control input { font-size: 14px; }
+  .search-control kbd { display: none; }
+  .search-examples { gap: 0; font-size: 12px; }
+  .search-examples button { padding-inline: 5px; }
+  .catalog-section { padding-top: 12px; }
+  .filter-bar { top: 63px; gap: 8px; }
+  .catalog-grid { gap: 28px 18px; }
+  .header-actions { gap: 2px; }
+  .back-link { font-size: 13px; padding-inline: 4px; }
+}
+@media (max-width: 520px) {
+  .catalog-grid { grid-template-columns: 1fr; }
+  .info-grid, .related-grid { grid-template-columns: 1fr; }
 }

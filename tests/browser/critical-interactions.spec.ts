@@ -49,7 +49,7 @@ const identificationCapabilities = {
   visualWebpageCapture: false,
 };
 
-async function mockIdentificationApi(page: Page, result = identificationResult) {
+async function mockIdentificationApi(page: Page, result: unknown = identificationResult) {
   await page.route("**/api/identify", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -919,6 +919,25 @@ test("results cannot hide provider settings and repeated demos keep unique ids",
     return [...counts.entries()].filter(([, count]) => count > 1);
   });
   expect(duplicateIds).toEqual([]);
+});
+
+test("unknown identification preserves uncertainty and follow-up guidance", async ({ page }) => {
+  await mockIdentificationApi(page, {
+    ...identificationResult,
+    status: "unknown",
+    candidates: [],
+    uncertainties: ["当前画面看不到展开状态"],
+    followUpQuestion: "点击之后会出现什么内容？",
+  });
+  await gotoReady(page, "/");
+  await page.getByRole("button", { name: "AI 识别" }).click();
+  const dialog = page.getByRole("dialog", { name: "AI 视觉识别" });
+  await dialog.getByRole("tab", { name: "网页识别" }).click();
+  await dialog.getByRole("textbox", { name: "公开网页地址" }).fill("https://example.com/");
+  await dialog.getByRole("button", { name: "分析这个网页" }).click();
+  await expect(dialog.getByRole("heading", { name: "这次无法可靠命名" })).toBeVisible();
+  await expect(dialog.getByText("当前画面看不到展开状态", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("点击之后会出现什么内容？", { exact: true })).toBeVisible();
 });
 
 test("switching source mode prevents a delayed analysis from landing", async ({ page }) => {

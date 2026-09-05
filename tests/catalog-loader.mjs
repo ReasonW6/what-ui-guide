@@ -36,10 +36,13 @@ export async function loadCatalogModule() {
       "utf8",
     );
     const searchUrl = dataUrl(transpile(searchSource));
+    const codeUrl = dataUrl(transpile(await readFile(new URL("../lib/additional-code.ts", import.meta.url), "utf8")));
+    const additionsUrl = dataUrl(transpile(await readFile(new URL("../lib/catalog-additions.ts", import.meta.url), "utf8"))
+      .replace(/from\s+["']\.\/additional-code["']/, `from ${JSON.stringify(codeUrl)}`));
     const compiledCatalog = transpile(source).replace(
       /from\s+["']\.\/catalog-search["']/,
       `from ${JSON.stringify(searchUrl)}`,
-    );
+    ).replace(/from\s+["']\.\/catalog-additions["']/, `from ${JSON.stringify(additionsUrl)}`);
     cachedModule = import(dataUrl(compiledCatalog));
   }
   return cachedModule;

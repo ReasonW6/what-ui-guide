@@ -114,7 +114,7 @@ export function AnalysisResults({ result }: { readonly result: IdentificationRes
                   aria-pressed={candidate.slug === selectedSlug}
                   onClick={() => {
                     setSelectedSlug(candidate.slug);
-                    setFeedback(index === 0 ? "correct" : "");
+                    setFeedback("");
                   }}
                   type="button"
                 >
@@ -133,16 +133,6 @@ export function AnalysisResults({ result }: { readonly result: IdentificationRes
               </article>
             ))}
           </div>
-
-          {(result.uncertainties.length > 0 || result.followUpQuestion) && (
-            <div className="analyzer-uncertainty">
-              <strong>还不能仅凭当前证据确定</strong>
-              {result.uncertainties.length > 0 && (
-                <ul>{result.uncertainties.map((line) => <li key={line}>{line}</li>)}</ul>
-              )}
-              {result.followUpQuestion && <p>{result.followUpQuestion}</p>}
-            </div>
-          )}
 
           {selected && (
             <div className="analyzer-selected-detail">
@@ -252,7 +242,7 @@ export function AnalysisResults({ result }: { readonly result: IdentificationRes
         </>
       ) : (
         <div className="analyzer-no-match">
-          <h3>没有足够证据映射到现有 81 个术语</h3>
+          <h3>没有足够证据映射到现有术语</h3>
           <p>请缩小到单个组件、补充它的操作方式，或换一张能看到展开状态的截图。</p>
           <a
             href="https://github.com/ReasonW6/what-ui-guide/issues/new"
@@ -261,6 +251,14 @@ export function AnalysisResults({ result }: { readonly result: IdentificationRes
           >
             告诉我们缺少什么术语 ↗
           </a>
+        </div>
+      )}
+
+      {(result.uncertainties.length > 0 || result.followUpQuestion) && (
+        <div className="analyzer-uncertainty">
+          <strong>还不能仅凭当前证据确定</strong>
+          {result.uncertainties.length > 0 && <ul>{result.uncertainties.map(line => <li key={line}>{line}</li>)}</ul>}
+          {result.followUpQuestion && <p>{result.followUpQuestion}</p>}
         </div>
       )}
 
