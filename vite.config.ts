@@ -1,4 +1,5 @@
 import vinext from "vinext";
+import "./build/image-size-policy.mjs";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
@@ -50,6 +51,9 @@ export default defineConfig(async () => {
       vinext(),
       sites(),
       cloudflare({
+        // Local UI development needs no cloud credentials. Opt in only when
+        // testing an explicitly configured remote Browser Rendering binding.
+        remoteBindings: process.env.WHAT_UI_REMOTE_BINDINGS === "true",
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
         config: localBindingConfig,
       }),

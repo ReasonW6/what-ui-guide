@@ -8,13 +8,15 @@
 
 [在线体验](https://what-ui-guide.reasonw6.chatgpt.site) · [浏览组件](https://what-ui-guide.reasonw6.chatgpt.site/#catalog) · [提交问题](https://github.com/ReasonW6/what-ui-guide/issues)
 
-![81 components](https://img.shields.io/badge/components-81-2496ff?style=flat-square)
+![90 components](https://img.shields.io/badge/components-90-2496ff?style=flat-square)
 ![React 19](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=111827)
 ![License: 0BSD](https://img.shields.io/badge/license-0BSD-37c98b?style=flat-square)
 
 </div>
 
-![What UI? 首页](docs/images/home.png)
+![What UI? 早期深色首页](docs/images/home.png)
+
+默认使用亮色主题，也支持深色和跟随系统。上图保留早期深色版参考。2026-09 新增日期范围、时间输入、多选、评分、菜单栏、分步问卷、聊天消息、消息滚动容器和附件卡片。[审查记录与官方参考](docs/REVIEW-2026-09.md)。
 
 ## 它解决什么问题？
 
@@ -26,7 +28,7 @@ What UI? 把抽象术语变成可观察、可操作、可实现的视觉索引�
 - 输入公开网页 URL，在安全边界内分析页面；
 - 获得 1–3 个候选名称、可观察证据、置信度与易混区别；
 - 亲手操作真实演示，再查看结构、行为、样式、无障碍与代码；
-- 用中文、英文、别名、平台或自然语言描述搜索 81 个术语。
+- 用中文、英文、别名、平台或自然语言描述搜索 90 个术语。
 
 > What UI? 是视觉词典和教学工具，不是可直接安装的组件库。AI 结果用于辅助判断，不代替 DOM 检查和人工确认。
 
@@ -38,7 +40,7 @@ What UI? 把抽象术语变成可观察、可操作、可实现的视觉索引�
 | 多服务商 BYOK | 内置主流服务商预设，也支持自定义 OpenAI / Anthropic 兼容 API、地址和模型。 |
 | 可解释结果 | 只从本项目目录中选择候选，并说明证据、区别、不确定项和必要追问。 |
 | 公开网页分析 | 白名单网页可使用浏览器快照；否则仅在受支持条件下使用受限的公开网页语义分析。 |
-| 交互式词典 | 81 个条目均有卡片预览、完整演示、键盘路径、使用边界和相关术语。 |
+| 交互式词典 | 90 个条目均有卡片预览、完整演示、键盘路径、使用边界和相关术语。 |
 | 实现工作台 | 提供结构、行为、样式、无障碍建议，以及原生与 React 两套可复制代码。 |
 | 自然语言搜索 | 匹配中英文名称、别名、关键词、平台、分类与“可以拖动的圆点”等描述。 |
 | 可恢复筛选 | 搜索、分类和平台状态写入 URL，刷新或分享后仍可恢复。 |
@@ -90,20 +92,20 @@ AI 识别位于独立浮层中，不改变首页原有目录布局。关闭浮�
 
 ## 组件词典
 
-目录覆盖 9 个类别、81 个 UI / UX 术语：
+目录覆盖 9 个类别、90 个 UI / UX 术语：
 
 | 分类 | English | 数量 | 示例 |
 | --- | --- | ---: | --- |
 | 导航与定位 | Navigation & Orientation | 10 | Navigation Bar、Breadcrumb、Tabs |
-| 操作与菜单 | Actions & Menus | 9 | Button、Context Menu、Overflow Menu |
-| 文本与文件输入 | Text & File Inputs | 9 | Text Field、OTP Input、Drop Zone |
-| 选择与取值 | Selection & Values | 10 | Checkbox、Combobox、Date Picker |
+| 操作与菜单 | Actions & Menus | 10 | Button、Context Menu、Overflow Menu |
+| 文本与文件输入 | Text & File Inputs | 11 | Text Field、OTP Input、Drop Zone |
+| 选择与取值 | Selection & Values | 13 | Checkbox、Combobox、Date Picker |
 | 反馈与状态 | Feedback & Status | 11 | Alert、Toast、Progress Bar |
 | 浮层与展开 | Overlays & Disclosure | 10 | Dialog、Popover、Side Sheet |
-| 内容与媒体 | Content & Media | 8 | Card、Carousel、Lightbox |
+| 内容与媒体 | Content & Media | 10 | Card、Carousel、Lightbox |
 | 数据展示 | Data Display | 6 | Data Table、Data Grid、Tree View |
-| 动效与交互模式 | Motion & Interaction | 8 | Drag and Drop、Pan and Zoom |
-| **合计** |  | **81** |  |
+| 动效与交互模式 | Motion & Interaction | 9 | Drag and Drop、Pan and Zoom |
+| **合计** |  | **90** |  |
 
 ![组件详情页](docs/images/component-detail.png)
 
@@ -148,7 +150,7 @@ AI 识别可以直接使用界面中的 BYOK 设置。部署方也可以复制 `
 </details>
 
 Browser Run 的 `quickAction()` 在本地模式尚不可用，因此配置使用
-`browser: { binding: "BROWSER", remote: true }`。本地启用网页快照前需先登录
+`browser: { binding: "BROWSER", remote: true }`。本地开发默认不连接远程 binding；需要测试网页快照时设置 `WHAT_UI_REMOTE_BINDINGS=true`，并先登录
 Cloudflare，并只在 `BROWSER_ALLOWED_HOSTS` 中加入确实需要抓取的公开主机名；
 未配置允许列表时不会发起浏览器任务。生产部署会沿用同名 `BROWSER` binding。
 
@@ -159,6 +161,8 @@ Cloudflare，并只在 `BROWSER_ALLOWED_HOSTS` 中加入确实需要抓取的公
 | `npm run dev` | 启动开发服务器 |
 | `npm run build` | 构建生产版本 |
 | `npm start` | 重新构建并启动生产 Worker 预览 |
+| `npm run audit:security` | 显示完整依赖审计，并验证限期的图片解析器缓解措施 |
+| `npm run generate:examples` | 从新增组件的实际演示同步可复制 React 代码 |
 | `npm run lint` | 运行 ESLint |
 | `npm test` | 类型检查、契约测试、构建、生产 HTTP 与 Playwright 浏览器测试 |
 | `npm run test:browser` | 单独构建并运行 Playwright 浏览器测试 |
@@ -180,6 +184,7 @@ Cloudflare，并只在 `BROWSER_ALLOWED_HOSTS` 中加入确实需要抓取的公
 ## 技术栈
 
 - React 19、TypeScript、Next.js App Router 风格路由
+- GSAP / @gsap/react、视口进入动效、减少动态偏好、亮色 / 深色主题
 - vinext、Vite、Tailwind CSS 4、Cloudflare Worker
 - OpenAI Responses、OpenAI-compatible Chat、Anthropic Messages
 - Web Crypto、IndexedDB、可选 Cloudflare Browser Rendering
@@ -191,7 +196,7 @@ Cloudflare，并只在 `BROWSER_ALLOWED_HOSTS` 中加入确实需要抓取的公
 app/
 ├─ page.tsx                    # 首页与目录
 ├─ api/identify/route.ts       # 识别接口与能力探测
-├─ components/[slug]/page.tsx # 81 个详情路由
+├─ components/[slug]/page.tsx # 90 个详情路由
 └─ ui/                         # 目录、识别浮层、演示与代码浏览器
 lib/
 ├─ catalog.ts                  # 双语术语注册表
@@ -223,7 +228,7 @@ worker/index.ts                # Cloudflare Worker 入口
 - 演示交互与代码示例的问题；
 - 不同平台对同一模式的命名差异。
 
-新增组件时，请同时补充 `CatalogItem`、`DemoRegistry` 和相应测试。提交前运行：
+新增组件时，请同时补充 `CatalogItem`、`DemoRegistry`、结构标注、可复制代码和相应测试。新增词条可在 `lib/catalog-additions.ts` 中维护。提交前运行：
 
 ```bash
 npm run lint

@@ -2,6 +2,7 @@ import {
   filterCatalogSearchEntries,
   normalizeSearchText,
 } from "./catalog-search";
+import { catalogAdditions } from "./catalog-additions";
 
 export const categories = [
   { id: "navigation", zh: "导航与定位", en: "Navigation & Orientation" },
@@ -2711,7 +2712,7 @@ const catalogSeeds: readonly CatalogSeed[] = [
   ),
 ];
 
-export const catalog: readonly CatalogItem[] = catalogSeeds.map((item, index) => ({
+export const catalog: readonly CatalogItem[] = [...catalogSeeds.map((item, index) => ({
   slug: item.slug,
   order: index + 1,
   category: item.category,
@@ -2727,7 +2728,10 @@ export const catalog: readonly CatalogItem[] = catalogSeeds.map((item, index) =>
   related: item.related,
   aiPrompt: `实现${item.name.zh}（${item.name.en}）：${item.summary.zh}`,
   code: makeCode(item),
-}));
+})), ...catalogAdditions.map((item, index) => ({
+  ...item,
+  order: catalogSeeds.length + index + 1,
+}))];
 
 const catalogBySlug = new Map(catalog.map((item) => [item.slug, item]));
 
@@ -2794,7 +2798,7 @@ export function validateCatalog(items: readonly CatalogItem[] = catalog): string
   const errors: string[] = [];
   const slugs = new Set(items.map((item) => item.slug));
 
-  if (items.length !== 81) errors.push(`目录应包含 81 个条目，当前为 ${items.length} 个。`);
+  if (items.length !== 90) errors.push(`目录应包含 90 个条目，当前为 ${items.length} 个。`);
   if (slugs.size !== items.length) errors.push("目录包含重复 slug。");
 
   for (const item of items) {

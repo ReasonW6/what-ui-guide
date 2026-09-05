@@ -3,7 +3,7 @@
   overflow: visible;
   border-color: color-mix(in srgb, var(--line) 76%, var(--blue));
   border-radius: 16px;
-  background: #141416;
+  background: light-dark(#ffffff, #141416);
   box-shadow: 0 24px 70px rgb(0 0 0 / 0.18);
   container-type: inline-size;
 }
@@ -43,7 +43,7 @@
   min-height: 430px;
   padding-inline: var(--annotation-rail);
   overflow: hidden;
-  background: #171719;
+  background: light-dark(#f0f2f6, #171719);
 }
 
 .detail-demo-preview .demo-stage--detail {
@@ -130,7 +130,7 @@
 .detail-demo-inspector {
   border-top: 1px solid var(--line);
   border-radius: 0 0 16px 16px;
-  background: #18181b;
+  background: var(--surface);
 }
 
 .detail-demo-tabs {
@@ -158,9 +158,9 @@
 
 .detail-demo-tabs button[aria-selected="true"] {
   border-color: var(--line);
-  border-bottom-color: #202023;
+  border-bottom-color: light-dark(#f4f6f9, #202023);
   color: var(--ink);
-  background: #202023;
+  background: light-dark(#f4f6f9, #202023);
 }
 
 .demo-anatomy-list,
@@ -183,7 +183,7 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   color: var(--ink);
-  background: #202023;
+  background: light-dark(#f4f6f9, #202023);
   cursor: pointer;
   transition: border-color var(--demo-motion-fast, 150ms) ease, background var(--demo-motion-fast, 150ms) ease, transform var(--demo-motion-fast, 150ms) ease;
 }
@@ -213,7 +213,7 @@
 .demo-anatomy-list button small em {
   display: block;
   margin-top: 3px;
-  color: #8f8f98;
+  color: var(--muted);
   font-style: normal;
 }
 
@@ -226,12 +226,12 @@
 .demo-anatomy-list button:focus-visible,
 .demo-anatomy-list button[data-active="true"] {
   border-color: color-mix(in srgb, var(--blue) 70%, white);
-  background: color-mix(in srgb, #202023 90%, var(--blue));
+  background: color-mix(in srgb, light-dark(#f4f6f9, #202023) 90%, var(--blue));
   transform: translateY(-1px);
 }
 
 .demo-anatomy-list button[data-active="true"] > span {
-  color: #171719;
+  color: light-dark(#f0f2f6, #171719);
   background: #f0c62e;
 }
 
@@ -254,7 +254,7 @@
   border: 1px dashed rgb(255 255 255 / 0.14);
   border-radius: 10px;
   color: var(--ink);
-  background: #202023;
+  background: light-dark(#f4f6f9, #202023);
 }
 
 .demo-customize-empty strong { font-size: 13px; }
@@ -268,7 +268,7 @@
   gap: 9px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #202023;
+  background: light-dark(#f4f6f9, #202023);
 }
 
 .demo-control > span:first-child {
@@ -309,7 +309,7 @@
   border: 1px solid var(--line-strong);
   border-radius: 8px;
   color: var(--ink);
-  background: #171719;
+  background: light-dark(#f0f2f6, #171719);
   padding: 0 9px;
   font: inherit;
 }
@@ -326,7 +326,7 @@
   padding: 3px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
-  background: #171719;
+  background: light-dark(#f0f2f6, #171719);
   cursor: pointer;
 }
 
@@ -346,7 +346,7 @@
   margin: 0;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: #303036;
+  background: var(--surface-3);
   cursor: pointer;
   transition: background var(--demo-motion-fast, 150ms) ease;
 }

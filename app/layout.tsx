@@ -44,8 +44,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" data-theme="light" suppressHydrationWarning>
       <head>
+        {/* Runs before paint so a saved dark preference never flashes light. */}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/theme-init.js" />
         <link href="/favicon.svg" rel="icon" type="image/svg+xml" />
       </head>
       <body>{children}</body>

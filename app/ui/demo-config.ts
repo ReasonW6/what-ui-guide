@@ -219,6 +219,15 @@ const parts = (
 ];
 
 const annotationDefinitions: Record<DemoSlug, AnnotationTriplet> = {
+  "date-range-picker": parts(".modern-date-row label:first-child", ".modern-date-row label:last-child", ".modern-actions"),
+  "time-field": parts(".modern-demo > input", ".modern-actions", ".modern-demo > p"),
+  "multi-select": parts(".modern-demo > input", ".modern-options", ".modern-actions"),
+  rating: parts(".modern-rating legend", ".modern-rating > div", ".modern-demo > p"),
+  menubar: parts(".modern-menubar", "[data-menu-popup], .modern-editor", ".modern-demo > p"),
+  questionnaire: parts(".modern-kicker", ".modern-options", ".modern-actions"),
+  "chat-message": parts(".modern-message", ".modern-message-form", ".modern-demo > button"),
+  "message-scroller": parts(".modern-transcript", ".modern-actions", ".modern-demo > p"),
+  attachment: parts(".modern-attachment > div", ".modern-demo > button", ".modern-attachment > button"),
   "navigation-bar": parts(
     ".demo-navbar > strong",
     ".demo-navbar > .demo-nav-list > button",

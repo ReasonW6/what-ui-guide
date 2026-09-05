@@ -197,7 +197,7 @@ test("six added demos are registered, routed explicitly, and keyboard accessible
     readFile(cssUrl, "utf8"),
   ]);
   const slugBlock = source.slice(source.indexOf("export const demoSlugs"), source.indexOf("] as const;"));
-  assert.equal((slugBlock.match(/^\s+"[a-z-]+",$/gm) ?? []).length, 81);
+  assert.equal((slugBlock.match(/^\s+"[a-z-]+",$/gm) ?? []).length, 90);
   for (const slug of ["split-view", "command-palette", "focus-ring", "progress-ring", "scrim", "divider"]) {
     assert.match(source, new RegExp(`case "${slug}"`));
     assert.match(source, new RegExp(`(?:"${slug}"|${slug}): entry\\("${slug}"\\)`));
@@ -274,7 +274,7 @@ test("audited demos expose complete content and interaction behavior", async () 
   const hoverCard = source.slice(source.indexOf('case "hover-card"'), source.indexOf('case "side-sheet"'));
   assert.match(hoverCard, /<a[^>]*href="#design-system-profile"/);
   assert.match(hoverCard, /event\.preventDefault\(\)/);
-  assert.match(hoverCard, /收录 81 个常用组件/);
+  assert.match(hoverCard, /收录常用交互组件/);
 
   const lightbox = source.slice(source.indexOf('case "lightbox"'), source.indexOf("default:", source.indexOf('case "lightbox"')));
   assert.match(source, /const lightboxItems = \["界面总览", "组件细节", "移动端预览"\]/);

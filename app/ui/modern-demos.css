@@ -1,0 +1,73 @@
+.modern-demo {
+  --demo-bg: light-dark(#fff, #1b1b1d);
+  --demo-panel: light-dark(#fff, #232428);
+  --demo-panel-strong: light-dark(#edf0f5, #2a2a2d);
+  --demo-line: light-dark(#dfe3ea, #414753);
+  --demo-text: light-dark(#252b35, #f3f3f4);
+  --demo-muted: light-dark(#596474, #b8b8bd);
+  --demo-blue: #2458d3;
+  display: grid; gap: 12px; width: min(100%, 360px); min-width: 0; container-type: inline-size;
+  padding: 18px; color: var(--demo-text); background: var(--demo-panel);
+  border: 1px solid var(--demo-line); border-radius: 12px; font: 14px/1.5 system-ui, sans-serif;
+}
+.modern-demo *, .modern-demo *::before, .modern-demo *::after { box-sizing: border-box; }
+.modern-demo [hidden] { display: none !important; }
+.modern-demo button, .modern-demo input { font: inherit; }
+.modern-demo button { min-height: 44px; border: 1px solid var(--demo-line); border-radius: 7px; background: var(--demo-panel-strong); color: var(--demo-text); padding: 8px 12px; cursor: pointer; }
+.modern-demo button:hover { border-color: var(--demo-blue); }
+.modern-demo button:disabled { opacity: 0.5; cursor: not-allowed; }
+.modern-demo :focus-visible { outline: 2px solid light-dark(#2458d3, #8aafff); outline-offset: 3px; }
+.modern-demo p { margin: 0; }
+.modern-demo > p { font-size: 12px; color: var(--demo-muted); }
+.modern-demo input:not([type=checkbox], [type=radio]) { display: block; width: 100%; min-width: 0; min-height: 44px; background: var(--demo-bg); color: var(--demo-text); border: 1px solid var(--demo-line); border-radius: 7px; padding: 8px 10px; }
+.modern-demo input[aria-invalid=true] { border-color: light-dark(#bc3548, #ed7683); }
+.modern-kicker { font-size: 12px; font-weight: 650; color: var(--demo-muted); }
+.modern-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.modern-date-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 6px; }
+.modern-date-row label { font-size: 12px; min-width: 0; }
+.modern-date-row > span { padding-bottom: 12px; }
+.modern-options, .modern-rating { margin: 0; padding: 0; border: 0; min-width: 0; }
+.modern-options legend, .modern-rating legend { margin-bottom: 10px; font-weight: 600; }
+.modern-options { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.modern-options label { display: flex; min-height: 36px; gap: 6px; align-items: center; }
+.modern-options input { accent-color: var(--demo-blue); width: 16px; height: 16px; }
+.modern-rating > div { display: flex; overflow-x: auto; }
+.modern-rating label { position: relative; display: grid; place-items: center; flex: 0 0 44px; min-width: 44px; height: 48px; font-size: 34px; color: var(--demo-muted); cursor: pointer; }
+.modern-rating label[data-filled=true] { color: light-dark(#a2670e, #e9ad58); }
+.modern-rating input { position: absolute; inset: 0; margin: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.modern-rating label:focus-within { outline: 2px solid light-dark(#2458d3, #8aafff); border-radius: 7px; }
+.modern-menubar { display: flex; gap: 4px; position: relative; z-index: 2; }
+.modern-menubar > div { position: relative; }
+.modern-menubar [data-menu-trigger] { padding-inline: 8px; }
+.modern-menubar [data-menu-popup] { position: absolute; top: 100%; left: 0; min-width: 132px; padding: 4px; background: var(--demo-panel); border: 1px solid var(--demo-line); border-radius: 8px; box-shadow: 0 8px 20px rgb(0 0 0 / 0.12); }
+.modern-menubar > div:last-child [data-menu-popup] { left: auto; right: 0; }
+.modern-menubar [data-menu-popup] button { width: 100%; border: 0; text-align: left; background: transparent; }
+.modern-menubar [data-menu-popup] button:focus, .modern-menubar [data-menu-popup] button:hover { background: var(--demo-panel-strong); }
+.modern-editor { display: flex; align-items: baseline; justify-content: space-between; padding: 20px; background: var(--demo-panel-strong); border-radius: 6px; font-size: 32px; }
+.modern-editor span { font-size: 12px; color: var(--demo-muted); }
+.modern-message { justify-self: end; max-width: 90%; padding: 12px 16px; border-radius: 12px 12px 3px 12px; background: var(--demo-panel-strong); overflow-wrap: anywhere; }
+.modern-message small { color: var(--demo-muted); }
+.modern-message-form { display: flex; gap: 6px; }
+.modern-message-form button { flex-shrink: 0; background: var(--demo-blue); color: white; }
+.modern-transcript { height: 130px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; overflow-anchor: none; }
+.modern-transcript > p { padding: 10px; margin-bottom: 6px; background: var(--demo-panel-strong); border-radius: 6px; }
+.modern-transcript small { display: block; color: var(--demo-muted); font-size: 11px; }
+.modern-attachment { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--demo-line); border-radius: 8px; }
+.modern-attachment > div { flex: 1; min-width: 0; }
+.modern-attachment strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
+.modern-attachment small { display: block; color: var(--demo-muted); font-size: 11px; }
+.modern-filetype { background: var(--demo-panel-strong); border-radius: 4px; padding: 12px 6px; font-size: 10px; font-weight: 700; }
+.demo-stage--card .modern-demo { padding: 12px; gap: 8px; font-size: 12px; }
+.demo-stage--card:has(.modern-demo) .demo-canvas { padding: 12px; height: 100%; overflow-y: auto; align-content: safe center; }
+.demo-stage--card .modern-demo > .modern-kicker { display: none; }
+.demo-stage--card .modern-demo button { min-height: 36px; padding: 6px 10px; }
+.demo-stage--card .modern-demo input:not([type=checkbox], [type=radio]) { min-height: 36px; padding: 6px; }
+.demo-stage--card .modern-transcript { height: 88px; }
+.demo-stage--card .modern-options label { min-height: 28px; }
+.demo-stage--card .modern-date-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.demo-stage--card .modern-date-row > span { display: none; }
+.demo-stage--card .modern-date-row label { display: grid; grid-template-columns: 50px minmax(0,1fr); align-items: center; }
+@container (max-width: 280px) {
+  .modern-date-row { grid-template-columns: minmax(0, 1fr); }
+  .modern-date-row > span { display: none; }
+}

@@ -35,3 +35,9 @@ SOFTWARE.
 No other source code from external GitHub projects has been copied or adapted
 for this project. Projects named in the README acknowledgements are cited only
 as product-direction or documentation-organization references.
+
+## Animation dependencies
+
+The application bundles GSAP 3.15.0 under the [GSAP Standard License](https://gsap.com/standard-license/)
+and `@gsap/react` under the [MIT license](https://github.com/greensock/react/blob/main/LICENSE).
+Their license terms remain separate from this repository's own 0BSD code.
