@@ -243,8 +243,8 @@ test("dialog and drawer constrain focus and restore it on close", async ({ page 
   await expect(drawerTrigger).toBeFocused();
 });
 
-test("edge overlays use the full demo viewport", async ({ page }) => {
-  for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }]) {
+  test(`edge overlays use the full demo viewport at ${viewport.width}px`, async ({ page }) => {
     await page.setViewportSize(viewport);
     await gotoReady(page, "/components/side-sheet");
     const stage = page.locator(".demo-stage--detail");
@@ -285,15 +285,17 @@ test("edge overlays use the full demo viewport", async ({ page }) => {
         Math.abs(drawerBox.bottom - stageBox.bottom),
       );
     }).toBeLessThanOrEqual(2);
-  }
+  });
+}
 
-  await page.setViewportSize({ width: 1280, height: 900 });
-  for (const overlay of [
-    { path: "/components/dialog", trigger: "编辑资料", selector: ".demo-backdrop" },
-    { path: "/components/command-palette", trigger: /打开命令面板/, selector: ".demo-command-backdrop" },
-    { path: "/components/lightbox", trigger: "打开三张组件预览", selector: ".demo-lightbox" },
-    { path: "/components/scrim", trigger: "显示遮罩", selector: ".demo-scrim-layer" },
-  ]) {
+for (const overlay of [
+  { path: "/components/dialog", trigger: "编辑资料", selector: ".demo-backdrop" },
+  { path: "/components/command-palette", trigger: /打开命令面板/, selector: ".demo-command-backdrop" },
+  { path: "/components/lightbox", trigger: "打开三张组件预览", selector: ".demo-lightbox" },
+  { path: "/components/scrim", trigger: "显示遮罩", selector: ".demo-scrim-layer" },
+]) {
+  test(`${overlay.path} backdrop covers the full demo viewport`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
     await gotoReady(page, overlay.path);
     const stage = page.locator(".demo-stage--detail");
     const initialOverlay = stage.locator(overlay.selector);
@@ -321,8 +323,11 @@ test("edge overlays use the full demo viewport", async ({ page }) => {
         Math.abs(overlayBox.left - stageBox.left),
       );
     }).toBeLessThanOrEqual(2);
-  }
+  });
+}
 
+test("popover stays anchored and contained in detail and catalog demos", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
   await gotoReady(page, "/components/popover");
   const popoverStage = page.locator(".demo-stage--detail");
   const popoverTrigger = popoverStage.getByRole("button", { name: "查看详情" });
@@ -342,7 +347,10 @@ test("edge overlays use the full demo viewport", async ({ page }) => {
   const popoverCard = page.locator('.demo-stage--card[data-demo-slug="popover"]');
   await expect(popoverCard).toBeVisible();
   expectContained(await rect(popoverCard.locator(".demo-popover")), await rect(popoverCard));
+});
 
+test("toast preserves its edge spacing in the demo viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
   await gotoReady(page, "/components/toast");
   const toastStage = page.locator(".demo-stage--detail");
   await toastStage.getByRole("button", { name: "显示提示" }).click();
